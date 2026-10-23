@@ -1215,6 +1215,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_new: boolean
           links: NonNullable<Json>
           ministry_id: string
           original_key: string | null
@@ -1232,6 +1233,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_new?: boolean
           links?: NonNullable<Json>
           ministry_id: string
           original_key?: string | null
@@ -1248,6 +1250,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_new?: boolean
           links?: NonNullable<Json>
           ministry_id?: string
           original_key?: string | null

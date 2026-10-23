@@ -12,6 +12,7 @@ import { DashboardPage } from '@/pages/DashboardPage'
 import { EventSchedulePage } from '@/pages/EventSchedulePage'
 import { MembersPage } from '@/pages/MembersPage'
 import { MinistriesPage } from '@/pages/MinistriesPage'
+import { PlanningPage } from '@/pages/PlanningPage'
 import { PresencePage } from '@/pages/PresencePage'
 import { RepertoirePage } from '@/pages/RepertoirePage'
 import { SchedulePage } from '@/pages/SchedulePage'
@@ -88,6 +89,7 @@ const router = createBrowserRouter([
               import('@/pages/attendance/CheckinPage').then((m) => ({ Component: m.CheckinPage })),
           },
           { path: 'configuracoes', element: <SettingsPage /> },
+          { path: 'planejamento', element: <PlanningPage /> },
           { path: 'membros', element: <MembersPage /> },
           { path: 'ministerios', element: <MinistriesPage /> },
           { path: 'cadastro-igreja', element: <CreateChurchPage /> },

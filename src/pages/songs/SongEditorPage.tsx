@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { useForm, useWatch } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -13,7 +13,9 @@ import { FormField } from '@/components/FormField'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useChurch } from '@/features/church/church-context'
@@ -33,6 +35,7 @@ const schema = z.object({
   bpm: z.string().regex(/^(\d{2,3})?$/, { message: 'BPM entre 20 e 300' }),
   timeSignature: z.string().regex(/^(\d{1,2}\/\d{1,2})?$/, { message: 'Ex.: 4/4, 6/8' }),
   tags: z.string().max(200),
+  isNew: z.boolean(),
   links: z.string().max(2000),
   chordpro: z.string().max(50_000),
 })
@@ -82,6 +85,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
       bpm: song?.bpm ? String(song.bpm) : '',
       timeSignature: song?.time_signature ?? '4/4',
       tags: song?.tags.join(', ') ?? '',
+      isNew: song?.is_new ?? false,
       links: linksToText(song?.links),
       chordpro: song?.chordpro ?? '',
     },
@@ -120,6 +124,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
         original_key: v.originalKey || null,
         bpm: v.bpm ? Number(v.bpm) : null,
         time_signature: v.timeSignature || null,
+        is_new: v.isNew,
         tags: v.tags
           .split(',')
           .map((t) => t.trim())
@@ -229,6 +234,16 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
             <Input id="song-ts" {...form.register('timeSignature')} />
           </FormField>
         </div>
+        <Controller
+          control={form.control}
+          name="isNew"
+          render={({ field }) => (
+            <Label className="min-h-11 cursor-pointer font-normal">
+              <Checkbox checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+              Música nova (a banda ainda está aprendendo)
+            </Label>
+          )}
+        />
         <FormField
           id="song-tags"
           label="Etiquetas (separadas por vírgula)"

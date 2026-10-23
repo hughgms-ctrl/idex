@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router'
+import { NavLink, Outlet, useMatch } from 'react-router'
+import { CalendarRange } from 'lucide-react'
 
 import { AccountMenu } from '@/components/layout/AccountMenu'
 import { NAV_ITEMS } from '@/components/layout/nav-items'
@@ -8,7 +9,8 @@ import { useChurch } from '@/features/church/church-context'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
-  const { church, ministry } = useChurch()
+  const { church, ministry, isLeader } = useChurch()
+  const wide = useMatch('/planejamento')
 
   return (
     <div className="flex min-h-dvh">
@@ -39,6 +41,22 @@ export function AppLayout() {
               {label}
             </NavLink>
           ))}
+          {ministry && isLeader(ministry.id) && (
+            <NavLink
+              to="/planejamento"
+              className={({ isActive }) =>
+                cn(
+                  'flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-secondary text-primary'
+                    : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+                )
+              }
+            >
+              <CalendarRange className="size-5" aria-hidden="true" />
+              Planejamento
+            </NavLink>
+          )}
         </nav>
         <div className="mt-auto">
           <AccountMenu variant="sidebar" />
@@ -57,7 +75,12 @@ export function AppLayout() {
           <AccountMenu variant="header" />
         </header>
 
-        <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-5 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10">
+        <main
+          className={cn(
+            'mx-auto flex w-full flex-1 flex-col gap-5 px-5 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10',
+            wide ? 'max-w-6xl' : 'max-w-3xl',
+          )}
+        >
           <InstallBanner />
           <Outlet />
         </main>

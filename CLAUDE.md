@@ -82,5 +82,7 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - RPCs do app: `create_checkin_request` (prazo/limite → `evidence.over_limit`), `review_justification`. Jobs pg_cron: `process_absences` (15 min, idempotente) e `close_due_cycles` (diário): ciclo vencido vira `closing` e o próximo abre com saldo cheio; após o prazo dos pedidos calcula `cycle_eligibility` e fecha.
   - Telas: check-in pela câmera (`qr-scanner`) + GPS, QR em tela cheia (`qrcode`), Presença (membro: pontos, "esqueci", avisar falta/atraso; líder: ao vivo, pedidos com evidências, pontos da equipe), Configurações (local da igreja, regras de pontos).
   - Segredo `QR_SECRET`: local em `supabase/functions/.env` (criado pelo `pnpm db:start`); produção via `supabase secrets set`.
-- [ ] Fase 5 — planejamento trimestral
+- [x] Fase 5 — planejamento trimestral
+  - Regras puras em `_shared/domain/planning.ts` (`analyzePlan`: repetição em menos de N semanas, novas por mês, cultos incompletos; `suggestFill`: completa os cultos priorizando o que está há mais tempo sem tocar). "Nova" = `songs.is_new` (marcada pelo líder) na estreia; sem isso, um app recém-adotado trataria todo o repertório como novo.
+  - Tela `/planejamento` (líder): 3 meses em colunas, cartões por culto com tom, selos NOVA / "N SEM", números do trimestre, regras editáveis (`quarter_plan_rules`), "Sugerir com regras" mostra a prévia tracejada e só grava ao salvar.
 - [ ] Fase 6 — notificações WhatsApp
