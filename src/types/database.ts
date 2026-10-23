@@ -413,6 +413,49 @@ export type Database = {
           },
         ]
       }
+      event_availability: {
+        Row: {
+          available: boolean
+          church_id: string
+          event_id: string
+          ministry_member_id: string
+          note: string | null
+          updated_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          available: boolean
+          church_id: string
+          event_id: string
+          ministry_member_id: string
+          note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          available?: boolean
+          church_id?: string
+          event_id?: string
+          ministry_member_id?: string
+          note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'event_availability_event_id_church_id_fkey'
+            columns: ['event_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'event_availability_ministry_member_id_church_id_fkey'
+            columns: ['ministry_member_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministry_members'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
       events: {
         Row: {
           church_id: string
@@ -841,6 +884,10 @@ export type Database = {
       ministry_settings: {
         Row: {
           absence_penalty: number
+          availability_deadline: string | null
+          availability_ends_on: string | null
+          availability_starts_on: string | null
+          checkin_mode: string
           checkin_radius_m: number | null
           checkin_request_deadline_hours: number
           checkin_request_limit_per_cycle: number
@@ -856,6 +903,10 @@ export type Database = {
         ComputedFields: never
         Insert: {
           absence_penalty?: number
+          availability_deadline?: string | null
+          availability_ends_on?: string | null
+          availability_starts_on?: string | null
+          checkin_mode?: string
           checkin_radius_m?: number | null
           checkin_request_deadline_hours?: number
           checkin_request_limit_per_cycle?: number
@@ -870,6 +921,10 @@ export type Database = {
         }
         Update: {
           absence_penalty?: number
+          availability_deadline?: string | null
+          availability_ends_on?: string | null
+          availability_starts_on?: string | null
+          checkin_mode?: string
           checkin_radius_m?: number | null
           checkin_request_deadline_hours?: number
           checkin_request_limit_per_cycle?: number
@@ -904,6 +959,7 @@ export type Database = {
           next_attempt_at: string
           payload: NonNullable<Json>
           profile_id: string
+          push_sent_at: string | null
           sent_at: string | null
           status: Database['public']['Enums']['notification_status']
         }
@@ -919,6 +975,7 @@ export type Database = {
           next_attempt_at?: string
           payload?: NonNullable<Json>
           profile_id: string
+          push_sent_at?: string | null
           sent_at?: string | null
           status?: Database['public']['Enums']['notification_status']
         }
@@ -933,6 +990,7 @@ export type Database = {
           next_attempt_at?: string
           payload?: NonNullable<Json>
           profile_id?: string
+          push_sent_at?: string | null
           sent_at?: string | null
           status?: Database['public']['Enums']['notification_status']
         }
@@ -1082,6 +1140,48 @@ export type Database = {
           whatsapp_opt_out?: boolean
         }
         Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          last_success_at: string | null
+          p256dh: string
+          profile_id: string
+          user_agent: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          last_success_at?: string | null
+          p256dh: string
+          profile_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          last_success_at?: string | null
+          p256dh?: string
+          profile_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'push_subscriptions_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
       quarter_plan_rules: {
         Row: {
@@ -1406,6 +1506,8 @@ export type Database = {
           kind: Database['public']['Enums']['notification_kind']
           payload: Json
           phone: string
+          profile_id: string
+          push_sent: boolean
         }[]
       }
       close_due_cycles: { Args: Record<PropertyKey, never>; Returns: number }
@@ -1423,6 +1525,7 @@ export type Database = {
         Returns: string
       }
       cycle_for_event: { Args: { p_event_id: string }; Returns: string }
+      delete_push_subscription: { Args: { p_endpoint: string }; Returns: undefined }
       dispatch_notifications_http: { Args: Record<PropertyKey, never>; Returns: undefined }
       enqueue_notification: {
         Args: {
@@ -1494,12 +1597,16 @@ export type Database = {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
         Returns: undefined
       }
+      save_push_subscription: {
+        Args: { p_auth: string; p_endpoint: string; p_p256dh: string; p_user_agent?: string }
+        Returns: undefined
+      }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }
     }
     Enums: {
       assignment_status: 'scheduled' | 'confirmed' | 'declined'
-      checkin_source: 'qr' | 'request' | 'manual'
+      checkin_source: 'qr' | 'geo' | 'request' | 'manual'
       church_role: 'owner' | 'member'
       cycle_status: 'open' | 'closing' | 'closed'
       event_kind: 'service' | 'rehearsal' | 'other'
@@ -1624,7 +1731,7 @@ export const Constants = {
   public: {
     Enums: {
       assignment_status: ['scheduled', 'confirmed', 'declined'],
-      checkin_source: ['qr', 'request', 'manual'],
+      checkin_source: ['qr', 'geo', 'request', 'manual'],
       church_role: ['owner', 'member'],
       cycle_status: ['open', 'closing', 'closed'],
       event_kind: ['service', 'rehearsal', 'other'],
