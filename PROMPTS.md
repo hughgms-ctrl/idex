@@ -8,6 +8,8 @@ Como usar: crie a pasta do projeto, coloque o CLAUDE.md na raiz, abra o Claude C
 
 Leia o CLAUDE.md inteiro antes de começar. Implemente a Fase 1:
 
+IMPORTANTE: por enquanto tudo roda 100% LOCAL — Supabase local (`supabase start`, via Docker) e front com `pnpm dev`. Não usar projeto remoto do Supabase nem Vercel ainda. Inclua um script `pnpm dev:phone` que sobe o Vite com `--host` e HTTPS (plugin `@vitejs/plugin-basic-ssl`) para testar no celular na mesma rede, e documente no README como expor por túnel (`cloudflared tunnel --url`) quando precisar de HTTPS válido para instalar o PWA, câmera e geolocalização.
+
 1. Projeto Vite + React + TS estrito + shadcn/ui + TanStack Query + React Router, ESLint e Prettier, PWA conforme a seção PWA do CLAUDE.md (manifest, ícones placeholder, service worker com aviso de atualização, banner de instalação com instruções para iPhone e Android). `vercel.json` com rewrite de SPA. `.env.example` com as variáveis do CLAUDE.md.
 2. `supabase init` e migration inicial com o schema COMPLETO do MVP (mesmo as tabelas das fases futuras, para não migrar toda hora):
    churches, profiles, ministries, ministry_roles (ministro, vocal, violão…), ministry_members (+ funções), member_unavailability, events (culto/ensaio, recorrência, local com lat/lng e raio), schedule_assignments, songs (ChordPro, tom original, BPM, compasso, links), setlists + setlist_items (tom escolhido), cycles, ministry_settings (tolerância, faixas de desconto, pontos iniciais/mínimos, limite de pedidos), checkins, checkin_requests, justifications, point_ledger, cycle_eligibility, quarter_plan_rules, invites, audit_log.
