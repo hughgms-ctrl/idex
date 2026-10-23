@@ -19,7 +19,12 @@ createRoot(root).render(
     {envError ? (
       <ConfigMissing detail={envError} />
     ) : (
-      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={persistOptions}
+        // o que veio do aparelho é só para abrir rápido/offline: atualiza logo em seguida
+        onSuccess={() => void queryClient.invalidateQueries()}
+      >
         <AuthProvider>
           <App />
         </AuthProvider>
