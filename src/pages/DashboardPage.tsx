@@ -7,13 +7,15 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useChurch } from '@/features/church/church-context'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMyProfile } from '@/features/profile/queries'
+import { useMyUpcomingAssignments } from '@/features/schedule/queries'
 import {
+  useMinistryRoles,
   useMinistrySettings,
   useMyBalance,
   useNextEvent,
   useOpenCycle,
 } from '@/features/ministries/queries'
-import { formatDate, formatEventDate, relativeDays } from '@/lib/format'
+import { formatDate, formatDayMonth, formatEventDate, relativeDays } from '@/lib/format'
 
 const EVENT_KIND: Record<string, string> = {
   service: 'PRÓXIMO CULTO',
@@ -31,6 +33,9 @@ export function DashboardPage() {
   const balance = useMyBalance(myMembership?.id, cycle.data?.id)
   const leader = ministry ? isLeader(ministry.id) : false
   const members = useMinistryMembers(leader ? ministry?.id : undefined)
+  const myAssignments = useMyUpcomingAssignments(myMembership?.id)
+  const roles = useMinistryRoles(ministry?.id)
+  const roleName = new Map((roles.data ?? []).map((r) => [r.id, r.name]))
 
   const firstName = profile.data?.full_name.split(' ')[0]
   const event = nextEvent.data
@@ -82,6 +87,38 @@ export function DashboardPage() {
           O check-in pelo QR chega na próxima etapa do app.
         </p>
       </Panel>
+
+      <section className="flex flex-col gap-2.5">
+        <SectionTitle
+          title="Sua escala"
+          action={
+            <Link to="/escalas" className="text-primary text-sm">
+              Ver mês
+            </Link>
+          }
+        />
+        {myAssignments.data && myAssignments.data.length > 0 ? (
+          <ul className="grid grid-cols-3 gap-2.5">
+            {myAssignments.data.map((a) => (
+              <li key={a.id} className="bg-card flex flex-col gap-1 rounded-2xl border p-3">
+                <span className="text-muted-foreground font-mono text-[13px]">
+                  {formatDayMonth(a.events.starts_at)}
+                </span>
+                <span className="truncate text-[15px] font-semibold">
+                  {(a.ministry_role_id && roleName.get(a.ministry_role_id)) || 'Equipe'}
+                </span>
+                <span className="text-muted-foreground truncate text-xs">{a.events.title}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            {myAssignments.isPending
+              ? 'Carregando…'
+              : 'Você não está escalado nos próximos eventos.'}
+          </p>
+        )}
+      </section>
 
       <Panel>
         <div className="flex items-baseline justify-between gap-2">

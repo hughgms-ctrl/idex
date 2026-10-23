@@ -65,3 +65,12 @@ export function relativeDays(value: string | Date, now = new Date()): string {
   if (diff === -1) return 'ontem'
   return diff > 0 ? `em ${diff} dias` : `há ${-diff} dias`
 }
+
+/** "25/10" no fuso de São Paulo */
+export function formatDayMonth(value: string | Date): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: APP_TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+  }).format(new Date(value))
+}

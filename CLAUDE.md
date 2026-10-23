@@ -65,7 +65,12 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - `checkin_requests` e revisão de `justifications` ficam para RPCs da Fase 4 (cliente não escreve).
   - Visual segue os protótipos (tema escuro, verde-limão #D4F04A, Bricolage Grotesque + IBM Plex). Atenção: o protótipo de Presença usa "pontos de penalidade" (6 = fora da escala); a regra oficial é a deste arquivo (saldo 100, mínimo 70).
   - Pendências conhecidas: cache offline de escala/setlist (Fases 2/3) e Web Push.
-- [ ] Fase 2 — escala
+- [x] Fase 2 — escala
+  - Regras puras em `supabase/functions/_shared/domain/{time,schedule}.ts` (fuso, recorrência semanal, indisponibilidade, conflitos, elegibilidade, sugestão de substituto), testadas com Vitest (o front importa via alias `@domain`).
+  - Eventos únicos ou semanais (filhos com `recurrence_parent_id`), escala por função, copiar escala de outro evento, indisponibilidade por período ou semanal (dia inteiro). Motivo visível só ao próprio membro e ao líder; gatilho impede escalar gente/função de outro ministério.
+  - Elegibilidade: último ciclo fechado (`cycle_eligibility`); sem ciclo fechado ou membro não avaliado = elegível.
+  - Telas: Escala (meses, calendário do líder, "só as minhas", alertas com sugestão), editor do evento (`/escalas/:id`), "Sua escala" no Início.
+  - Repasse do Supabase local no Vite fica em `/__supabase` (não usar `/supabase`, conflita com os arquivos de domínio).
 - [ ] Fase 3 — repertório e cifras
 - [ ] Fase 4 — presença e pontos
 - [ ] Fase 5 — planejamento trimestral

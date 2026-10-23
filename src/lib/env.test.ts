@@ -14,7 +14,7 @@ describe('resolveSupabaseUrl', () => {
   it('no celular/túnel usa o repasse do Vite', () => {
     expect(
       resolveSupabaseUrl(local, { hostname: '192.168.0.10', origin: 'https://192.168.0.10:5173' }),
-    ).toBe('https://192.168.0.10:5173/supabase')
+    ).toBe('https://192.168.0.10:5173/__supabase')
   })
 
   it('Supabase na nuvem nunca é trocado', () => {

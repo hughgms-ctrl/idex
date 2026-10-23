@@ -14,7 +14,7 @@ export const envError = parsed.success
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
 // Supabase local + app aberto de outro aparelho (celular na rede, túnel):
-// usa o repasse /supabase do servidor do Vite em vez de 127.0.0.1.
+// usa o repasse /__supabase do servidor do Vite em vez de 127.0.0.1.
 export function resolveSupabaseUrl(
   configured: string,
   location: Pick<Location, 'hostname' | 'origin'> | undefined,
@@ -23,7 +23,7 @@ export function resolveSupabaseUrl(
   const target = new URL(configured)
   const supabaseIsLocal = LOCAL_HOSTS.includes(target.hostname)
   const appIsLocal = LOCAL_HOSTS.includes(location.hostname)
-  if (import.meta.env.DEV && supabaseIsLocal && !appIsLocal) return `${location.origin}/supabase`
+  if (import.meta.env.DEV && supabaseIsLocal && !appIsLocal) return `${location.origin}/__supabase`
   return configured
 }
 

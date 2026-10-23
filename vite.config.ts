@@ -48,12 +48,12 @@ export default defineConfig(({ mode }) => ({
     // Libera endereços do túnel (cloudflared) para testar no celular com HTTPS válido
     allowedHosts: ['.trycloudflare.com'],
     // Repasse para o Supabase local: o celular (ou o túnel) acessa tudo pelo
-    // mesmo endereço do app, em /supabase. Ver src/lib/env.ts.
+    // mesmo endereço do app, em /__supabase. Ver src/lib/env.ts.
     proxy: {
-      '/supabase': {
+      '/__supabase': {
         target: 'http://127.0.0.1:54321',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/supabase/, ''),
+        rewrite: (path) => path.replace(/^\/__supabase/, ''),
       },
     },
   },
@@ -77,6 +77,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@domain': fileURLToPath(new URL('./supabase/functions/_shared/domain', import.meta.url)),
     },
   },
 }))
