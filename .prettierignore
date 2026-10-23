@@ -1,0 +1,9 @@
+dist
+dev-dist
+coverage
+pnpm-lock.yaml
+supabase/.temp
+supabase/migrations
+supabase/seed.sql
+supabase/tests
+*.md
