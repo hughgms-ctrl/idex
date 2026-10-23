@@ -37,6 +37,8 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         globIgnores: ['**/*.woff'],
         navigateFallback: '/index.html',
+        // aviso no celular (Web Push): public/push-sw.js
+        importScripts: ['push-sw.js'],
         cleanupOutdatedCaches: true,
       },
       devOptions: {

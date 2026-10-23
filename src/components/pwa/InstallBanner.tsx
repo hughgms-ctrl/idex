@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { Link } from 'react-router'
 import { Download, Share, SquarePlus, X } from 'lucide-react'
 
-import { isIos, isStandalone, type BeforeInstallPromptEvent } from '@/components/pwa/install'
+import { isIos } from '@/components/pwa/install'
+import { useInstallPrompt } from '@/components/pwa/install-prompt'
 import { Button } from '@/components/ui/button'
 
 const DISMISS_KEY = 'idex.installDismissedAt'
@@ -18,25 +20,11 @@ function recentlyDismissed(): boolean {
 
 // Banner "Instalar app": Android/Chrome usa o prompt nativo; iPhone mostra o passo a passo.
 export function InstallBanner() {
-  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null)
-  const [hidden, setHidden] = useState(() => isStandalone() || recentlyDismissed())
+  const { canPrompt, installed, install } = useInstallPrompt()
+  const [hidden, setHidden] = useState(recentlyDismissed)
   const ios = isIos()
 
-  useEffect(() => {
-    const onPrompt = (event: Event) => {
-      event.preventDefault()
-      setPromptEvent(event as BeforeInstallPromptEvent)
-    }
-    const onInstalled = () => setHidden(true)
-    window.addEventListener('beforeinstallprompt', onPrompt)
-    window.addEventListener('appinstalled', onInstalled)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onPrompt)
-      window.removeEventListener('appinstalled', onInstalled)
-    }
-  }, [])
-
-  if (hidden || (!promptEvent && !ios)) return null
+  if (installed || hidden || (!canPrompt && !ios)) return null
 
   const dismiss = () => {
     try {
@@ -45,14 +33,6 @@ export function InstallBanner() {
       // ignora
     }
     setHidden(true)
-  }
-
-  const install = async () => {
-    if (!promptEvent) return
-    await promptEvent.prompt()
-    const { outcome } = await promptEvent.userChoice
-    setPromptEvent(null)
-    if (outcome === 'accepted') setHidden(true)
   }
 
   return (
@@ -74,7 +54,7 @@ export function InstallBanner() {
           Tenha o ide.x na tela inicial: abre mais rápido e mostra sua escala mesmo sem internet.
         </span>
       </div>
-      {promptEvent ? (
+      {canPrompt ? (
         <Button onClick={() => void install()} className="self-start">
           <Download aria-hidden="true" /> Instalar
         </Button>
@@ -92,6 +72,9 @@ export function InstallBanner() {
           </li>
         </ol>
       )}
+      <Link to="/instalar" className="text-primary self-start text-sm underline">
+        Ver passo a passo
+      </Link>
     </section>
   )
 }

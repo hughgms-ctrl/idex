@@ -1,7 +1,7 @@
 // Cria/atualiza o .env.local com a URL e a chave "anon" do Supabase local.
 // Roda sozinho depois do `pnpm db:start`.
 import { execFileSync } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
+import { generateKeyPairSync, randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 export function parseStatusEnv(output) {
@@ -44,6 +44,28 @@ function main() {
     [`VITE_SUPABASE_URL=${url}`, `VITE_SUPABASE_ANON_KEY=${key}`, ...keep].join('\n') + '\n',
   )
   console.log(`✔ ${file} pronto (Supabase local em ${url}).`)
+
+  // Chaves VAPID do aviso no celular: pública no front, privada só nas funções
+  const fnEnvPath = 'supabase/functions/.env'
+  if (!existsSync(fnEnvPath) || !readFileSync(fnEnvPath, 'utf8').includes('VAPID_PRIVATE_KEY=')) {
+    const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
+    const pub = publicKey.export({ format: 'jwk' })
+    const raw = Buffer.concat([
+      Buffer.from([4]),
+      Buffer.from(pub.x, 'base64url'),
+      Buffer.from(pub.y, 'base64url'),
+    ]).toString('base64url')
+    const previous = existsSync(fnEnvPath) ? readFileSync(fnEnvPath, 'utf8').trimEnd() + '\n' : ''
+    writeFileSync(
+      fnEnvPath,
+      `${previous}VAPID_PUBLIC_KEY=${raw}\nVAPID_PRIVATE_KEY=${privateKey.export({ format: 'jwk' }).d}\nVAPID_SUBJECT=mailto:contato@idex.app\n`,
+    )
+    const local = readFileSync(file, 'utf8')
+      .split(/\r?\n/)
+      .filter((l) => l && !l.startsWith('VITE_VAPID_PUBLIC_KEY='))
+    writeFileSync(file, [...local, `VITE_VAPID_PUBLIC_KEY=${raw}`].join('\n') + '\n')
+    console.log('✔ Chaves do aviso no celular (VAPID) criadas.')
+  }
 
   // Segredo do QR para as Edge Functions locais (fica fora do git)
   const fnEnv = 'supabase/functions/.env'

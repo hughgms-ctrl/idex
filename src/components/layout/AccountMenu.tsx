@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Church, Layers, LogOut, Settings2, UserRound } from 'lucide-react'
+import {
+  CalendarCheck,
+  Church,
+  Guitar,
+  Layers,
+  LogOut,
+  Settings2,
+  Smartphone,
+  UserRound,
+} from 'lucide-react'
 
 import { useUser } from '@/auth/auth-context'
 import { ProfileDialog } from '@/components/layout/ProfileDialog'
@@ -103,6 +112,36 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
                 }}
               >
                 <UserRound aria-hidden="true" /> Meu perfil
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className="justify-start"
+                onClick={() => setOpen(false)}
+              >
+                <Link to="/minhas-funcoes">
+                  <Guitar aria-hidden="true" /> Meus instrumentos e vozes
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className="justify-start"
+                onClick={() => setOpen(false)}
+              >
+                <Link to="/disponibilidade">
+                  <CalendarCheck aria-hidden="true" /> Minha disponibilidade
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className="justify-start"
+                onClick={() => setOpen(false)}
+              >
+                <Link to="/instalar">
+                  <Smartphone aria-hidden="true" /> Instalar app e avisos
+                </Link>
               </Button>
               <Button
                 asChild

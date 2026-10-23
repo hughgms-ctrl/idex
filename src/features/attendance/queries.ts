@@ -214,3 +214,34 @@ export function useMinistryBalances(
     },
   })
 }
+
+/** Eventos em que estou escalado e cujo check-in está aberto agora (2h antes até o fim). */
+export function useMyOpenCheckinEvents(memberId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: [...attendanceKeys.all, 'open-now', memberId ?? ''],
+    enabled: Boolean(memberId) && enabled,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const now = Date.now()
+      const { data, error } = await supabase
+        .from('schedule_assignments')
+        .select('id, status, events!inner(id, title, kind, starts_at, ends_at, location_name)')
+        .eq('ministry_member_id', memberId ?? '')
+        .neq('status', 'declined')
+        .gte('events.starts_at', new Date(now - 12 * 3_600_000).toISOString())
+        .lte('events.starts_at', new Date(now + 2 * 3_600_000).toISOString())
+      if (error) throw error
+      const seen = new Set<string>()
+      return data
+        .map((a) => a.events)
+        .filter((e) => {
+          const start = new Date(e.starts_at).getTime()
+          const end = e.ends_at ? new Date(e.ends_at).getTime() : start + 2 * 3_600_000
+          if (seen.has(e.id) || now < start - 2 * 3_600_000 || now > end) return false
+          seen.add(e.id)
+          return true
+        })
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    },
+  })
+}

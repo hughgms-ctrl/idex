@@ -1,10 +1,13 @@
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CalendarClock, QrCode, UserPlus } from 'lucide-react'
+import { CalendarCheck, CalendarClock, ChevronRight, Guitar, QrCode, UserPlus } from 'lucide-react'
 
 import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useMyAvailability, useMyRoleIds, useUpcomingEvents } from '@/features/availability/queries'
 import { useChurch } from '@/features/church/church-context'
+import { PushCard } from '@/features/push/PushCard'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMyProfile } from '@/features/profile/queries'
 import { useMyUpcomingAssignments } from '@/features/schedule/queries'
@@ -44,6 +47,21 @@ export function DashboardPage() {
   const setlistItems = setlist.data?.setlist_items ?? []
   const roleName = new Map((roles.data ?? []).map((r) => [r.id, r.name]))
 
+  const myRoleIds = useMyRoleIds(myMembership?.id)
+  const period =
+    settings.data?.availability_starts_on && settings.data.availability_ends_on
+      ? {
+          startsOn: settings.data.availability_starts_on,
+          endsOn: settings.data.availability_ends_on,
+        }
+      : null
+  const periodEvents = useUpcomingEvents(myMembership ? ministry?.id : undefined, period)
+  const myAnswers = useMyAvailability(myMembership?.id)
+  const answered = new Set((myAnswers.data ?? []).map((a) => a.event_id))
+  const pendingAnswers = myAnswers.data
+    ? (periodEvents.data ?? []).filter((e) => !answered.has(e.id)).length
+    : 0
+
   const firstName = profile.data?.full_name.split(' ')[0]
   const event = nextEvent.data
 
@@ -58,6 +76,23 @@ export function DashboardPage() {
           </>
         )}
       </h1>
+
+      {myMembership && myRoleIds.data?.length === 0 && (
+        <TodoCard
+          to="/minhas-funcoes"
+          icon={<Guitar className="text-primary size-5" aria-hidden="true" />}
+          title="Escolha seus instrumentos e vozes"
+          text="O líder usa isso para montar a escala."
+        />
+      )}
+      {pendingAnswers > 0 && (
+        <TodoCard
+          to="/disponibilidade"
+          icon={<CalendarCheck className="text-primary size-5" aria-hidden="true" />}
+          title="Responda sua disponibilidade"
+          text={`${pendingAnswers} ${pendingAnswers === 1 ? 'data sem resposta' : 'datas sem resposta'}${settings.data?.availability_deadline ? ` · até ${formatDate(settings.data.availability_deadline)}` : ''}.`}
+        />
+      )}
 
       <Panel className="gap-4 rounded-[20px] p-[18px]">
         {nextEvent.isPending ? (
@@ -89,7 +124,7 @@ export function DashboardPage() {
         <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
           <Link to="/presenca/checkin">
             <QrCode className="size-[22px]" aria-hidden="true" />
-            Bater ponto com QR
+            Bater ponto
           </Link>
         </Button>
         {event && (
@@ -206,6 +241,8 @@ export function DashboardPage() {
         </p>
       </Panel>
 
+      <PushCard compact />
+
       {leader && (
         <Panel>
           <SectionTitle
@@ -229,5 +266,31 @@ export function DashboardPage() {
         </Panel>
       )}
     </>
+  )
+}
+
+function TodoCard({
+  to,
+  icon,
+  title,
+  text,
+}: {
+  to: string
+  icon: ReactNode
+  title: string
+  text: string
+}) {
+  return (
+    <Link
+      to={to}
+      className="border-primary/50 bg-card flex min-h-14 items-center gap-3 rounded-2xl border p-3.5"
+    >
+      {icon}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-[15px] font-semibold">{title}</span>
+        <span className="text-muted-foreground text-[13px]">{text}</span>
+      </span>
+      <ChevronRight className="text-muted-foreground size-5" aria-hidden="true" />
+    </Link>
   )
 }

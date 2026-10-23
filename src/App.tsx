@@ -7,11 +7,14 @@ import { InvitePage } from '@/pages/auth/InvitePage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignUpChurchPage } from '@/pages/auth/SignUpChurchPage'
 import { WelcomePage } from '@/pages/auth/WelcomePage'
+import { AvailabilityPage } from '@/pages/AvailabilityPage'
 import { CreateChurchPage } from '@/pages/CreateChurchPage'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { InstallPage } from '@/pages/InstallPage'
 import { EventSchedulePage } from '@/pages/EventSchedulePage'
 import { MembersPage } from '@/pages/MembersPage'
 import { MinistriesPage } from '@/pages/MinistriesPage'
+import { MyRolesPage } from '@/pages/MyRolesPage'
 import { PlanningPage } from '@/pages/PlanningPage'
 import { PresencePage } from '@/pages/PresencePage'
 import { RepertoirePage } from '@/pages/RepertoirePage'
@@ -88,7 +91,16 @@ const router = createBrowserRouter([
             lazy: () =>
               import('@/pages/attendance/CheckinPage').then((m) => ({ Component: m.CheckinPage })),
           },
+          {
+            // QR lido pela câmera do celular (fora do app)
+            path: 'ponto',
+            lazy: () =>
+              import('@/pages/attendance/CheckinPage').then((m) => ({ Component: m.CheckinPage })),
+          },
           { path: 'configuracoes', element: <SettingsPage /> },
+          { path: 'minhas-funcoes', element: <MyRolesPage /> },
+          { path: 'disponibilidade', element: <AvailabilityPage /> },
+          { path: 'instalar', element: <InstallPage /> },
           { path: 'planejamento', element: <PlanningPage /> },
           { path: 'membros', element: <MembersPage /> },
           { path: 'ministerios', element: <MinistriesPage /> },

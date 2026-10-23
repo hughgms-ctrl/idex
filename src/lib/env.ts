@@ -3,6 +3,8 @@ import { z } from 'zod'
 const envSchema = z.object({
   VITE_SUPABASE_URL: z.url({ message: 'VITE_SUPABASE_URL ausente ou inválida' }),
   VITE_SUPABASE_ANON_KEY: z.string().min(20, { message: 'VITE_SUPABASE_ANON_KEY ausente' }),
+  // opcional: sem ela o botão de aviso no celular não aparece
+  VITE_VAPID_PUBLIC_KEY: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(import.meta.env)

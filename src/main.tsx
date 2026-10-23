@@ -5,6 +5,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { App } from '@/App'
 import { AuthProvider } from '@/auth/AuthProvider'
 import { ConfigMissing } from '@/components/ConfigMissing'
+import '@/components/pwa/install-prompt'
 import { UpdatePrompt } from '@/components/pwa/UpdatePrompt'
 import { Toaster } from '@/components/ui/sonner'
 import { envError } from '@/lib/env'

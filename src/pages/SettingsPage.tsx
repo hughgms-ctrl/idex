@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { LocateFixed } from 'lucide-react'
+import { addDaysToKey, addMonths, localDateKey } from '@domain/time.ts'
+import { Link } from 'react-router'
 import { normalizeTiers } from '@domain/points.ts'
 
 import { FormField } from '@/components/FormField'
@@ -12,6 +14,8 @@ import { Input } from '@/components/ui/input'
 import { useChurch } from '@/features/church/church-context'
 import { ministryKeys, useMinistrySettings } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
+import { formatDate } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
 
@@ -42,6 +46,20 @@ export function SettingsPage() {
         />
       )}
       {ministry && settings.data && (
+        <AvailabilityPeriod
+          key={`periodo-${settings.data.updated_at}`}
+          settings={settings.data}
+          canEdit={isLeader(ministry.id)}
+        />
+      )}
+      {ministry && settings.data && (
+        <CheckinMode
+          key={`ponto-${settings.data.updated_at}`}
+          settings={settings.data}
+          canEdit={isLeader(ministry.id)}
+        />
+      )}
+      {ministry && settings.data && (
         <MinistryRules
           key={`regras-${settings.data.updated_at}`}
           ministryName={ministry.name}
@@ -51,6 +69,212 @@ export function SettingsPage() {
       )}
       {isOwner && <NotificationLog churchId={church.id} />}
     </>
+  )
+}
+
+function useSaveSettings(ministryId: string, message: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (patch: Partial<Tables<'ministry_settings'>>) => {
+      const { error } = await supabase
+        .from('ministry_settings')
+        .update(patch)
+        .eq('ministry_id', ministryId)
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ministryKeys.settings(ministryId) })
+      toast.success(message)
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+}
+
+// Período da programação que a equipe responde ("posso / não posso").
+function AvailabilityPeriod({
+  settings,
+  canEdit,
+}: {
+  settings: Tables<'ministry_settings'>
+  canEdit: boolean
+}) {
+  const today = localDateKey(new Date())
+  const [startsOn, setStartsOn] = useState(settings.availability_starts_on ?? '')
+  const [endsOn, setEndsOn] = useState(settings.availability_ends_on ?? '')
+  const [deadline, setDeadline] = useState(settings.availability_deadline ?? '')
+  const save = useSaveSettings(settings.ministry_id, 'Período salvo')
+  const open = settings.availability_starts_on && settings.availability_ends_on
+
+  // de hoje até o mesmo dia daqui a N meses (menos um dia)
+  const quick = (months: number) => {
+    const [y, m, d] = today.split('-').map(Number) as [number, number, number]
+    const target = addMonths(y, m, months)
+    const lastDay = new Date(Date.UTC(target.year, target.month, 0)).getUTCDate()
+    const end = `${target.year}-${String(target.month).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`
+    setStartsOn(today)
+    setEndsOn(addDaysToKey(end, -1))
+  }
+
+  const submit = () => {
+    if (!startsOn || !endsOn) return toast.error('Escolha o início e o fim do período')
+    if (endsOn < startsOn) return toast.error('O fim precisa ser depois do início')
+    save.mutate({
+      availability_starts_on: startsOn,
+      availability_ends_on: endsOn,
+      availability_deadline: deadline || null,
+    })
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionTitle title="Disponibilidade da equipe" />
+      <Panel className="gap-4">
+        <p className="text-muted-foreground text-[13px]">
+          Escolha o período da programação. A equipe vê os cultos e ensaios desse período e marca
+          “Posso” ou “Não posso”. Quem não responder pode ser escalado normalmente. Os cultos são
+          criados em{' '}
+          <Link to="/escalas" className="text-primary underline">
+            Escala
+          </Link>{' '}
+          (dá para repetir toda semana).
+        </p>
+        {open && (
+          <p className="text-sm">
+            Aberto: <strong>{formatDate(settings.availability_starts_on!)}</strong> a{' '}
+            <strong>{formatDate(settings.availability_ends_on!)}</strong>
+            {settings.availability_deadline &&
+              ` · respostas até ${formatDate(settings.availability_deadline)}`}
+          </p>
+        )}
+        {canEdit && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => quick(1)}>
+                Próximo mês
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => quick(3)}>
+                Próximos 3 meses
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => quick(6)}>
+                Próximos 6 meses
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField id="av-start" label="De">
+                <Input
+                  id="av-start"
+                  type="date"
+                  value={startsOn}
+                  onChange={(e) => setStartsOn(e.target.value)}
+                />
+              </FormField>
+              <FormField id="av-end" label="Até">
+                <Input
+                  id="av-end"
+                  type="date"
+                  value={endsOn}
+                  min={startsOn || undefined}
+                  onChange={(e) => setEndsOn(e.target.value)}
+                />
+              </FormField>
+            </div>
+            <FormField id="av-deadline" label="Responder até (opcional)">
+              <Input
+                id="av-deadline"
+                type="date"
+                value={deadline}
+                min={today}
+                onChange={(e) => setDeadline(e.target.value)}
+              />
+            </FormField>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={submit} disabled={save.isPending}>
+                {save.isPending ? 'Salvando…' : open ? 'Salvar período' : 'Abrir para a equipe'}
+              </Button>
+              {open && (
+                <Button
+                  variant="ghost"
+                  disabled={save.isPending}
+                  onClick={() =>
+                    save.mutate({
+                      availability_starts_on: null,
+                      availability_ends_on: null,
+                      availability_deadline: null,
+                    })
+                  }
+                >
+                  Fechar período
+                </Button>
+              )}
+            </div>
+          </>
+        )}
+      </Panel>
+    </section>
+  )
+}
+
+const CHECKIN_MODES = [
+  {
+    value: 'qr',
+    title: 'Só QR Code',
+    text: 'A pessoa lê o QR que você projeta. Não pede localização.',
+  },
+  {
+    value: 'qr_geo',
+    title: 'QR Code + localização',
+    text: 'Lê o QR e precisa estar perto da igreja. O mais seguro.',
+  },
+  {
+    value: 'geo',
+    title: 'Só localização',
+    text: 'A pessoa abre o app e bate o ponto perto da igreja, sem QR.',
+  },
+] as const
+
+function CheckinMode({
+  settings,
+  canEdit,
+}: {
+  settings: Tables<'ministry_settings'>
+  canEdit: boolean
+}) {
+  const save = useSaveSettings(settings.ministry_id, 'Forma do ponto salva')
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionTitle title="Como bater o ponto" />
+      <div role="radiogroup" aria-label="Como bater o ponto" className="flex flex-col gap-2">
+        {CHECKIN_MODES.map((m) => {
+          const on = settings.checkin_mode === m.value
+          return (
+            <button
+              key={m.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={!canEdit || save.isPending}
+              onClick={() => !on && save.mutate({ checkin_mode: m.value })}
+              className={cn(
+                'bg-card flex min-h-14 items-start gap-3 rounded-2xl border p-3.5 text-left',
+                on && 'border-primary',
+              )}
+            >
+              <span
+                className={cn(
+                  'mt-0.5 size-5 shrink-0 rounded-full border-2',
+                  on ? 'border-primary bg-primary' : 'border-muted-foreground',
+                )}
+                aria-hidden="true"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-[15px] font-semibold">{m.title}</span>
+                <span className="text-muted-foreground text-[13px]">{m.text}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 

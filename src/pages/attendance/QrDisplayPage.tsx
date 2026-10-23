@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import QRCode from 'qrcode'
 import { Maximize, X } from 'lucide-react'
+import { qrCheckinUrl } from '@domain/qr.ts'
 
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
@@ -45,7 +46,8 @@ export function QrDisplayPage() {
 
   useEffect(() => {
     if (!token.data || !canvasRef.current) return
-    QRCode.toCanvas(canvasRef.current, token.data.payload, {
+    // endereço do app: a câmera comum do celular também abre o check-in
+    QRCode.toCanvas(canvasRef.current, qrCheckinUrl(window.location.origin, token.data.payload), {
       width: 560,
       margin: 2,
       errorCorrectionLevel: 'M',
@@ -119,7 +121,7 @@ export function QrDisplayPage() {
 
       <div className="flex flex-col items-center gap-1 text-center">
         <p className="text-lg">
-          Abra o <strong>ide.x</strong> e toque em <strong>Bater ponto com QR</strong>
+          Aponte a câmera do celular ou toque em <strong>Bater ponto</strong> no ide.x
         </p>
         <p className="text-muted-foreground text-sm">
           O código muda a cada 30 segundos ·{' '}

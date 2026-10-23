@@ -139,12 +139,20 @@ O app manda lembretes da escala (2 dias antes), do ensaio (no dia), de ponto des
 
 Em **Configurações** o responsável pela igreja vê o histórico (enviado, na fila, falhou). Se a Evolution falhar, o app tenta de novo em 1 min, 5 min, 30 min, 2 h e 6 h.
 
+### 3.1.2 Avisos no celular (Web Push)
+
+1. Gere um par de chaves VAPID: `pnpm dlx web-push generate-vapid-keys`.
+2. Cadastre nas funções: `pnpm exec supabase secrets set VAPID_PUBLIC_KEY=<pública> VAPID_PRIVATE_KEY=<privada> VAPID_SUBJECT=mailto:seu-email`.
+3. Na Vercel, cadastre `VITE_VAPID_PUBLIC_KEY` = a chave **pública** (a privada nunca vai para o front).
+4. Cada pessoa toca em **Ativar avisos** (Início ou **Instalar app e avisos**). No iPhone só funciona com o app instalado (iOS 16.4+).
+
 ### 3.2 Vercel
 
 1. Em https://vercel.com, **Add New → Project** e importe o repositório do GitHub.
 2. Em **Environment Variables**, cadastre:
    - `VITE_SUPABASE_URL` = Project URL do Supabase
    - `VITE_SUPABASE_ANON_KEY` = chave anon / public
+   - `VITE_VAPID_PUBLIC_KEY` = chave pública VAPID (avisos no celular; veja 3.1.2)
 3. Clique em **Deploy**. Daí em diante, cada push na `main` publica sozinho, e cada pull request ganha um link de prévia.
 
 ---

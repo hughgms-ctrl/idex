@@ -80,7 +80,7 @@ export function MemberAttendance({
     <>
       <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
         <Link to="/presenca/checkin">
-          <QrCode className="size-[22px]" aria-hidden="true" /> Bater ponto com QR
+          <QrCode className="size-[22px]" aria-hidden="true" /> Bater ponto
         </Link>
       </Button>
 

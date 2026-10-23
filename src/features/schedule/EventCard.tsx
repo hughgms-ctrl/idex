@@ -42,6 +42,7 @@ export function EventCard({
           events: data.domainEvents,
           assignments: data.assignments,
           unavailability: data.unavailability,
+          answers: data.answers,
           eligibility: data.eligibility,
         }).filter((c) => c.kind !== 'missing_role')
         const first = conflicts[0]
@@ -53,6 +54,7 @@ export function EventCard({
           events: data.domainEvents,
           assignments: data.assignments,
           unavailability: data.unavailability,
+          answers: data.answers,
           eligibility: data.eligibility,
           exclude: [member.id],
           limit: 1,

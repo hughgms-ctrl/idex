@@ -189,6 +189,8 @@ function Editor({
         </Button>
       )}
 
+      {canEdit && <AnswersSummary event={event} data={data} />}
+
       {data.roles.map((role) => {
         const inRole = event.schedule_assignments.filter((a) => a.ministry_role_id === role.id)
         return (
@@ -297,6 +299,7 @@ function RoleSlot({
     assignments: data.assignments,
     unavailability: data.unavailability,
     eligibility: data.eligibility,
+    answers: data.answers,
   }
   const suggestions = suggestSubstitutes({ ...common, roleId, members: data.members, limit: 50 })
   const suggestedIds = new Set(suggestions.map((s) => s.member.id))
@@ -373,10 +376,12 @@ function RoleSlot({
         >
           <option value="">+ Escalar em {roleName}</option>
           {suggestions.length > 0 && (
-            <optgroup label="Disponíveis (menos escalados primeiro)">
+            <optgroup label="Disponíveis (quem disse “posso” primeiro)">
               {suggestions.map((s) => (
                 <option key={s.member.id} value={s.member.id}>
-                  {s.member.name} · {s.assignmentsInMonth} no mês
+                  {s.confirmed ? '✓ ' : ''}
+                  {s.member.name} · {s.confirmed ? 'pode' : 'sem resposta'} · {s.assignmentsInMonth}{' '}
+                  no mês
                 </option>
               ))}
             </optgroup>
@@ -389,7 +394,7 @@ function RoleSlot({
                   <option key={m.id} value={m.id}>
                     {m.name} ·{' '}
                     {c?.kind === 'unavailable'
-                      ? 'indisponível'
+                      ? 'não pode'
                       : c?.kind === 'ineligible'
                         ? 'inelegível'
                         : 'outro evento'}
@@ -401,5 +406,31 @@ function RoleSlot({
         </NativeSelect>
       )}
     </section>
+  )
+}
+
+// Quem respondeu "posso / não posso" para esta data
+function AnswersSummary({ event, data }: { event: ScheduleEvent; data: ScheduleData }) {
+  const active = data.members.filter((m) => m.status === 'active')
+  const byMember = new Map(
+    data.answers.filter((a) => a.event_id === event.id).map((a) => [a.ministry_member_id, a]),
+  )
+  const yes = active.filter((m) => byMember.get(m.id)?.available === true)
+  const no = active.filter((m) => byMember.get(m.id)?.available === false)
+  const none = active.length - yes.length - no.length
+  const names = (list: typeof active) => list.map((m) => m.name.split(' ')[0]).join(', ')
+  return (
+    <Panel className="gap-1.5">
+      <SectionTitle title="Disponibilidade da equipe" />
+      <p className="text-sm">
+        <span className="text-primary font-semibold">{yes.length} podem</span>
+        {yes.length > 0 && <span className="text-muted-foreground"> · {names(yes)}</span>}
+      </p>
+      <p className="text-sm">
+        <span className="text-destructive font-semibold">{no.length} não podem</span>
+        {no.length > 0 && <span className="text-muted-foreground"> · {names(no)}</span>}
+      </p>
+      <p className="text-muted-foreground text-sm">{none} sem resposta (podem ser escalados)</p>
+    </Panel>
   )
 }

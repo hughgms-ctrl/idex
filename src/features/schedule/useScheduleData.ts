@@ -1,6 +1,13 @@
 import { useMemo } from 'react'
-import type { Assignment, EventLike, MemberLike, Unavailability } from '@domain/schedule.ts'
+import type {
+  Assignment,
+  AvailabilityAnswer,
+  EventLike,
+  MemberLike,
+  Unavailability,
+} from '@domain/schedule.ts'
 
+import { useMinistryAvailability } from '@/features/availability/queries'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMinistryRoles } from '@/features/ministries/queries'
 import {
@@ -17,6 +24,7 @@ export function useScheduleData(ministryId: string | undefined, year: number, mo
   const roles = useMinistryRoles(ministryId)
   const unavailability = useUnavailability(ministryId)
   const eligibility = useEligibility(ministryId)
+  const availability = useMinistryAvailability(ministryId)
 
   const data = useMemo(() => {
     const eventList: ScheduleEvent[] = events.data ?? []
@@ -38,8 +46,14 @@ export function useScheduleData(ministryId: string | undefined, year: number, mo
       ends_at: u.ends_at,
       recurrence_rule: u.recurrence_rule,
     }))
+    const answers: AvailabilityAnswer[] = (availability.data ?? []).map((a) => ({
+      event_id: a.event_id,
+      ministry_member_id: a.ministry_member_id,
+      available: a.available,
+    }))
     return {
       events: eventList,
+      answers,
       domainEvents,
       assignments,
       members: memberList,
@@ -54,7 +68,14 @@ export function useScheduleData(ministryId: string | undefined, year: number, mo
         eligible: new Set(eligibility.data?.eligible ?? []),
       },
     }
-  }, [events.data, members.data, roles.data, unavailability.data, eligibility.data])
+  }, [
+    events.data,
+    members.data,
+    roles.data,
+    unavailability.data,
+    eligibility.data,
+    availability.data,
+  ])
 
   return {
     ...data,

@@ -112,7 +112,8 @@ function useAcceptInvite(token: string) {
       toast.success(
         result.already_member ? 'Você já faz parte desta equipe.' : 'Bem-vindo à equipe!',
       )
-      navigate('/', { replace: true })
+      // primeira vez: escolher funções e responder a disponibilidade
+      navigate(result.already_member ? '/' : '/minhas-funcoes?inicio=1', { replace: true })
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
