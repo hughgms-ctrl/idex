@@ -90,6 +90,12 @@ describe('import-cifra', () => {
       }),
     )
     expect(down.status).toBe(502)
+    const blocked = await handleImportCifra(
+      post({ ministryId: MINISTRY, artist: 'A', title: 'B' }),
+      deps({ fetch: (async () => new Response('Access Denied', { status: 403 })) as typeof fetch }),
+    )
+    expect(blocked.status).toBe(502)
+    expect(((await blocked.json()) as { error: string }).error).toContain('Abrir no Cifra Club')
   })
 
   it('não segue redirecionamento para outro site', async () => {

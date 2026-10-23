@@ -68,6 +68,14 @@ export async function handleImportCifra(req: Request, deps: Deps): Promise<Respo
       404,
     )
   }
+  // O Cifra Club barra acessos vindos de servidores na nuvem (403/429):
+  // o líder abre a página pelo botão do app, copia e cola a cifra.
+  if (response.status === 403 || response.status === 429) {
+    return errorJson(
+      "O Cifra Club bloqueou a busca automática. Toque em 'Abrir no Cifra Club', copie a cifra e cole no campo Cifra.",
+      502,
+    )
+  }
   if (!response.ok)
     return errorJson('O Cifra Club não respondeu. Tente de novo ou cole a cifra.', 502)
 

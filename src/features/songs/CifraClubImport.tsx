@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Download } from 'lucide-react'
+import { Download, ExternalLink } from 'lucide-react'
 
 import { FormField } from '@/components/FormField'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,22 @@ export type ImportedChords = {
   key: string | null
   text: string
   sourceUrl: string
+}
+
+// Mesmo endereço montado pela Edge Function (`_shared/import/cifraclub.ts`).
+function cifraClubPageUrl(artist: string, title: string, link: string): string | null {
+  const pasted = link.trim()
+  if (/^https:\/\/(www\.|m\.)?cifraclub\.com\.br\//.test(pasted)) return pasted
+  const slug = (text: string) =>
+    text
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .replace(/&/g, 'e')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+  if (!slug(artist) || !slug(title)) return null
+  return `https://www.cifraclub.com.br/${slug(artist)}/${slug(title)}/`
 }
 
 // Traz a cifra do Cifra Club (pela Edge Function import-cifra) para o
@@ -32,6 +48,8 @@ export function CifraClubImport({
   const [title, setTitle] = useState(initialTitle ?? '')
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const pageUrl = cifraClubPageUrl(artist, title, link)
 
   const run = useMutation({
     mutationFn: async () => {
@@ -57,7 +75,8 @@ export function CifraClubImport({
           BUSCAR NO CIFRA CLUB
         </span>
         <p className="text-muted-foreground text-[13px]">
-          Trazemos a cifra para você revisar e editar aqui antes de salvar.
+          Trazemos a cifra para você revisar e editar aqui antes de salvar. Se a busca falhar, abra
+          a música no Cifra Club, copie a cifra e cole no campo Cifra.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -79,16 +98,25 @@ export function CifraClubImport({
         />
       </FormField>
       {error && <p className="text-destructive text-sm">{error}</p>}
-      <Button
-        type="button"
-        variant="secondary"
-        className="self-start"
-        disabled={run.isPending}
-        onClick={() => run.mutate()}
-      >
-        <Download aria-hidden="true" />
-        {run.isPending ? 'Buscando…' : 'Trazer cifra'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={run.isPending}
+          onClick={() => run.mutate()}
+        >
+          <Download aria-hidden="true" />
+          {run.isPending ? 'Buscando…' : 'Trazer cifra'}
+        </Button>
+        {pageUrl && (
+          <Button variant="ghost" asChild>
+            <a href={pageUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink aria-hidden="true" />
+              Abrir no Cifra Club
+            </a>
+          </Button>
+        )}
+      </div>
     </section>
   )
 }
