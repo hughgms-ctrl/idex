@@ -58,7 +58,13 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - Antes de encerrar uma fase: rodar testes e typecheck, e atualizar a seção "Status" abaixo.
 
 ## Status
-- [ ] Fase 1 — fundação (monorepo, schema, auth, tenant, membros)
+- [x] Fase 1 — fundação (monorepo, schema, auth, tenant, membros)
+  - Projeto único na raiz (front em `src/`, banco em `supabase/`), schema completo do MVP em 3 migrations, RLS em todas as tabelas (48 testes pgTAP em `supabase/tests/database`), RPCs `create_church`, `accept_invite`, `get_invite_preview`.
+  - Igreja ↔ usuário via `church_members` (owner/member); FKs compostas `(id, church_id)` impedem misturar igrejas.
+  - Saldo = soma do `point_ledger` (view `member_cycle_balance`); quem entra no ministério ganha o crédito `cycle_start` do ciclo aberto (gatilho). Ledger só aceita INSERT (DELETE só em cascata).
+  - `checkin_requests` e revisão de `justifications` ficam para RPCs da Fase 4 (cliente não escreve).
+  - Visual segue os protótipos (tema escuro, verde-limão #D4F04A, Bricolage Grotesque + IBM Plex). Atenção: o protótipo de Presença usa "pontos de penalidade" (6 = fora da escala); a regra oficial é a deste arquivo (saldo 100, mínimo 70).
+  - Pendências conhecidas: cache offline de escala/setlist (Fases 2/3) e Web Push.
 - [ ] Fase 2 — escala
 - [ ] Fase 3 — repertório e cifras
 - [ ] Fase 4 — presença e pontos
