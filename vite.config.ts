@@ -45,6 +45,8 @@ export default defineConfig(({ mode }) => ({
     }),
   ],
   server: {
+    // Libera endereços do túnel (cloudflared) para testar no celular com HTTPS válido
+    allowedHosts: ['.trycloudflare.com'],
     // Repasse para o Supabase local: o celular (ou o túnel) acessa tudo pelo
     // mesmo endereço do app, em /supabase. Ver src/lib/env.ts.
     proxy: {
