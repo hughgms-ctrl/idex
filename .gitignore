@@ -12,3 +12,4 @@ supabase/.branches/
 .DS_Store
 *.log
 coverage/
+supabase/functions/.local-ca.pem

@@ -18,10 +18,11 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useChurch } from '@/features/church/church-context'
 import { ChordSheet } from '@/features/songs/ChordSheet'
+import { CifraClubImport } from '@/features/songs/CifraClubImport'
 import { chordsOverWordsToChordPro, looksLikeChordPro } from '@/features/songs/chordpro'
 import { songKeys, useSong } from '@/features/songs/queries'
 import { errorMessage } from '@/lib/errors'
-import { KEY_OPTIONS } from '@/lib/music'
+import { KEY_OPTIONS, normalizeKey } from '@/lib/music'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
 
@@ -178,6 +179,27 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
         </Link>
       </Button>
       <PageHeader title={song ? 'Editar música' : 'Nova música'} />
+      {!song && ministry && (
+        <CifraClubImport
+          ministryId={ministry.id}
+          onImported={(r) => {
+            if (r.title) form.setValue('title', r.title)
+            if (r.artist) form.setValue('artist', r.artist)
+            const key = r.key ? normalizeKey(r.key) : null
+            if (key) form.setValue('originalKey', key)
+            form.setValue(
+              'chordpro',
+              safeConvert(r.text, key ?? '', r.title ?? form.getValues('title')),
+            )
+            const links = form.getValues('links')
+            form.setValue(
+              'links',
+              [links, `Cifra Club | ${r.sourceUrl}`].filter(Boolean).join('\n'),
+            )
+            setView('previa')
+          }}
+        />
+      )}
       <form
         onSubmit={form.handleSubmit((v) => save.mutate(v))}
         className="flex flex-col gap-4"
@@ -299,9 +321,9 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
   )
 }
 
-function safeConvert(text: string, key: string): string {
+function safeConvert(text: string, key: string, title?: string): string {
   try {
-    return chordsOverWordsToChordPro(text, { key })
+    return chordsOverWordsToChordPro(text, { key, title })
   } catch {
     return text
   }

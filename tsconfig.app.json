@@ -28,5 +28,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "supabase/functions/_shared/domain"]
+  "include": ["src", "supabase/functions/_shared/domain", "supabase/functions/_shared/import", "supabase/functions/*/handler.ts"]
 }

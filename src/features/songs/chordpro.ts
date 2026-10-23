@@ -9,7 +9,7 @@ import {
 } from 'chordsheetjs'
 
 const SECTION_RE =
-  /^\s*\[?\s*((intro|introdução|verso|estrofe|parte|refr[aã]o|pr[eé][- ]?refr[aã]o|coro|ponte|ponte instrumental|final|outro|solo|interl[uú]dio|tag|vamp)(\s*\d+)?)\s*:?\s*\]?\s*$/i
+  /^\s*\[?\s*(((primeira|segunda|terceira|quarta|quinta)\s+)?(intro|introdução|verso|estrofe|parte|refr[aã]o|pr[eé][- ]?refr[aã]o|coro|ponte|ponte instrumental|final|outro|solo|interl[uú]dio|tag|vamp)(\s*\d+)?)\s*:?\s*\]?\s*$/i
 
 const PLACEHOLDER = '§§SECAO§§'
 

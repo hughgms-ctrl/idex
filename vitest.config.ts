@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['src/**/*.test.ts', 'supabase/functions/_shared/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'supabase/functions/**/*.test.ts'],
     environment: 'node',
   },
 })

@@ -40,6 +40,21 @@ describe('chordpro', () => {
     expect(sections.map((s) => s.label)).toContain('Verso 1')
   })
 
+  it('aceita o texto trazido do Cifra Club', () => {
+    const texto = 'Intro\nG  D  Em  C\n\nPrimeira Parte\nG          D\nQuando a manhã chega devagar'
+    const pro = chordsOverWordsToChordPro(texto)
+    expect(pro).toContain('{comment: Intro}')
+    expect(pro).toContain('{comment: Primeira parte}')
+    const sections = readChordPro(pro)
+    expect(sections[0]?.label).toBe('Intro')
+    expect(sections[0]?.lines[0]?.segments.map((s) => s.chord).filter(Boolean)).toEqual([
+      'G',
+      'D',
+      'Em',
+      'C',
+    ])
+  })
+
   it('entende blocos de refrão do ChordPro', () => {
     const sections = readChordPro('{start_of_chorus}\n[C]Santo, [G/B]santo\n{end_of_chorus}')
     expect(sections[0]?.label).toBe('Refrão')

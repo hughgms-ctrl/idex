@@ -71,7 +71,11 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - Elegibilidade: último ciclo fechado (`cycle_eligibility`); sem ciclo fechado ou membro não avaliado = elegível.
   - Telas: Escala (meses, calendário do líder, "só as minhas", alertas com sugestão), editor do evento (`/escalas/:id`), "Sua escala" no Início.
   - Repasse do Supabase local no Vite fica em `/__supabase` (não usar `/supabase`, conflita com os arquivos de domínio).
-- [ ] Fase 3 — repertório e cifras
+- [x] Fase 3 — repertório e cifras
+  - `chordsheetjs` só nas telas de cifra (rotas lazy). Conversão "acordes sobre a letra" → ChordPro em `src/features/songs/chordpro.ts` (rótulos de seção viram `{comment: …}`); tons em `src/lib/music.ts`.
+  - Setlist por culto: líder ou quem está escalado com função "Ministro…" (`is_event_minister`) edita; tom do item vale para todos.
+  - Importar do Cifra Club: Edge Function `import-cifra` (lógica testável em `handler.ts`, leitor em `_shared/import/cifraclub.ts`). Sem API oficial: lê a página sob demanda, só links https do Cifra Club, só líder; o texto volta para o editor e o link de origem fica salvo. Se o HTML do site mudar, ajustar o leitor.
+  - Offline: `PersistQueryClientProvider` salva no aparelho as consultas listadas em `src/lib/query-client.ts` (igreja, escala, setlist, cifras do próximo culto); limpa ao sair.
 - [ ] Fase 4 — presença e pontos
 - [ ] Fase 5 — planejamento trimestral
 - [ ] Fase 6 — notificações WhatsApp
