@@ -134,7 +134,7 @@ O app manda lembretes da escala (2 dias antes), do ensaio (no dia), de ponto des
    ```bash
    pnpm exec supabase secrets set EVOLUTION_API_URL=https://sua-evolution.exemplo.com EVOLUTION_API_KEY=<chave> EVOLUTION_INSTANCE=<instancia> APP_URL=https://seu-app.vercel.app
    ```
-3. No painel do Supabase, em **Project Settings → Vault**, crie dois segredos: `project_url` (a Project URL) e `service_role_key` (a chave service_role). É com eles que o envio automático (a cada minuto) chama a função.
+3. No painel do Supabase, em **Project Settings → Vault**, crie dois segredos: `project_url` (a Project URL) e `service_role_key` (a chave **secret** `sb_secret_…` de Project Settings → API Keys; é a mesma que as funções recebem em `SUPABASE_SERVICE_ROLE_KEY`). É com eles que o envio automático (a cada minuto) chama a função.
 4. Cada pessoa cadastra o WhatsApp em **Meu perfil** e pode desligar os avisos ali.
 
 Em **Configurações** o responsável pela igreja vê o histórico (enviado, na fila, falhou). Se a Evolution falhar, o app tenta de novo em 1 min, 5 min, 30 min, 2 h e 6 h.
