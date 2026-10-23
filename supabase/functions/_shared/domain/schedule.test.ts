@@ -197,3 +197,56 @@ describe('sugestão de substituto', () => {
     expect(result.map((s) => s.member.name)).toEqual(['Júlia'])
   })
 })
+
+describe('respostas de disponibilidade', () => {
+  const vocal = [member('m1', 'Ana', [VOCAL]), member('m2', 'Bia', [VOCAL])]
+  const periodo = {
+    ministry_member_id: 'm1',
+    starts_at: '2026-11-01T00:00:00Z',
+    ends_at: '2026-11-03T00:00:00Z',
+    recurrence_rule: null,
+  }
+  const base = {
+    roleId: VOCAL,
+    event: culto,
+    events: [culto],
+    assignments: [],
+    eligibility: allEligible,
+  }
+
+  it('sem resposta pode ser escalado; "não posso" vira conflito', () => {
+    expect(assignmentConflicts({ ...base, member: vocal[0]!, unavailability: [] })).toEqual([])
+    const conflicts = assignmentConflicts({
+      ...base,
+      member: vocal[0]!,
+      unavailability: [],
+      answers: [{ event_id: 'e1', ministry_member_id: 'm1', available: false }],
+    })
+    expect(conflicts.map((c) => c.kind)).toEqual(['unavailable'])
+  })
+
+  it('"posso" na data vale mais que um período de indisponibilidade', () => {
+    expect(
+      assignmentConflicts({
+        ...base,
+        member: vocal[0]!,
+        unavailability: [periodo],
+        answers: [{ event_id: 'e1', ministry_member_id: 'm1', available: true }],
+      }),
+    ).toEqual([])
+  })
+
+  it('sugere primeiro quem disse "posso"', () => {
+    const result = suggestSubstitutes({
+      ...base,
+      members: vocal,
+      unavailability: [],
+      assignments: [{ event_id: 'e1', ministry_member_id: 'x', ministry_role_id: null }],
+      answers: [{ event_id: 'e1', ministry_member_id: 'm2', available: true }],
+    })
+    expect(result.map((s) => [s.member.name, s.confirmed])).toEqual([
+      ['Bia', true],
+      ['Ana', false],
+    ])
+  })
+})

@@ -5,21 +5,35 @@ import { handleDispatch, type DispatchDeps, type QueueItem } from './handler.ts'
 
 const NOW = Date.parse('2026-10-30T12:00:00Z')
 
-function setup(items: QueueItem[], send: DispatchDeps['send']) {
+function setup(items: QueueItem[], send: DispatchDeps['send'], push: Partial<DispatchDeps> = {}) {
   const finished: { id: string; ok: boolean; error: string | null; retryAt: string | null }[] = []
+  const pushSent: string[] = []
+  const removed: string[] = []
   const deps: DispatchDeps = {
     serviceKey: 'service',
-    configured: true,
+    whatsappConfigured: true,
+    pushConfigured: false,
     appUrl: 'https://idex.app',
     claim: async () => items,
     finish: async (id, ok, error, retryAt) => {
       finished.push({ id, ok, error, retryAt })
     },
     send,
+    pushSubscriptions: async () => [],
+    sendPush: async () => ({ ok: true }),
+    removeSubscription: async (endpoint) => {
+      removed.push(endpoint)
+    },
+    markPushSent: async (id) => {
+      pushSent.push(id)
+    },
     now: () => NOW,
+    ...push,
   }
-  return { deps, finished }
+  return { deps, finished, pushSent, removed }
 }
+
+const SUB = { endpoint: 'https://push.example/1', p256dh: 'x', auth: 'y' }
 
 const call = (deps: DispatchDeps, token = 'service') =>
   handleDispatch(
@@ -37,7 +51,9 @@ const item = (over: Partial<QueueItem> = {}): QueueItem => ({
     role: 'Violão',
   },
   attempts: 1,
+  profile_id: 'p1',
   phone: '(11) 91234-5678',
+  push_sent: false,
   ...over,
 })
 
@@ -45,7 +61,7 @@ describe('envio de avisos', () => {
   it('só roda com a chave do servidor', async () => {
     const { deps } = setup([], async () => ({ ok: true }))
     expect((await call(deps, 'anon')).status).toBe(401)
-    expect((await call({ ...deps, configured: false })).status).toBe(503)
+    expect((await call({ ...deps, whatsappConfigured: false })).status).toBe(503)
   })
 
   it('envia com telefone normalizado e texto em pt-BR', async () => {
@@ -111,5 +127,68 @@ describe('envio de avisos', () => {
       (async () => new Response('erro', { status: 401 })) as typeof fetch,
     )
     expect(await failing('1', 'a')).toEqual({ ok: false, error: 'HTTP 401 erro' })
+  })
+
+  describe('aviso no celular', () => {
+    it('sem WhatsApp configurado, entrega só no celular', async () => {
+      const messages: unknown[] = []
+      const { deps, finished, pushSent } = setup([item()], async () => ({ ok: true }), {
+        whatsappConfigured: false,
+        pushConfigured: true,
+        pushSubscriptions: async () => [SUB],
+        sendPush: async (_sub, message) => {
+          messages.push(message)
+          return { ok: true }
+        },
+      })
+      expect(await (await call(deps)).json()).toMatchObject({ sent: 1 })
+      expect(messages[0]).toMatchObject({ title: 'Você está na escala', url: '/escalas' })
+      expect(pushSent).toEqual(['n1'])
+      expect(finished[0]).toMatchObject({ ok: true })
+    })
+
+    it('manda nos dois canais; na nova tentativa do WhatsApp não repete o celular', async () => {
+      let pushes = 0
+      const { deps, finished } = setup(
+        [item({ push_sent: true })],
+        async () => ({ ok: false, error: 'HTTP 500' }),
+        {
+          pushConfigured: true,
+          pushSubscriptions: async () => [SUB],
+          sendPush: async () => {
+            pushes++
+            return { ok: true }
+          },
+        },
+      )
+      await call(deps)
+      expect(pushes).toBe(0)
+      expect(finished[0]).toMatchObject({ ok: false, error: 'HTTP 500' })
+    })
+
+    it('apaga aparelho que não existe mais; sem canal, não insiste', async () => {
+      const { deps, finished, removed } = setup(
+        [item({ phone: null })],
+        async () => ({ ok: true }),
+        {
+          pushConfigured: true,
+          pushSubscriptions: async () => [SUB],
+          sendPush: async () => ({ ok: false, gone: true, error: 'HTTP 410' }),
+        },
+      )
+      await call(deps)
+      expect(removed).toEqual([SUB.endpoint])
+      expect(finished[0]).toMatchObject({ ok: false, retryAt: null })
+    })
+
+    it('falha passageira no celular tenta de novo', async () => {
+      const { deps, finished } = setup([item({ phone: null })], async () => ({ ok: true }), {
+        pushConfigured: true,
+        pushSubscriptions: async () => [SUB],
+        sendPush: async () => ({ ok: false, gone: false, error: 'HTTP 503' }),
+      })
+      await call(deps)
+      expect(finished[0]?.retryAt).not.toBeNull()
+    })
   })
 })

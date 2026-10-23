@@ -151,4 +151,50 @@ describe('checkin', () => {
     expect((await post(setup(START).deps, { qr: 'não é qr', ...IGREJA })).status).toBe(400)
     expect((await post(setup(START).deps, { qr })).status).toBe(400) // sem localização
   })
+
+  describe('forma do ponto escolhida pelo líder', () => {
+    const withMode = (checkin_mode: string) =>
+      context({ settings: { ...context().settings, checkin_mode } })
+
+    it('só localização: bate o ponto sem QR, pelo evento', async () => {
+      const { deps, recorded } = setup(START, withMode('geo'))
+      const r = await post(deps, { eventId: EVENT, ...IGREJA, accuracy: 10 })
+      expect(r.status).toBe(200)
+      expect(recorded[0]).toMatchObject({ source: 'geo' })
+      // longe da igreja continua recusado
+      const far = await post(setup(START, withMode('geo')).deps, {
+        eventId: EVENT,
+        lat: IGREJA.lat + 0.05,
+        lng: IGREJA.lng,
+      })
+      expect(far.status).toBe(403)
+      // sem localização não dá
+      expect((await post(setup(START, withMode('geo')).deps, { eventId: EVENT })).status).toBe(400)
+    })
+
+    it('só QR: não exige localização', async () => {
+      const { deps, recorded } = setup(START, withMode('qr'))
+      const r = await post(deps, { qr: await qrPayload(SECRET, EVENT, START) })
+      expect(r.status).toBe(200)
+      expect(recorded[0]).toMatchObject({ source: 'qr', lat: null, distanceM: null })
+      // sem QR não dá
+      const noQr = await post(setup(START, withMode('qr')).deps, { eventId: EVENT, ...IGREJA })
+      expect(noQr.status).toBe(400)
+    })
+
+    it('QR + localização (padrão) exige os dois', async () => {
+      const noQr = await post(setup(START).deps, { eventId: EVENT, ...IGREJA })
+      expect(noQr.status).toBe(400)
+    })
+
+    it('aceita o QR lido pela câmera do celular (endereço do app)', async () => {
+      const { deps } = setup(START)
+      const payload = await qrPayload(SECRET, EVENT, START)
+      const r = await post(deps, {
+        qr: `https://idex.app/ponto?q=${encodeURIComponent(payload)}`,
+        ...IGREJA,
+      })
+      expect(r.status).toBe(200)
+    })
+  })
 })

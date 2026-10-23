@@ -134,10 +134,11 @@ export function makeDeps(
       arrivedAt: string
       lateMinutes: number
       delta: number
-      lat: number
-      lng: number
+      source: 'qr' | 'geo'
+      lat: number | null
+      lng: number | null
       accuracyM: number | null
-      distanceM: number
+      distanceM: number | null
     }) =>
       must<string>(
         service.rpc('record_attendance', {
@@ -146,7 +147,7 @@ export function makeDeps(
           p_arrived_at: args.arrivedAt,
           p_late_minutes: args.lateMinutes,
           p_delta: args.delta,
-          p_source: 'qr',
+          p_source: args.source,
           p_lat: args.lat,
           p_lng: args.lng,
           p_accuracy_m: args.accuracyM,

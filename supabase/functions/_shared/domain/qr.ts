@@ -32,7 +32,24 @@ export async function qrPayload(secret: string, eventId: string, nowMs: number):
   return `${PREFIX}.${eventId}.${await qrToken(secret, eventId, qrWindow(nowMs))}`
 }
 
-export function parseQrPayload(payload: string): { eventId: string; token: string } | null {
+/**
+ * Endereço do QR: abre o app direto no check-in quando lido pela câmera do
+ * celular (fora do app). Ex.: https://app/ponto?q=idex1.<evento>.<token>
+ */
+export function qrCheckinUrl(appOrigin: string, payload: string): string {
+  return `${appOrigin.replace(/\/+$/, '')}/ponto?q=${encodeURIComponent(payload)}`
+}
+
+/** Aceita o conteúdo puro (idex1.…) ou o endereço com ?q=. */
+export function parseQrPayload(raw: string): { eventId: string; token: string } | null {
+  let payload = raw.trim()
+  if (/^https?:\/\//i.test(payload)) {
+    try {
+      payload = new URL(payload).searchParams.get('q') ?? ''
+    } catch {
+      return null
+    }
+  }
   const m = payload.trim().match(/^idex1\.([0-9a-f-]{36})\.([A-Za-z0-9_-]{10,64})$/i)
   return m?.[1] && m[2] ? { eventId: m[1].toLowerCase(), token: m[2] } : null
 }

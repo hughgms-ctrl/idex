@@ -46,7 +46,7 @@ export function renderMessage(
     case 'schedule_reminder':
       return `${hi} Lembrete: você está escalado(a)${p.role ? ` como *${p.role}*` : ''} no *${p.eventTitle}* de ${when(p.eventStartsAt, tz)}. Se não puder ir, avise o líder pelo app o quanto antes.${link}`
     case 'rehearsal_today':
-      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}. Chegue no horário e bata o ponto pelo QR. 🎶${link}`
+      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}. Chegue no horário e bata o ponto pelo app. 🎶${link}`
     case 'points_deducted':
       return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
     case 'request_reviewed': {
@@ -77,4 +77,28 @@ export function normalizePhone(raw: string | null | undefined): string | null {
 export function retryDelayMs(attempts: number): number | null {
   const steps = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 6 * 3_600_000]
   return attempts >= 1 && attempts <= steps.length ? (steps[attempts - 1] ?? null) : null
+}
+
+export type PushMessage = { title: string; body: string; url: string; tag: string }
+
+/** Aviso no celular (Web Push): título curto, texto sem formatação e a tela que abre. */
+export function renderPush(
+  kind: NotificationKind,
+  p: NotificationPayload,
+  tag: string,
+  tz = DEFAULT_TZ,
+): PushMessage {
+  const plain = renderMessage(kind, { ...p, appUrl: null }, tz)
+    .replace(/\*/g, '')
+    .replace(/^Olá(, [^!]+)?! /, '')
+  switch (kind) {
+    case 'schedule_reminder':
+      return { title: 'Você está na escala', body: plain, url: '/escalas', tag }
+    case 'rehearsal_today':
+      return { title: 'Hoje tem ensaio', body: plain, url: '/', tag }
+    case 'points_deducted':
+      return { title: 'Pontos descontados', body: plain, url: '/presenca', tag }
+    case 'request_reviewed':
+      return { title: 'Seu pedido foi analisado', body: plain, url: '/presenca', tag }
+  }
 }

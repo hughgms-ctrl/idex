@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizePhone, renderMessage, retryDelayMs } from './notifications.ts'
+import { normalizePhone, renderMessage, renderPush, retryDelayMs } from './notifications.ts'
 
 const SUNDAY = '2026-11-01T22:00:00Z' // domingo 19h em SP
 
@@ -70,5 +70,20 @@ describe('telefone e novas tentativas', () => {
     expect(retryDelayMs(1)).toBe(60_000)
     expect(retryDelayMs(5)).toBe(6 * 3_600_000)
     expect(retryDelayMs(6)).toBeNull()
+  })
+})
+
+describe('aviso no celular', () => {
+  it('título curto, texto sem asteriscos e a tela certa', () => {
+    const push = renderPush(
+      'schedule_reminder',
+      { name: 'Bruno Lima', eventTitle: 'Culto de domingo', eventStartsAt: SUNDAY, role: 'Violão' },
+      'n1',
+    )
+    expect(push.title).toBe('Você está na escala')
+    expect(push.body).not.toContain('*')
+    expect(push.body).not.toMatch(/^Olá/)
+    expect(push.body).toContain('Violão')
+    expect(push.url).toBe('/escalas')
   })
 })

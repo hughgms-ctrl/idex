@@ -20,6 +20,22 @@ export type Unavailability = {
   recurrence_rule: string | null
 }
 
+/** Resposta do membro para um evento: pode (true) ou não pode (false). */
+export type AvailabilityAnswer = {
+  event_id: string
+  ministry_member_id: string
+  available: boolean
+}
+
+export function answerFor(
+  memberId: string,
+  eventId: string,
+  answers: AvailabilityAnswer[] | undefined,
+): boolean | null {
+  const a = answers?.find((x) => x.event_id === eventId && x.ministry_member_id === memberId)
+  return a ? a.available : null
+}
+
 export type Assignment = {
   id?: string
   event_id: string
@@ -174,6 +190,8 @@ export function assignmentConflicts(params: {
   assignments: Assignment[]
   unavailability: Unavailability[]
   eligibility: EligibilityInfo
+  /** respostas "posso / não posso" (sem resposta = pode ser escalado) */
+  answers?: AvailabilityAnswer[]
   tz?: string
 }): Conflict[] {
   const {
@@ -184,6 +202,7 @@ export function assignmentConflicts(params: {
     assignments,
     unavailability,
     eligibility,
+    answers,
     tz = DEFAULT_TZ,
   } = params
   const out: Conflict[] = []
@@ -192,7 +211,11 @@ export function assignmentConflicts(params: {
   if (!isEligible(member.id, eligibility)) {
     out.push({ kind: 'ineligible', message: `${member.name} não ficou elegível no último ciclo.` })
   }
-  if (isUnavailable(member.id, event, unavailability, tz)) {
+  // A resposta para a data vale mais que o período de indisponibilidade
+  const answer = answerFor(member.id, event.id, answers)
+  if (answer === false) {
+    out.push({ kind: 'unavailable', message: `${member.name} disse que não pode nesta data.` })
+  } else if (answer === null && isUnavailable(member.id, event, unavailability, tz)) {
     out.push({ kind: 'unavailable', message: `${member.name} marcou indisponibilidade.` })
   }
   if (roleId && !member.roleIds.includes(roleId)) {
@@ -220,12 +243,17 @@ export function assignmentConflicts(params: {
 // Sugestão de substituto
 // ---------------------------------------------------------------------------
 
-export type Suggestion = { member: MemberLike; assignmentsInMonth: number }
+export type Suggestion = {
+  member: MemberLike
+  assignmentsInMonth: number
+  /** disse "posso" para esta data */
+  confirmed: boolean
+}
 
 /**
  * Candidatos para uma função num evento: ativos, com a função, disponíveis,
- * elegíveis no ciclo e livres no horário; ordenados por quem foi menos
- * escalado no mês (empate: ordem alfabética).
+ * elegíveis no ciclo e livres no horário; primeiro quem disse "posso", depois
+ * quem foi menos escalado no mês (empate: ordem alfabética).
  */
 export function suggestSubstitutes(params: {
   roleId: string | null
@@ -235,6 +263,7 @@ export function suggestSubstitutes(params: {
   assignments: Assignment[] // escalas do mês
   unavailability: Unavailability[]
   eligibility: EligibilityInfo
+  answers?: AvailabilityAnswer[]
   exclude?: string[]
   limit?: number
   tz?: string
@@ -253,9 +282,14 @@ export function suggestSubstitutes(params: {
     .filter((m) => !exclude.includes(m.id) && !alreadyInEvent.has(m.id))
     .filter((m) => (roleId ? m.roleIds.includes(roleId) : true))
     .filter((m) => assignmentConflicts({ ...params, member: m }).length === 0)
-    .map((m) => ({ member: m, assignmentsInMonth: counts.get(m.id) ?? 0 }))
+    .map((m) => ({
+      member: m,
+      assignmentsInMonth: counts.get(m.id) ?? 0,
+      confirmed: answerFor(m.id, event.id, params.answers) === true,
+    }))
     .sort(
       (a, b) =>
+        Number(b.confirmed) - Number(a.confirmed) ||
         a.assignmentsInMonth - b.assignmentsInMonth ||
         a.member.name.localeCompare(b.member.name, 'pt-BR'),
     )
