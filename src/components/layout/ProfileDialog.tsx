@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { FormField } from '@/components/FormField'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { errorMessage } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 
@@ -26,6 +28,7 @@ const schema = z.object({
     .refine((v) => v === '' || /^\+?[0-9 ()-]{8,20}$/.test(v), {
       message: 'Telefone inválido (ex.: +55 11 91234-5678)',
     }),
+  notify: z.boolean(),
 })
 type Values = z.infer<typeof schema>
 
@@ -36,12 +39,16 @@ export function ProfileDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  profile: { id: string; full_name: string; phone: string | null }
+  profile: { id: string; full_name: string; phone: string | null; whatsapp_opt_out: boolean }
 }) {
   const queryClient = useQueryClient()
   const form = useForm<Values>({
     resolver: zodResolver(schema),
-    values: { fullName: profile.full_name, phone: profile.phone ?? '' },
+    values: {
+      fullName: profile.full_name,
+      phone: profile.phone ?? '',
+      notify: !profile.whatsapp_opt_out,
+    },
   })
   const { errors } = form.formState
 
@@ -49,7 +56,11 @@ export function ProfileDialog({
     mutationFn: async (values: Values) => {
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: values.fullName, phone: values.phone || null })
+        .update({
+          full_name: values.fullName,
+          phone: values.phone || null,
+          whatsapp_opt_out: !values.notify,
+        })
         .eq('id', profile.id)
       if (error) throw error
     },
@@ -86,6 +97,19 @@ export function ProfileDialog({
               {...form.register('phone')}
             />
           </FormField>
+          <Controller
+            control={form.control}
+            name="notify"
+            render={({ field }) => (
+              <Label className="min-h-11 cursor-pointer font-normal">
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={(v) => field.onChange(v === true)}
+                />
+                Receber avisos pelo WhatsApp (escala, ensaio, pontos)
+              </Label>
+            )}
+          />
           <DialogFooter>
             <Button type="submit" disabled={save.isPending}>
               {save.isPending ? 'Salvando…' : 'Salvar'}

@@ -10,7 +10,7 @@ export function useMyProfile() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone')
+        .select('id, full_name, phone, whatsapp_opt_out')
         .eq('id', user.id)
         .single()
       if (error) throw error

@@ -892,6 +892,67 @@ export type Database = {
           },
         ]
       }
+      notification_queue: {
+        Row: {
+          attempts: number
+          church_id: string
+          created_at: string
+          dedupe_key: string
+          id: string
+          kind: Database['public']['Enums']['notification_kind']
+          last_error: string | null
+          next_attempt_at: string
+          payload: NonNullable<Json>
+          profile_id: string
+          sent_at: string | null
+          status: Database['public']['Enums']['notification_status']
+        }
+        ComputedFields: never
+        Insert: {
+          attempts?: number
+          church_id: string
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          kind: Database['public']['Enums']['notification_kind']
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: NonNullable<Json>
+          profile_id: string
+          sent_at?: string | null
+          status?: Database['public']['Enums']['notification_status']
+        }
+        Update: {
+          attempts?: number
+          church_id?: string
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          kind?: Database['public']['Enums']['notification_kind']
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: NonNullable<Json>
+          profile_id?: string
+          sent_at?: string | null
+          status?: Database['public']['Enums']['notification_status']
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'notification_queue_church_id_fkey'
+            columns: ['church_id']
+            isOneToOne: false
+            referencedRelation: 'churches'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'notification_queue_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       point_ledger: {
         Row: {
           checkin_id: string | null
@@ -999,6 +1060,7 @@ export type Database = {
           id: string
           phone: string | null
           updated_at: string
+          whatsapp_opt_out: boolean
         }
         ComputedFields: never
         Insert: {
@@ -1008,6 +1070,7 @@ export type Database = {
           id: string
           phone?: string | null
           updated_at?: string
+          whatsapp_opt_out?: boolean
         }
         Update: {
           avatar_url?: string | null
@@ -1016,6 +1079,7 @@ export type Database = {
           id?: string
           phone?: string | null
           updated_at?: string
+          whatsapp_opt_out?: boolean
         }
         Relationships: []
       }
@@ -1334,6 +1398,16 @@ export type Database = {
         Args: { p_event_id: string; p_ministry_member_id: string }
         Returns: boolean
       }
+      claim_notifications: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          id: string
+          kind: Database['public']['Enums']['notification_kind']
+          payload: Json
+          phone: string
+        }[]
+      }
       close_due_cycles: { Args: Record<PropertyKey, never>; Returns: number }
       create_checkin_request: {
         Args: {
@@ -1349,7 +1423,23 @@ export type Database = {
         Returns: string
       }
       cycle_for_event: { Args: { p_event_id: string }; Returns: string }
+      dispatch_notifications_http: { Args: Record<PropertyKey, never>; Returns: undefined }
+      enqueue_notification: {
+        Args: {
+          p_church_id: string
+          p_dedupe_key: string
+          p_kind: Database['public']['Enums']['notification_kind']
+          p_payload: Json
+          p_profile_id: string
+        }
+        Returns: undefined
+      }
+      enqueue_reminders: { Args: Record<PropertyKey, never>; Returns: number }
       event_end: { Args: { p_ends_at: string; p_starts_at: string }; Returns: string }
+      finish_notification: {
+        Args: { p_error?: string; p_id: string; p_ok: boolean; p_retry_at?: string }
+        Returns: undefined
+      }
       get_invite_preview: {
         Args: { p_token: string }
         Returns: {
@@ -1399,6 +1489,7 @@ export type Database = {
         }
         Returns: string
       }
+      requeue_stuck_notifications: { Args: Record<PropertyKey, never>; Returns: number }
       review_justification: {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
         Returns: undefined
@@ -1416,6 +1507,9 @@ export type Database = {
       justification_status: 'pending' | 'approved' | 'rejected'
       member_status: 'active' | 'inactive'
       ministry_member_role: 'leader' | 'member'
+      notification_kind:
+        'schedule_reminder' | 'rehearsal_today' | 'points_deducted' | 'request_reviewed'
+      notification_status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
       point_reason: 'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment'
       request_status: 'pending' | 'approved' | 'adjusted' | 'rejected'
     }
@@ -1538,6 +1632,13 @@ export const Constants = {
       justification_status: ['pending', 'approved', 'rejected'],
       member_status: ['active', 'inactive'],
       ministry_member_role: ['leader', 'member'],
+      notification_kind: [
+        'schedule_reminder',
+        'rehearsal_today',
+        'points_deducted',
+        'request_reviewed',
+      ],
+      notification_status: ['pending', 'sending', 'sent', 'failed', 'skipped'],
       point_reason: ['cycle_start', 'late', 'absence', 'request_rejected', 'adjustment'],
       request_status: ['pending', 'approved', 'adjusted', 'rejected'],
     },

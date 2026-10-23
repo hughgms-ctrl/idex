@@ -26,7 +26,7 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - Hierarquia: churches → ministries → ministry_members (membro com uma ou mais funções). `profiles` liga `auth.users` aos dados do usuário.
 - Leituras e CRUD simples: direto do front com supabase-js, protegidos por RLS.
 - Tudo que mexe em ponto, check-in ou ciclo NUNCA é escrito pelo front: passa por Edge Function ou função Postgres (RPC `security definer`) que valida a regra. O cliente não tem permissão de INSERT/UPDATE em `point_ledger`, `checkins` nem `cycle_eligibility`.
-- Regras de cálculo (atraso, desconto, saldo, elegibilidade) em `supabase/functions/_shared/domain/*` como funções puras, com testes (Deno test).
+- Regras de cálculo (atraso, desconto, saldo, elegibilidade) em `supabase/functions/_shared/domain/*` como funções puras, com testes (Vitest, `pnpm test`; código compatível com Deno).
 - Toda alteração de ponto gera um registro em `point_ledger` (nunca editar saldo direto; saldo = soma do ledger, exposto por view).
 - Fechamento de ciclo agendado com pg_cron chamando uma função.
 
@@ -64,7 +64,6 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - Saldo = soma do `point_ledger` (view `member_cycle_balance`); quem entra no ministério ganha o crédito `cycle_start` do ciclo aberto (gatilho). Ledger só aceita INSERT (DELETE só em cascata).
   - `checkin_requests` e revisão de `justifications` ficam para RPCs da Fase 4 (cliente não escreve).
   - Visual segue os protótipos (tema escuro, verde-limão #D4F04A, Bricolage Grotesque + IBM Plex). Atenção: o protótipo de Presença usa "pontos de penalidade" (6 = fora da escala); a regra oficial é a deste arquivo (saldo 100, mínimo 70).
-  - Pendências conhecidas: cache offline de escala/setlist (Fases 2/3) e Web Push.
 - [x] Fase 2 — escala
   - Regras puras em `supabase/functions/_shared/domain/{time,schedule}.ts` (fuso, recorrência semanal, indisponibilidade, conflitos, elegibilidade, sugestão de substituto), testadas com Vitest (o front importa via alias `@domain`).
   - Eventos únicos ou semanais (filhos com `recurrence_parent_id`), escala por função, copiar escala de outro evento, indisponibilidade por período ou semanal (dia inteiro). Motivo visível só ao próprio membro e ao líder; gatilho impede escalar gente/função de outro ministério.
@@ -85,4 +84,8 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - [x] Fase 5 — planejamento trimestral
   - Regras puras em `_shared/domain/planning.ts` (`analyzePlan`: repetição em menos de N semanas, novas por mês, cultos incompletos; `suggestFill`: completa os cultos priorizando o que está há mais tempo sem tocar). "Nova" = `songs.is_new` (marcada pelo líder) na estreia; sem isso, um app recém-adotado trataria todo o repertório como novo.
   - Tela `/planejamento` (líder): 3 meses em colunas, cartões por culto com tom, selos NOVA / "N SEM", números do trimestre, regras editáveis (`quarter_plan_rules`), "Sugerir com regras" mostra a prévia tracejada e só grava ao salvar.
-- [ ] Fase 6 — notificações WhatsApp
+- [x] Fase 6 — notificações WhatsApp
+  - Fila `notification_queue` (dedupe por chave; RLS: a pessoa vê os próprios, dono vê os da igreja). Enfileiram: gatilho de `point_ledger` (desconto), gatilhos de `checkin_requests`/`justifications` (analisado) e job `enqueue_reminders` (escala D-2; ensaio no dia após 8h). Opt-out em `profiles.whatsapp_opt_out` → `skipped`.
+  - Edge Function `notifications-dispatch` (só com a chave service_role): `claim_notifications` (skip locked) → Evolution `POST /message/sendText/{instância}` → `finish_notification`; novas tentativas 1m/5m/30m/2h/6h. Textos e telefone em `_shared/domain/notifications.ts`.
+  - pg_cron chama a função via `pg_net` a cada minuto usando os segredos do Vault `project_url` e `service_role_key` (sem eles, nada é enviado). Segredos: `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`, `APP_URL`.
+- Pendências conhecidas: Web Push (VAPID) não implementado; importação do Cifra Club depende do HTML do site (sem API oficial) e não pôde ser testada contra o site real no ambiente de desenvolvimento.

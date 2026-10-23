@@ -1,0 +1,80 @@
+// Avisos por WhatsApp: texto das mensagens, telefone e novas tentativas.
+import { DEFAULT_TZ, localParts } from './time.ts'
+
+export type NotificationKind =
+  'schedule_reminder' | 'rehearsal_today' | 'points_deducted' | 'request_reviewed'
+
+export type NotificationPayload = {
+  name?: string | null
+  church?: string | null
+  eventTitle?: string | null
+  eventStartsAt?: string | null
+  role?: string | null
+  delta?: number | null
+  reason?: string | null
+  balance?: number | null
+  status?: string | null
+  kind?: string | null // pedido | justificativa
+  appUrl?: string | null
+}
+
+const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+const pad = (n: number) => String(n).padStart(2, '0')
+
+function when(iso: string | null | undefined, tz: string): string {
+  if (!iso) return ''
+  const p = localParts(iso, tz)
+  return `${WEEKDAYS[p.weekday]}, ${pad(p.day)}/${pad(p.month)} às ${pad(p.hour)}h${p.minute ? pad(p.minute) : ''}`
+}
+
+const REASON: Record<string, string> = {
+  late: 'atraso',
+  absence: 'falta sem aviso',
+  request_rejected: 'pedido de registro recusado',
+  adjustment: 'ajuste do líder',
+}
+
+/** Texto do WhatsApp (pt-BR). */
+export function renderMessage(
+  kind: NotificationKind,
+  p: NotificationPayload,
+  tz = DEFAULT_TZ,
+): string {
+  const hi = p.name ? `Olá, ${p.name.split(' ')[0]}!` : 'Olá!'
+  const link = p.appUrl ? `\n\nAbra o ide.x: ${p.appUrl}` : ''
+  switch (kind) {
+    case 'schedule_reminder':
+      return `${hi} Lembrete: você está escalado(a)${p.role ? ` como *${p.role}*` : ''} no *${p.eventTitle}* de ${when(p.eventStartsAt, tz)}. Se não puder ir, avise o líder pelo app o quanto antes.${link}`
+    case 'rehearsal_today':
+      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}. Chegue no horário e bata o ponto pelo QR. 🎶${link}`
+    case 'points_deducted':
+      return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
+    case 'request_reviewed': {
+      const what =
+        p.kind === 'justificativa'
+          ? 'Seu aviso de falta/atraso'
+          : 'Seu pedido de registro de presença'
+      const result =
+        p.status === 'approved'
+          ? 'foi *aprovado* ✅'
+          : p.status === 'adjusted'
+            ? 'foi *aprovado com ajuste de horário*'
+            : 'foi *recusado*'
+      return `${hi} ${what}${p.eventTitle ? ` (${p.eventTitle})` : ''} ${result}.${link}`
+    }
+  }
+}
+
+/** Telefone → só dígitos com DDI (Brasil por padrão). null se inválido. */
+export function normalizePhone(raw: string | null | undefined): string | null {
+  const digits = (raw ?? '').replace(/\D/g, '')
+  if (digits.length === 10 || digits.length === 11) return `55${digits}`
+  if (digits.length >= 12 && digits.length <= 15) return digits
+  return null
+}
+
+/** Espera antes da próxima tentativa (1 min, 5 min, 30 min, 2 h, 6 h). null = desistir. */
+export function retryDelayMs(attempts: number): number | null {
+  const steps = [60_000, 5 * 60_000, 30 * 60_000, 2 * 3_600_000, 6 * 3_600_000]
+  return attempts >= 1 && attempts <= steps.length ? (steps[attempts - 1] ?? null) : null
+}

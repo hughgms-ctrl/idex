@@ -35,16 +35,21 @@ export function SettingsPage() {
     <>
       <PageHeader title="Configurações" description={church.name} />
       {churchRow.data && (
-        <ChurchLocation key={churchRow.data.updated_at} church={churchRow.data} canEdit={isOwner} />
+        <ChurchLocation
+          key={`igreja-${churchRow.data.updated_at}`}
+          church={churchRow.data}
+          canEdit={isOwner}
+        />
       )}
       {ministry && settings.data && (
         <MinistryRules
-          key={settings.data.updated_at}
+          key={`regras-${settings.data.updated_at}`}
           ministryName={ministry.name}
           settings={settings.data}
           canEdit={isLeader(ministry.id)}
         />
       )}
+      {isOwner && <NotificationLog churchId={church.id} />}
     </>
   )
 }
@@ -277,6 +282,83 @@ function MinistryRules({
           </p>
         )}
       </Panel>
+    </section>
+  )
+}
+
+const KIND_LABEL: Record<string, string> = {
+  schedule_reminder: 'Lembrete de escala',
+  rehearsal_today: 'Ensaio hoje',
+  points_deducted: 'Ponto descontado',
+  request_reviewed: 'Pedido analisado',
+}
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'na fila',
+  sending: 'enviando',
+  sent: 'enviado',
+  failed: 'falhou',
+  skipped: 'não enviado',
+}
+
+function NotificationLog({ churchId }: { churchId: string }) {
+  const log = useQuery({
+    queryKey: ['notifications', churchId],
+    refetchInterval: 30_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('notification_queue')
+        .select('id, kind, status, last_error, created_at, sent_at, profiles(full_name)')
+        .eq('church_id', churchId)
+        .order('created_at', { ascending: false })
+        .limit(30)
+      if (error) throw error
+      return data
+    },
+  })
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionTitle title="Avisos por WhatsApp" />
+      <p className="text-muted-foreground text-[13px]">
+        Lembrete da escala 2 dias antes, ensaio no dia, ponto descontado e pedidos analisados. Cada
+        pessoa pode desligar em “Meu perfil”.
+      </p>
+      {log.data && log.data.length > 0 ? (
+        <ul className="bg-card flex flex-col overflow-hidden rounded-2xl border">
+          {log.data.map((n) => (
+            <li
+              key={n.id}
+              className="flex items-center gap-3 border-b px-3.5 py-2.5 text-sm last:border-b-0"
+            >
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate">
+                  {KIND_LABEL[n.kind] ?? n.kind} · {n.profiles?.full_name ?? '—'}
+                </span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {new Date(n.sent_at ?? n.created_at).toLocaleString('pt-BR', {
+                    timeZone: 'America/Sao_Paulo',
+                  })}
+                  {n.last_error ? ` · ${n.last_error}` : ''}
+                </span>
+              </span>
+              <span
+                className={
+                  n.status === 'sent'
+                    ? 'text-primary text-xs font-semibold'
+                    : n.status === 'failed'
+                      ? 'text-destructive text-xs font-semibold'
+                      : 'text-muted-foreground text-xs'
+                }
+              >
+                {STATUS_LABEL[n.status] ?? n.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Panel className="text-muted-foreground items-center py-6 text-center text-sm">
+          Nenhum aviso ainda.
+        </Panel>
+      )}
     </section>
   )
 }

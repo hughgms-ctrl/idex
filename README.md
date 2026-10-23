@@ -125,6 +125,20 @@ Observação: links enviados por e-mail (link mágico) apontam para o seu comput
    O `pnpm exec supabase db push` também liga as tarefas automáticas (faltas a cada 15 min e fechamento de ciclo diário). Se o painel avisar que a extensão `pg_cron` está desligada, ligue em **Database → Extensions**.
 6. Ainda no painel, abra o app, vá em **Configurações** e cadastre a localização da igreja (de dentro da igreja, toque em "Usar minha localização"). Sem isso o check-in não funciona.
 
+### 3.1.1 Avisos por WhatsApp (Evolution API)
+
+O app manda lembretes da escala (2 dias antes), do ensaio (no dia), de ponto descontado e de pedidos analisados. Para ligar:
+
+1. Tenha uma instância da **Evolution API** conectada ao WhatsApp da igreja (anote a URL, a chave e o nome da instância).
+2. Cadastre os segredos das funções:
+   ```bash
+   pnpm exec supabase secrets set EVOLUTION_API_URL=https://sua-evolution.exemplo.com EVOLUTION_API_KEY=<chave> EVOLUTION_INSTANCE=<instancia> APP_URL=https://seu-app.vercel.app
+   ```
+3. No painel do Supabase, em **Project Settings → Vault**, crie dois segredos: `project_url` (a Project URL) e `service_role_key` (a chave service_role). É com eles que o envio automático (a cada minuto) chama a função.
+4. Cada pessoa cadastra o WhatsApp em **Meu perfil** e pode desligar os avisos ali.
+
+Em **Configurações** o responsável pela igreja vê o histórico (enviado, na fila, falhou). Se a Evolution falhar, o app tenta de novo em 1 min, 5 min, 30 min, 2 h e 6 h.
+
 ### 3.2 Vercel
 
 1. Em https://vercel.com, **Add New → Project** e importe o repositório do GitHub.
