@@ -4,9 +4,13 @@ import { ChevronDownIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 // <select> nativo com visual shadcn: no celular abre o seletor do sistema.
-function NativeSelect({ className, ...props }: React.ComponentProps<'select'>) {
+function NativeSelect({
+  className,
+  wrapperClassName,
+  ...props
+}: React.ComponentProps<'select'> & { wrapperClassName?: string }) {
   return (
-    <div className="relative w-full">
+    <div className={cn('relative w-full', wrapperClassName)}>
       <select
         data-slot="native-select"
         className={cn(

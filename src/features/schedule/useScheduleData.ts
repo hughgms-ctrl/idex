@@ -48,10 +48,10 @@ export function useScheduleData(ministryId: string | undefined, year: number, mo
       roleName: new Map((roles.data ?? []).map((r) => [r.id, r.name])),
       unavailability: unav,
       unavailabilityRows: unavailability.data ?? [],
-      eligibility: eligibility.data ?? {
-        hasClosedCycle: false,
-        evaluated: new Set<string>(),
-        eligible: new Set<string>(),
+      eligibility: {
+        hasClosedCycle: eligibility.data?.hasClosedCycle ?? false,
+        evaluated: new Set(eligibility.data?.evaluated ?? []),
+        eligible: new Set(eligibility.data?.eligible ?? []),
       },
     }
   }, [events.data, members.data, roles.data, unavailability.data, eligibility.data])

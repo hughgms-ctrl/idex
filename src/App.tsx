@@ -16,6 +16,7 @@ import { MembersPage } from '@/pages/MembersPage'
 import { MinistriesPage } from '@/pages/MinistriesPage'
 import { RepertoirePage } from '@/pages/RepertoirePage'
 import { SchedulePage } from '@/pages/SchedulePage'
+import { SetlistPage } from '@/pages/SetlistPage'
 
 const router = createBrowserRouter([
   {
@@ -59,6 +60,21 @@ const router = createBrowserRouter([
           { path: 'escalas', element: <SchedulePage /> },
           { path: 'escalas/:eventId', element: <EventSchedulePage /> },
           { path: 'repertorio', element: <RepertoirePage /> },
+          { path: 'repertorio/culto/:eventId', element: <SetlistPage /> },
+          {
+            path: 'repertorio/nova',
+            lazy: () =>
+              import('@/pages/songs/SongEditorPage').then((m) => ({ Component: m.SongEditorPage })),
+          },
+          {
+            path: 'repertorio/:songId/editar',
+            lazy: () =>
+              import('@/pages/songs/SongEditorPage').then((m) => ({ Component: m.SongEditorPage })),
+          },
+          {
+            path: 'repertorio/:songId',
+            lazy: () => import('@/pages/songs/SongPage').then((m) => ({ Component: m.SongPage })),
+          },
           {
             path: 'presenca',
             element: (

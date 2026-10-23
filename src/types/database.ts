@@ -1258,6 +1258,8 @@ export type Database = {
     }
     Functions: {
       accept_invite: { Args: { p_full_name?: string; p_token: string }; Returns: Json }
+      can_edit_setlist: { Args: { p_setlist_id: string }; Returns: boolean }
+      can_edit_setlist_of_event: { Args: { p_event_id: string }; Returns: boolean }
       can_justify_event: {
         Args: { p_event_id: string; p_ministry_member_id: string }
         Returns: boolean
@@ -1279,6 +1281,7 @@ export type Database = {
       is_church_member: { Args: { p_church_id: string }; Returns: boolean }
       is_church_owner: { Args: { p_church_id: string }; Returns: boolean }
       is_event_leader: { Args: { p_event_id: string }; Returns: boolean }
+      is_event_minister: { Args: { p_event_id: string }; Returns: boolean }
       is_leader_of_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_ministry_leader: { Args: { p_ministry_id: string }; Returns: boolean }
       is_ministry_member: { Args: { p_ministry_id: string }; Returns: boolean }

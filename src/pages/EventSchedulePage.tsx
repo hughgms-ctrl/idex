@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertCircle, ArrowLeft, Copy, Pencil, Trash2, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Copy, ListMusic, Pencil, Trash2, X } from 'lucide-react'
 import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
 import { localParts } from '@domain/time.ts'
 
@@ -180,6 +180,14 @@ function Editor({
           )
         }
       />
+
+      {event.kind === 'service' && (
+        <Button asChild variant="outline" className="self-start">
+          <Link to={`/repertorio/culto/${event.id}`}>
+            <ListMusic aria-hidden="true" /> Setlist do culto
+          </Link>
+        </Button>
+      )}
 
       {data.roles.map((role) => {
         const inRole = event.schedule_assignments.filter((a) => a.ministry_role_id === role.id)

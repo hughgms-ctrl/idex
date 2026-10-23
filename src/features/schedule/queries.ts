@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import type { EligibilityInfo } from '@domain/schedule.ts'
 import { monthRange } from '@domain/time.ts'
 
 import { supabase } from '@/lib/supabase'
@@ -72,12 +71,15 @@ export function useUnavailability(ministryId: string | undefined) {
   })
 }
 
+/** Resultado do último fechamento (listas simples: o cache offline guarda JSON). */
+export type EligibilityRows = { hasClosedCycle: boolean; evaluated: string[]; eligible: string[] }
+
 /** Resultado do último fechamento de ciclo (quem pode ser escalado). */
 export function useEligibility(ministryId: string | undefined) {
   return useQuery({
     queryKey: scheduleKeys.eligibility(ministryId ?? ''),
     enabled: Boolean(ministryId),
-    queryFn: async (): Promise<EligibilityInfo> => {
+    queryFn: async (): Promise<EligibilityRows> => {
       const { data: cycle, error } = await supabase
         .from('cycles')
         .select('id')
@@ -87,7 +89,7 @@ export function useEligibility(ministryId: string | undefined) {
         .limit(1)
         .maybeSingle()
       if (error) throw error
-      if (!cycle) return { hasClosedCycle: false, evaluated: new Set(), eligible: new Set() }
+      if (!cycle) return { hasClosedCycle: false, evaluated: [], eligible: [] }
       const { data: rows, error: err } = await supabase
         .from('cycle_eligibility')
         .select('ministry_member_id, eligible')
@@ -95,8 +97,8 @@ export function useEligibility(ministryId: string | undefined) {
       if (err) throw err
       return {
         hasClosedCycle: true,
-        evaluated: new Set(rows.map((r) => r.ministry_member_id)),
-        eligible: new Set(rows.filter((r) => r.eligible).map((r) => r.ministry_member_id)),
+        evaluated: rows.map((r) => r.ministry_member_id),
+        eligible: rows.filter((r) => r.eligible).map((r) => r.ministry_member_id),
       }
     },
   })

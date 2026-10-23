@@ -8,6 +8,8 @@ import { useChurch } from '@/features/church/church-context'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMyProfile } from '@/features/profile/queries'
 import { useMyUpcomingAssignments } from '@/features/schedule/queries'
+import { useNextServices, useSetlist } from '@/features/songs/queries'
+import { useOfflineNextSetlist } from '@/features/songs/useOfflineNextSetlist'
 import {
   useMinistryRoles,
   useMinistrySettings,
@@ -35,6 +37,11 @@ export function DashboardPage() {
   const members = useMinistryMembers(leader ? ministry?.id : undefined)
   const myAssignments = useMyUpcomingAssignments(myMembership?.id)
   const roles = useMinistryRoles(ministry?.id)
+  const nextServices = useNextServices(ministry?.id, 1)
+  const nextService = nextServices.data?.[0]
+  const setlist = useSetlist(nextService?.id)
+  useOfflineNextSetlist(nextService?.id)
+  const setlistItems = setlist.data?.setlist_items ?? []
   const roleName = new Map((roles.data ?? []).map((r) => [r.id, r.name]))
 
   const firstName = profile.data?.full_name.split(' ')[0]
@@ -119,6 +126,43 @@ export function DashboardPage() {
           </p>
         )}
       </section>
+
+      {nextService && (
+        <section className="flex flex-col gap-2.5">
+          <SectionTitle
+            title={`Repertório · ${formatDayMonth(nextService.starts_at)}`}
+            action={
+              <Link to={`/repertorio/culto/${nextService.id}`} className="text-primary text-sm">
+                {setlistItems.length ? `${setlistItems.length} músicas` : 'Ver setlist'}
+              </Link>
+            }
+          />
+          {setlistItems.length > 0 ? (
+            <ol className="bg-card flex flex-col overflow-hidden rounded-2xl border">
+              {setlistItems.map((item, i) => (
+                <li key={item.id} className="border-b last:border-b-0">
+                  <Link
+                    to={`/repertorio/${item.song_id}?culto=${nextService.id}${item.key ? `&tom=${encodeURIComponent(item.key)}` : ''}`}
+                    className="flex min-h-11 items-center gap-3 px-3.5 py-3"
+                  >
+                    <span className="text-muted-foreground w-[18px] font-mono text-[13px]">
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 truncate text-[15px]">{item.songs?.title}</span>
+                    <span className="bg-secondary text-primary rounded-lg px-2 py-1 font-mono text-[13px] font-semibold">
+                      {item.key ?? item.songs?.original_key ?? '—'}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              O setlist deste culto ainda não foi montado.
+            </p>
+          )}
+        </section>
+      )}
 
       <Panel>
         <div className="flex items-baseline justify-between gap-2">
