@@ -30,7 +30,7 @@ begin
 end;
 $fn$;
 
-select plan(45);
+select plan(48);
 
 -- -----------------------------------------------------------------------------
 -- Preparação (como postgres)
@@ -272,6 +272,15 @@ select pg_temp.entrar_como('bbbbbbbb-0000-4000-8000-000000000001', 'dono.b@teste
 select throws_ok('select public.accept_invite(''token-valido'')', '22023', 'Este convite já foi usado',
   'convite de uso único não é reutilizado');
 reset role;
+
+-- -----------------------------------------------------------------------------
+-- Livro de pontos é imutável (até para o servidor), exceto na cascata
+-- -----------------------------------------------------------------------------
+select throws_ok('delete from point_ledger', 'P0001', null, 'nem o servidor apaga lançamentos de pontos avulsos');
+select throws_ok('update point_ledger set delta = 1', 'P0001', null, 'nem o servidor altera lançamentos de pontos');
+select lives_ok(
+  format('delete from churches where id = %L', (select v from ids where k = 'church_b')),
+  'apagar uma igreja inteira apaga tudo dela em cascata');
 
 select * from finish();
 rollback;

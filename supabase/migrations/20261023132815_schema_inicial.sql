@@ -400,6 +400,15 @@ language plpgsql
 set search_path = ''
 as $$
 begin
+  -- Única exceção: apagar em cascata quando o membro, o ciclo ou o ministério
+  -- (ou a igreja inteira) deixou de existir.
+  if tg_op = 'DELETE' and (
+    not exists (select 1 from public.ministry_members mm where mm.id = old.ministry_member_id)
+    or not exists (select 1 from public.cycles c where c.id = old.cycle_id)
+    or not exists (select 1 from public.ministries m where m.id = old.ministry_id)
+  ) then
+    return old;
+  end if;
   raise exception 'point_ledger é somente inserção: lance um ajuste em vez de alterar ou apagar';
 end;
 $$;
