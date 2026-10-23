@@ -76,6 +76,11 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - Setlist por culto: líder ou quem está escalado com função "Ministro…" (`is_event_minister`) edita; tom do item vale para todos.
   - Importar do Cifra Club: Edge Function `import-cifra` (lógica testável em `handler.ts`, leitor em `_shared/import/cifraclub.ts`). Sem API oficial: lê a página sob demanda, só links https do Cifra Club, só líder; o texto volta para o editor e o link de origem fica salvo. Se o HTML do site mudar, ajustar o leitor.
   - Offline: `PersistQueryClientProvider` salva no aparelho as consultas listadas em `src/lib/query-client.ts` (igreja, escala, setlist, cifras do próximo culto); limpa ao sair.
-- [ ] Fase 4 — presença e pontos
+- [x] Fase 4 — presença e pontos
+  - Regras puras em `_shared/domain/{points,qr,geo}.ts` (atraso pelo tempo TOTAL: padrão 11–20 min −5, >20 −10; falta −20; justificado 0; prazo e limite do "esqueci"; HMAC 30s janela atual+anterior; raio com folga de até 50 m pela precisão do GPS). Testes com Vitest (rodam também os handlers).
+  - Edge Functions `checkin`, `qr-token`, `review-checkin-request`: lógica em `handler.ts` (testável), acesso ao banco em `_shared/deps.ts`; gravação só por RPCs `service_role` (`record_attendance`, `apply_checkin_request_review`, `log_checkin_attempt`). `checkin_attempts` guarda tentativas (evidência para o líder).
+  - RPCs do app: `create_checkin_request` (prazo/limite → `evidence.over_limit`), `review_justification`. Jobs pg_cron: `process_absences` (15 min, idempotente) e `close_due_cycles` (diário): ciclo vencido vira `closing` e o próximo abre com saldo cheio; após o prazo dos pedidos calcula `cycle_eligibility` e fecha.
+  - Telas: check-in pela câmera (`qr-scanner`) + GPS, QR em tela cheia (`qrcode`), Presença (membro: pontos, "esqueci", avisar falta/atraso; líder: ao vivo, pedidos com evidências, pontos da equipe), Configurações (local da igreja, regras de pontos).
+  - Segredo `QR_SECRET`: local em `supabase/functions/.env` (criado pelo `pnpm db:start`); produção via `supabase secrets set`.
 - [ ] Fase 5 — planejamento trimestral
 - [ ] Fase 6 — notificações WhatsApp

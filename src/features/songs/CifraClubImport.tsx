@@ -5,7 +5,7 @@ import { Download } from 'lucide-react'
 import { FormField } from '@/components/FormField'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { supabase } from '@/lib/supabase'
+import { invokeFunction } from '@/lib/functions'
 
 export type ImportedChords = {
   title: string | null
@@ -41,18 +41,7 @@ export function CifraClubImport({
       if (!('url' in body) && (!body.artist || !body.title)) {
         throw new Error('Informe o artista e o nome da música, ou cole o link.')
       }
-      const { data, error: err } = await supabase.functions.invoke<ImportedChords>('import-cifra', {
-        body,
-      })
-      if (err) {
-        const ctx = (err as { context?: Response }).context
-        const detail = ctx
-          ? ((await ctx.json().catch(() => null)) as { error?: string } | null)
-          : null
-        throw new Error(detail?.error ?? 'Não foi possível buscar a cifra agora.')
-      }
-      if (!data) throw new Error('Não foi possível buscar a cifra agora.')
-      return data
+      return invokeFunction<ImportedChords>('import-cifra', body)
     },
     onSuccess: (data) => {
       setError(null)

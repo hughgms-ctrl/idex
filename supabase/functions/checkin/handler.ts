@@ -1,0 +1,128 @@
+// Check-in pelo QR: valida token (HMAC, janela de 30s), escala, horário e
+// localização; calcula atraso/pontos com as regras puras e grava.
+import { z } from 'zod'
+
+import type { Deps } from '../_shared/deps.ts'
+import { withinRadius } from '../_shared/domain/geo.ts'
+import { attendanceOutcome, rulesFromSettings } from '../_shared/domain/points.ts'
+import { parseQrPayload, verifyQrToken } from '../_shared/domain/qr.ts'
+import { corsHeaders, errorJson, json } from '../_shared/http.ts'
+
+const bodySchema = z.object({
+  qr: z.string().min(10).max(200),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  accuracy: z.number().min(0).max(100_000).nullable().optional(),
+})
+
+const OPEN_BEFORE_MS = 2 * 3_600_000 // check-in abre 2h antes do início
+
+export type CheckinDeps = Pick<
+  Deps,
+  'getUserId' | 'loadEventContext' | 'recordAttendance' | 'logAttempt' | 'balanceFor'
+> & { qrSecret: string; now: () => number }
+
+export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Response> {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return errorJson('Método não permitido', 405)
+  if (!deps.qrSecret) return errorJson('Check-in não configurado (QR_SECRET ausente)', 500)
+
+  const userId = await deps.getUserId(req.headers.get('Authorization') ?? '')
+  if (!userId) return errorJson('Entre na sua conta para bater o ponto', 401)
+
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return errorJson('Ative a localização e leia o QR de novo', 400)
+  const { qr, lat, lng } = parsed.data
+  const accuracy = parsed.data.accuracy ?? null
+
+  const payload = parseQrPayload(qr)
+  if (!payload) return errorJson('Este QR não é de check-in do ide.x', 400)
+
+  const ctx = await deps.loadEventContext(payload.eventId, userId)
+  if (!ctx) return errorJson('Evento não encontrado', 404)
+  if (!ctx.member || ctx.member.status !== 'active') {
+    return errorJson('Você não faz parte deste ministério', 403)
+  }
+  const attempt = (outcome: string, distanceM?: number) =>
+    deps.logAttempt({
+      eventId: ctx.event.id,
+      memberId: ctx.member!.id,
+      outcome,
+      lat,
+      lng,
+      accuracyM: accuracy,
+      distanceM,
+    })
+
+  if (ctx.alreadyCheckedIn) return errorJson('Sua presença neste evento já está registrada', 409)
+  if (!ctx.assigned) {
+    await attempt('not_scheduled')
+    return errorJson('Você não está escalado neste evento', 403)
+  }
+
+  const now = deps.now()
+  const start = new Date(ctx.event.starts_at).getTime()
+  const end = ctx.event.ends_at ? new Date(ctx.event.ends_at).getTime() : start + 2 * 3_600_000
+  if (now < start - OPEN_BEFORE_MS || now > end) {
+    await attempt('out_of_time')
+    return errorJson('O check-in deste evento não está aberto agora', 409)
+  }
+
+  if (!(await verifyQrToken(deps.qrSecret, ctx.event.id, payload.token, now))) {
+    await attempt('invalid_qr')
+    return errorJson('QR expirado. Aponte a câmera para o QR de novo.', 400)
+  }
+
+  const placeLat = ctx.event.lat ?? ctx.church.lat
+  const placeLng = ctx.event.lng ?? ctx.church.lng
+  if (placeLat === null || placeLng === null) {
+    await attempt('no_location')
+    return errorJson('O líder ainda não cadastrou a localização da igreja', 409)
+  }
+  const radiusM = ctx.event.radius_m ?? ctx.settings.checkin_radius_m ?? ctx.church.checkin_radius_m
+  const geo = withinRadius({
+    place: { lat: placeLat, lng: placeLng },
+    device: { lat, lng },
+    accuracyM: accuracy,
+    radiusM,
+  })
+  if (!geo.ok) {
+    await attempt('outside_radius', geo.distanceM)
+    return errorJson(`Você está a ${geo.distanceM} m da igreja (limite: ${radiusM} m)`, 403)
+  }
+
+  const arrivedAt = new Date(now).toISOString()
+  const outcome = attendanceOutcome({
+    eventStart: ctx.event.starts_at,
+    arrivedAt,
+    justified: ctx.justified,
+    rules: rulesFromSettings(ctx.settings as Parameters<typeof rulesFromSettings>[0]),
+  })
+  try {
+    await deps.recordAttendance({
+      eventId: ctx.event.id,
+      memberId: ctx.member.id,
+      arrivedAt,
+      lateMinutes: outcome.lateMinutes,
+      delta: outcome.delta,
+      lat,
+      lng,
+      accuracyM: accuracy,
+      distanceM: geo.distanceM,
+    })
+  } catch (err) {
+    if (String(err).includes('duplicate'))
+      return errorJson('Sua presença neste evento já está registrada', 409)
+    throw err
+  }
+  await attempt('ok', geo.distanceM)
+
+  return json({
+    arrivedAt,
+    kind: outcome.kind,
+    lateMinutes: outcome.lateMinutes,
+    delta: outcome.delta,
+    balance: await deps.balanceFor(ctx.member.id, ctx.event.id),
+    distanceM: geo.distanceM,
+  })
+}

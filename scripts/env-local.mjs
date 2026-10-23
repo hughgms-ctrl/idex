@@ -1,6 +1,7 @@
 // Cria/atualiza o .env.local com a URL e a chave "anon" do Supabase local.
 // Roda sozinho depois do `pnpm db:start`.
 import { execFileSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
 export function parseStatusEnv(output) {
@@ -43,6 +44,14 @@ function main() {
     [`VITE_SUPABASE_URL=${url}`, `VITE_SUPABASE_ANON_KEY=${key}`, ...keep].join('\n') + '\n',
   )
   console.log(`✔ ${file} pronto (Supabase local em ${url}).`)
+
+  // Segredo do QR para as Edge Functions locais (fica fora do git)
+  const fnEnv = 'supabase/functions/.env'
+  if (!existsSync(fnEnv) || !readFileSync(fnEnv, 'utf8').includes('QR_SECRET=')) {
+    const previous = existsSync(fnEnv) ? readFileSync(fnEnv, 'utf8').trimEnd() + '\n' : ''
+    writeFileSync(fnEnv, `${previous}QR_SECRET=${randomBytes(32).toString('hex')}\n`)
+    console.log(`✔ ${fnEnv} criado com um QR_SECRET local.`)
+  }
 }
 
 if (process.argv[1]?.endsWith('env-local.mjs')) main()

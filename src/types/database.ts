@@ -45,6 +45,61 @@ export type Database = {
           },
         ]
       }
+      checkin_attempts: {
+        Row: {
+          accuracy_m: number | null
+          attempted_at: string
+          church_id: string
+          distance_m: number | null
+          event_id: string
+          id: string
+          lat: number | null
+          lng: number | null
+          ministry_member_id: string
+          outcome: string
+        }
+        ComputedFields: never
+        Insert: {
+          accuracy_m?: number | null
+          attempted_at?: string
+          church_id: string
+          distance_m?: number | null
+          event_id: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          ministry_member_id: string
+          outcome: string
+        }
+        Update: {
+          accuracy_m?: number | null
+          attempted_at?: string
+          church_id?: string
+          distance_m?: number | null
+          event_id?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          ministry_member_id?: string
+          outcome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'checkin_attempts_event_id_church_id_fkey'
+            columns: ['event_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'checkin_attempts_ministry_member_id_church_id_fkey'
+            columns: ['ministry_member_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministry_members'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
       checkin_requests: {
         Row: {
           adjusted_arrived_at: string | null
@@ -1258,16 +1313,40 @@ export type Database = {
     }
     Functions: {
       accept_invite: { Args: { p_full_name?: string; p_token: string }; Returns: Json }
+      apply_checkin_request_review: {
+        Args: {
+          p_arrived_at: string
+          p_delta: number
+          p_late_minutes: number
+          p_note?: string
+          p_request_id: string
+          p_reviewer: string
+          p_status: Database['public']['Enums']['request_status']
+        }
+        Returns: undefined
+      }
       can_edit_setlist: { Args: { p_setlist_id: string }; Returns: boolean }
       can_edit_setlist_of_event: { Args: { p_event_id: string }; Returns: boolean }
       can_justify_event: {
         Args: { p_event_id: string; p_ministry_member_id: string }
         Returns: boolean
       }
+      close_due_cycles: { Args: Record<PropertyKey, never>; Returns: number }
+      create_checkin_request: {
+        Args: {
+          p_declared_arrived_at: string
+          p_device_location?: Json
+          p_event_id: string
+          p_reason: string
+        }
+        Returns: string
+      }
       create_church: {
         Args: { p_church_name: string; p_full_name?: string; p_ministry_name?: string }
         Returns: string
       }
+      cycle_for_event: { Args: { p_event_id: string }; Returns: string }
+      event_end: { Args: { p_ends_at: string; p_starts_at: string }; Returns: string }
       get_invite_preview: {
         Args: { p_token: string }
         Returns: {
@@ -1287,6 +1366,40 @@ export type Database = {
       is_ministry_member: { Args: { p_ministry_id: string }; Returns: boolean }
       is_self_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_setlist_leader: { Args: { p_setlist_id: string }; Returns: boolean }
+      log_checkin_attempt: {
+        Args: {
+          p_accuracy_m?: number
+          p_distance_m?: number
+          p_event_id: string
+          p_lat?: number
+          p_lng?: number
+          p_ministry_member_id: string
+          p_outcome: string
+        }
+        Returns: undefined
+      }
+      process_absences: { Args: Record<PropertyKey, never>; Returns: number }
+      record_attendance: {
+        Args: {
+          p_accuracy_m?: number
+          p_actor?: string
+          p_arrived_at: string
+          p_delta: number
+          p_distance_m?: number
+          p_event_id: string
+          p_lat?: number
+          p_late_minutes: number
+          p_lng?: number
+          p_ministry_member_id: string
+          p_request_id?: string
+          p_source: Database['public']['Enums']['checkin_source']
+        }
+        Returns: string
+      }
+      review_justification: {
+        Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
+        Returns: undefined
+      }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }
     }
@@ -1294,7 +1407,7 @@ export type Database = {
       assignment_status: 'scheduled' | 'confirmed' | 'declined'
       checkin_source: 'qr' | 'request' | 'manual'
       church_role: 'owner' | 'member'
-      cycle_status: 'open' | 'closed'
+      cycle_status: 'open' | 'closing' | 'closed'
       event_kind: 'service' | 'rehearsal' | 'other'
       justification_kind: 'late' | 'absence'
       justification_status: 'pending' | 'approved' | 'rejected'
@@ -1416,7 +1529,7 @@ export const Constants = {
       assignment_status: ['scheduled', 'confirmed', 'declined'],
       checkin_source: ['qr', 'request', 'manual'],
       church_role: ['owner', 'member'],
-      cycle_status: ['open', 'closed'],
+      cycle_status: ['open', 'closing', 'closed'],
       event_kind: ['service', 'rehearsal', 'other'],
       justification_kind: ['late', 'absence'],
       justification_status: ['pending', 'approved', 'rejected'],

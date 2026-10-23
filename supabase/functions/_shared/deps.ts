@@ -1,0 +1,242 @@
+// Acesso ao banco usado pelas Edge Functions de presença. Recebe o
+// `createClient` (jsr no Deno, npm nos testes locais) para ficar portátil.
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+type CreateClient = (url: string, key: string, options?: any) => any
+
+export type EventContext = {
+  event: {
+    id: string
+    church_id: string
+    ministry_id: string
+    starts_at: string
+    ends_at: string | null
+    lat: number | null
+    lng: number | null
+    radius_m: number | null
+  }
+  church: { lat: number | null; lng: number | null; checkin_radius_m: number }
+  settings: Record<string, any>
+  member: { id: string; status: string } | null
+  assigned: boolean
+  alreadyCheckedIn: boolean
+  justified: boolean
+}
+
+export function makeDeps(
+  createClient: CreateClient,
+  env: { url: string; anonKey: string; serviceKey: string },
+) {
+  const service = createClient(env.url, env.serviceKey, { auth: { persistSession: false } })
+  const asUser = (authorization: string) =>
+    createClient(env.url, env.anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false },
+    })
+
+  async function must<T>(promise: Promise<{ data: T; error: any }>): Promise<T> {
+    const { data, error } = await promise
+    if (error) throw new Error(error.message)
+    return data
+  }
+
+  return {
+    getUserId: async (authorization: string): Promise<string | null> => {
+      if (!authorization) return null
+      const { data } = await asUser(authorization).auth.getUser()
+      return data?.user?.id ?? null
+    },
+
+    isEventLeader: async (authorization: string, eventId: string): Promise<boolean> => {
+      const { data } = await asUser(authorization).rpc('is_event_leader', { p_event_id: eventId })
+      return data === true
+    },
+
+    isLeaderOfMember: async (authorization: string, memberId: string): Promise<boolean> => {
+      const { data } = await asUser(authorization).rpc('is_leader_of_member', {
+        p_ministry_member_id: memberId,
+      })
+      return data === true
+    },
+
+    loadEventContext: async (eventId: string, userId: string): Promise<EventContext | null> => {
+      const event = await must<any>(
+        service
+          .from('events')
+          .select('id, church_id, ministry_id, starts_at, ends_at, lat, lng, radius_m')
+          .eq('id', eventId)
+          .maybeSingle(),
+      )
+      if (!event) return null
+      const [church, settings, member] = await Promise.all([
+        must<any>(
+          service
+            .from('churches')
+            .select('lat, lng, checkin_radius_m')
+            .eq('id', event.church_id)
+            .single(),
+        ),
+        must<any>(
+          service
+            .from('ministry_settings')
+            .select('*')
+            .eq('ministry_id', event.ministry_id)
+            .single(),
+        ),
+        must<any>(
+          service
+            .from('ministry_members')
+            .select('id, status')
+            .eq('ministry_id', event.ministry_id)
+            .eq('user_id', userId)
+            .maybeSingle(),
+        ),
+      ])
+      let assigned = false
+      let alreadyCheckedIn = false
+      let justified = false
+      if (member) {
+        const [a, c, j] = await Promise.all([
+          must<any[]>(
+            service
+              .from('schedule_assignments')
+              .select('id')
+              .eq('event_id', eventId)
+              .eq('ministry_member_id', member.id)
+              .neq('status', 'declined'),
+          ),
+          must<any[]>(
+            service
+              .from('checkins')
+              .select('id')
+              .eq('event_id', eventId)
+              .eq('ministry_member_id', member.id),
+          ),
+          must<any[]>(
+            service
+              .from('justifications')
+              .select('id')
+              .eq('event_id', eventId)
+              .eq('ministry_member_id', member.id)
+              .eq('status', 'approved'),
+          ),
+        ])
+        assigned = a.length > 0
+        alreadyCheckedIn = c.length > 0
+        justified = j.length > 0
+      }
+      return { event, church, settings, member, assigned, alreadyCheckedIn, justified }
+    },
+
+    recordAttendance: (args: {
+      eventId: string
+      memberId: string
+      arrivedAt: string
+      lateMinutes: number
+      delta: number
+      lat: number
+      lng: number
+      accuracyM: number | null
+      distanceM: number
+    }) =>
+      must<string>(
+        service.rpc('record_attendance', {
+          p_event_id: args.eventId,
+          p_ministry_member_id: args.memberId,
+          p_arrived_at: args.arrivedAt,
+          p_late_minutes: args.lateMinutes,
+          p_delta: args.delta,
+          p_source: 'qr',
+          p_lat: args.lat,
+          p_lng: args.lng,
+          p_accuracy_m: args.accuracyM,
+          p_distance_m: args.distanceM,
+        }),
+      ),
+
+    logAttempt: async (args: {
+      eventId: string
+      memberId: string
+      outcome: string
+      lat?: number | null
+      lng?: number | null
+      accuracyM?: number | null
+      distanceM?: number | null
+    }) => {
+      await service.rpc('log_checkin_attempt', {
+        p_event_id: args.eventId,
+        p_ministry_member_id: args.memberId,
+        p_outcome: args.outcome,
+        p_lat: args.lat ?? null,
+        p_lng: args.lng ?? null,
+        p_accuracy_m: args.accuracyM ?? null,
+        p_distance_m: args.distanceM ?? null,
+      })
+    },
+
+    balanceFor: async (memberId: string, eventId: string): Promise<number | null> => {
+      const cycleId = await must<string | null>(
+        service.rpc('cycle_for_event', { p_event_id: eventId }),
+      )
+      if (!cycleId) return null
+      const row = await must<any>(
+        service
+          .from('member_cycle_balance')
+          .select('balance')
+          .eq('ministry_member_id', memberId)
+          .eq('cycle_id', cycleId)
+          .maybeSingle(),
+      )
+      return row?.balance ?? null
+    },
+
+    loadRequest: async (requestId: string) => {
+      const request = await must<any>(
+        service.from('checkin_requests').select('*').eq('id', requestId).maybeSingle(),
+      )
+      if (!request) return null
+      const event = await must<any>(
+        service
+          .from('events')
+          .select('id, ministry_id, starts_at')
+          .eq('id', request.event_id)
+          .single(),
+      )
+      const settings = await must<any>(
+        service.from('ministry_settings').select('*').eq('ministry_id', event.ministry_id).single(),
+      )
+      const just = await must<any[]>(
+        service
+          .from('justifications')
+          .select('id')
+          .eq('event_id', request.event_id)
+          .eq('ministry_member_id', request.ministry_member_id)
+          .eq('status', 'approved'),
+      )
+      return { request, event, settings, justified: just.length > 0 }
+    },
+
+    applyReview: (args: {
+      requestId: string
+      status: 'approved' | 'adjusted' | 'rejected'
+      arrivedAt: string | null
+      lateMinutes: number
+      delta: number
+      reviewerId: string
+      note: string | null
+    }) =>
+      must<null>(
+        service.rpc('apply_checkin_request_review', {
+          p_request_id: args.requestId,
+          p_status: args.status,
+          p_arrived_at: args.arrivedAt,
+          p_late_minutes: args.lateMinutes,
+          p_delta: args.delta,
+          p_reviewer: args.reviewerId,
+          p_note: args.note,
+        }),
+      ),
+  }
+}
+
+export type Deps = ReturnType<typeof makeDeps>

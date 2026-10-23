@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Church, Layers, LogOut, UserRound } from 'lucide-react'
+import { Church, Layers, LogOut, Settings2, UserRound } from 'lucide-react'
 
 import { useUser } from '@/auth/auth-context'
 import { ProfileDialog } from '@/components/layout/ProfileDialog'
@@ -112,6 +112,16 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
               >
                 <Link to="/ministerios">
                   <Layers aria-hidden="true" /> Ministérios e funções
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className="justify-start"
+                onClick={() => setOpen(false)}
+              >
+                <Link to="/configuracoes">
+                  <Settings2 aria-hidden="true" /> Configurações
                 </Link>
               </Button>
               <Button

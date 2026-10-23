@@ -13,3 +13,4 @@ supabase/.branches/
 *.log
 coverage/
 supabase/functions/.local-ca.pem
+supabase/functions/.env

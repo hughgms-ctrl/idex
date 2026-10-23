@@ -86,13 +86,20 @@ export function DashboardPage() {
             Nenhum culto ou ensaio marcado ainda.
           </div>
         )}
-        <Button size="lg" disabled className="min-h-14 rounded-2xl text-[17px]">
-          <QrCode className="size-[22px]" aria-hidden="true" />
-          Bater ponto com QR
+        <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
+          <Link to="/presenca/checkin">
+            <QrCode className="size-[22px]" aria-hidden="true" />
+            Bater ponto com QR
+          </Link>
         </Button>
-        <p className="text-muted-foreground -mt-2 text-center text-xs">
-          O check-in pelo QR chega na próxima etapa do app.
-        </p>
+        {event && (
+          <Link
+            to={`/presenca?justificar=${event.id}`}
+            className="text-muted-foreground text-center text-sm underline"
+          >
+            Vou me atrasar — avisar o líder
+          </Link>
+        )}
       </Panel>
 
       <section className="flex flex-col gap-2.5">

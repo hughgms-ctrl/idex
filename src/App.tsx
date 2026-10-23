@@ -1,5 +1,4 @@
 import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router'
-import { UserCheck } from 'lucide-react'
 
 import { RedirectIfAuthed, RequireAuth } from '@/auth/guards'
 import { AppLayout } from '@/components/layout/AppLayout'
@@ -8,15 +7,16 @@ import { InvitePage } from '@/pages/auth/InvitePage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignUpChurchPage } from '@/pages/auth/SignUpChurchPage'
 import { WelcomePage } from '@/pages/auth/WelcomePage'
-import { ComingSoonPage } from '@/pages/ComingSoonPage'
 import { CreateChurchPage } from '@/pages/CreateChurchPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { EventSchedulePage } from '@/pages/EventSchedulePage'
 import { MembersPage } from '@/pages/MembersPage'
 import { MinistriesPage } from '@/pages/MinistriesPage'
+import { PresencePage } from '@/pages/PresencePage'
 import { RepertoirePage } from '@/pages/RepertoirePage'
 import { SchedulePage } from '@/pages/SchedulePage'
 import { SetlistPage } from '@/pages/SetlistPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 const router = createBrowserRouter([
   {
@@ -54,6 +54,12 @@ const router = createBrowserRouter([
     ),
     children: [
       {
+        // tela cheia, sem menu
+        path: 'presenca/qr/:eventId',
+        lazy: () =>
+          import('@/pages/attendance/QrDisplayPage').then((m) => ({ Component: m.QrDisplayPage })),
+      },
+      {
         element: <AppLayout />,
         children: [
           { index: true, element: <DashboardPage /> },
@@ -75,17 +81,13 @@ const router = createBrowserRouter([
             path: 'repertorio/:songId',
             lazy: () => import('@/pages/songs/SongPage').then((m) => ({ Component: m.SongPage })),
           },
+          { path: 'presenca', element: <PresencePage /> },
           {
-            path: 'presenca',
-            element: (
-              <ComingSoonPage
-                title="Presença"
-                icon={UserCheck}
-                phase="EM BREVE"
-                description="Check-in pelo QR com localização, pontos do ciclo e pedidos de “esqueci de registrar”."
-              />
-            ),
+            path: 'presenca/checkin',
+            lazy: () =>
+              import('@/pages/attendance/CheckinPage').then((m) => ({ Component: m.CheckinPage })),
           },
+          { path: 'configuracoes', element: <SettingsPage /> },
           { path: 'membros', element: <MembersPage /> },
           { path: 'ministerios', element: <MinistriesPage /> },
           { path: 'cadastro-igreja', element: <CreateChurchPage /> },

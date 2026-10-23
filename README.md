@@ -65,6 +65,7 @@ pnpm dev
 | `pnpm test` | Testes do front |
 | `pnpm test:rls` | Testes de segurança do banco (uma igreja não vê a outra etc.) |
 | `pnpm typecheck` / `pnpm lint` / `pnpm build` | Verificações de código e build de produção |
+| `pnpm exec supabase functions serve` | Roda as funções do servidor (check-in, QR, importar cifra) no seu computador |
 | `pnpm gen:types` | Atualiza `src/types/database.ts` depois de mudar o banco |
 | `pnpm exec supabase migration new <nome>` | Cria uma migration nova |
 
@@ -91,6 +92,13 @@ Instalar o PWA, ler QR pela câmera e pegar a localização exigem um HTTPS "de 
 
 Observação: links enviados por e-mail (link mágico) apontam para o seu computador; no celular, entre com e-mail e senha.
 
+### Testar o check-in pelo QR
+
+1. Rode também `pnpm exec supabase functions serve` (em outro terminal).
+2. Entre como `ana@idex.local` e, em **Configurações**, toque em "Usar minha localização" e salve (assim a "igreja" fica onde você está).
+3. Em **Escala**, crie um ensaio para agora e escale alguém. Em **Presença → Projetar QR no telão**, abra o QR.
+4. No celular (com o túnel), entre como a pessoa escalada e toque em **Bater ponto com QR**.
+
 ---
 
 ## 3. Publicar (Supabase na nuvem + Vercel)
@@ -109,10 +117,13 @@ Observação: links enviados por e-mail (link mágico) apontam para o seu comput
    - **Site URL**: o endereço da Vercel (ex.: `https://idex.vercel.app`)
    - **Redirect URLs**: `https://idex.vercel.app/**` (e o domínio próprio, se tiver)
 4. Em **Project Settings → API**, copie a **Project URL** e a chave **anon / public**.
-5. Segredos das Edge Functions (a partir da Fase 4), **nunca** no front nem no repositório:
+5. Funções do servidor e o segredo do QR (**nunca** no front nem no repositório):
    ```bash
    pnpm exec supabase secrets set QR_SECRET=<um-texto-aleatorio-longo>
+   pnpm exec supabase functions deploy
    ```
+   O `pnpm exec supabase db push` também liga as tarefas automáticas (faltas a cada 15 min e fechamento de ciclo diário). Se o painel avisar que a extensão `pg_cron` está desligada, ligue em **Database → Extensions**.
+6. Ainda no painel, abra o app, vá em **Configurações** e cadastre a localização da igreja (de dentro da igreja, toque em "Usar minha localização"). Sem isso o check-in não funciona.
 
 ### 3.2 Vercel
 
