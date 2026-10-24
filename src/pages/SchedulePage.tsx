@@ -14,6 +14,7 @@ import { useChurch } from '@/features/church/church-context'
 import { MONTH_NAMES, WEEKDAY_SHORT } from '@/features/schedule/datetime'
 import { EventCard } from '@/features/schedule/EventCard'
 import { EventDialog } from '@/features/schedule/EventDialog'
+import { MissingRehearsals } from '@/features/schedule/MissingRehearsals'
 import { MonthCalendar } from '@/features/schedule/MonthCalendar'
 import { scheduleKeys } from '@/features/schedule/queries'
 import { UnavailabilityDialog } from '@/features/schedule/UnavailabilityDialog'
@@ -106,6 +107,8 @@ export function SchedulePage() {
           <ChevronRight />
         </Button>
       </div>
+
+      {leader && ministry && <MissingRehearsals ministry={ministry} />}
 
       <MonthCalendar
         leader={leader}

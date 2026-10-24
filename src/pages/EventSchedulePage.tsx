@@ -13,7 +13,8 @@ import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useChurch } from '@/features/church/church-context'
-import { EVENT_KIND_LABEL } from '@/features/schedule/datetime'
+import { EVENT_KIND_LABEL, eventTimeRows } from '@/features/schedule/datetime'
+import { useMinistrySettings } from '@/features/ministries/queries'
 import { EventDialog } from '@/features/schedule/EventDialog'
 import {
   scheduleKeys,
@@ -25,6 +26,7 @@ import { useScheduleData, type ScheduleData } from '@/features/schedule/useSched
 import { errorMessage } from '@/lib/errors'
 import { formatEventDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 
 export function EventSchedulePage() {
   const { eventId = '' } = useParams()
@@ -93,13 +95,29 @@ function Editor({
     mutationFn: async ({ assignmentId, memberId }: { assignmentId: string; memberId: string }) => {
       const { error } = await supabase
         .from('schedule_assignments')
-        .update({ ministry_member_id: memberId })
+        // quem entra no lugar começa normal (não herda o "ficou de fora")
+        .update({ ministry_member_id: memberId, status: 'scheduled', benched_reason: null })
         .eq('id', assignmentId)
       if (error) throw error
     },
     onSuccess: async () => {
       await invalidate()
       toast.success('Substituto escalado')
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  const release = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      const { error } = await supabase
+        .from('schedule_assignments')
+        .update({ status: 'scheduled', benched_reason: null })
+        .eq('id', assignmentId)
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidate()
+      toast.success('Liberado para participar')
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
@@ -169,11 +187,7 @@ function Editor({
       <PageHeader
         eyebrow={EVENT_KIND_LABEL[event.kind]?.toUpperCase()}
         title={event.title}
-        description={[
-          formatEventDate(event.starts_at),
-          event.arrive_at && `chegada ${formatEventDate(event.arrive_at).split(' · ')[1]}`,
-          event.location_name,
-        ]
+        description={[formatEventDate(event.starts_at), event.location_name]
           .filter(Boolean)
           .join(' · ')}
         action={
@@ -190,6 +204,7 @@ function Editor({
         }
       />
 
+      <EventTimes event={event} ministryId={event.ministry_id} />
       <LinkedEvent event={event} />
 
       {event.kind === 'service' && (
@@ -216,9 +231,24 @@ function Editor({
             onAdd={(memberId) => add.mutate({ memberId, roleId: role.id })}
             onRemove={(id) => remove.mutate(id)}
             onSwap={(assignmentId, memberId) => swap.mutate({ assignmentId, memberId })}
+            onRelease={(id) => release.mutate(id)}
           />
         )
       })}
+      {event.schedule_assignments.some((a) => a.ministry_role_id === null) && (
+        <RoleSlot
+          roleId={null}
+          roleName="Equipe (sem função)"
+          assignments={event.schedule_assignments.filter((a) => a.ministry_role_id === null)}
+          event={event}
+          data={data}
+          canEdit={canEdit}
+          onAdd={(memberId) => add.mutate({ memberId, roleId: null })}
+          onRemove={(id) => remove.mutate(id)}
+          onSwap={(assignmentId, memberId) => swap.mutate({ assignmentId, memberId })}
+          onRelease={(id) => release.mutate(id)}
+        />
+      )}
 
       {canEdit && otherEvents.length > 0 && (
         <Panel>
@@ -293,8 +323,9 @@ function RoleSlot({
   onAdd,
   onRemove,
   onSwap,
+  onRelease,
 }: {
-  roleId: string
+  roleId: string | null
   roleName: string
   assignments: ScheduleEvent['schedule_assignments']
   event: ScheduleEvent
@@ -303,6 +334,7 @@ function RoleSlot({
   onAdd: (memberId: string) => void
   onRemove: (assignmentId: string) => void
   onSwap: (assignmentId: string, memberId: string) => void
+  onRelease: (assignmentId: string) => void
 }) {
   const common = {
     event,
@@ -318,7 +350,7 @@ function RoleSlot({
   // Outros com a função mas com algum problema (o líder ainda pode escalar)
   const others = data.members.filter(
     (m) =>
-      m.roleIds.includes(roleId) &&
+      (roleId === null || m.roleIds.includes(roleId)) &&
       !suggestedIds.has(m.id) &&
       !inEvent.has(m.id) &&
       m.status === 'active',
@@ -335,19 +367,28 @@ function RoleSlot({
           const member = data.memberById.get(a.ministry_member_id)
           if (!member) return null
           const conflicts = assignmentConflicts({ ...common, member, roleId })
-          const [sub] = conflicts.length
-            ? suggestSubstitutes({
-                ...common,
-                roleId,
-                members: data.members,
-                exclude: [member.id],
-                limit: 1,
-              })
-            : []
+          const benched = a.status === 'benched'
+          const [sub] =
+            conflicts.length || benched
+              ? suggestSubstitutes({
+                  ...common,
+                  roleId,
+                  members: data.members,
+                  exclude: [member.id],
+                  limit: 1,
+                })
+              : []
           return (
             <li key={a.id} className="bg-secondary flex flex-col gap-2 rounded-xl px-3 py-2">
               <div className="flex items-center gap-2">
-                <span className="flex-1 text-sm font-medium">{member.name}</span>
+                <span
+                  className={cn(
+                    'flex-1 text-sm font-medium',
+                    benched && 'text-muted-foreground line-through',
+                  )}
+                >
+                  {member.name}
+                </span>
                 {canEdit && (
                   <Button
                     variant="ghost"
@@ -359,6 +400,22 @@ function RoleSlot({
                   </Button>
                 )}
               </div>
+              {benched && (
+                <p className="text-destructive flex items-start gap-2 text-[13px]">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  Ficou de fora: {a.benched_reason ?? 'regra de horário'}.
+                </p>
+              )}
+              {benched && canEdit && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => onRelease(a.id)}
+                >
+                  Liberar mesmo assim
+                </Button>
+              )}
               {conflicts.map((c) => (
                 <p key={c.kind} className="text-warning flex items-start gap-2 text-[13px]">
                   <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -482,4 +539,25 @@ function LinkedEvent({ event }: { event: ScheduleEvent }) {
     )
   }
   return null
+}
+
+function EventTimes({ event, ministryId }: { event: ScheduleEvent; ministryId: string }) {
+  const settings = useMinistrySettings(ministryId).data
+  const rows = eventTimeRows(event, settings)
+  if (rows.length <= 1) return null
+  return (
+    <dl
+      className={cn(
+        'bg-card grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-2xl border border-l-4 p-3.5 text-sm',
+        event.kind === 'rehearsal' ? 'border-l-info' : 'border-l-primary',
+      )}
+    >
+      {rows.map((r) => (
+        <div key={r.label} className="contents">
+          <dt className="text-muted-foreground">{r.label}</dt>
+          <dd className={cn('text-right font-mono', r.strong && 'font-semibold')}>{r.time}</dd>
+        </div>
+      ))}
+    </dl>
+  )
 }

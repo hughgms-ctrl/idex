@@ -14,7 +14,7 @@ export const scheduleKeys = {
 }
 
 const EVENT_SELECT =
-  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, ends_at, service_event_id, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status)'
+  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, soundcheck_at, ends_at, service_event_id, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status, benched_reason)'
 
 export function useMonthEvents(ministryId: string | undefined, year: number, month: number) {
   return useQuery({
@@ -132,7 +132,7 @@ export function useLinkedRehearsal(serviceId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('id, title, starts_at, ends_at')
+        .select('id, title, starts_at, arrive_at, ends_at')
         .eq('service_event_id', serviceId ?? '')
         .maybeSingle()
       if (error) throw error

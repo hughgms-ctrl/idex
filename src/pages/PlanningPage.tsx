@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Sparkles } from 'lucide-react'
 import { analyzePlan, suggestFill, type PlannedService, type PlanRules } from '@domain/planning.ts'
 import { addMonths, localParts, monthRange } from '@domain/time.ts'
 
@@ -24,6 +24,8 @@ import { useMinistryMembers } from '@/features/members/queries'
 import { useMinistryRoles } from '@/features/ministries/queries'
 import { planningKeys, setlistOf, usePlanData, usePlanRules } from '@/features/planning/queries'
 import { MONTH_NAMES } from '@/features/schedule/datetime'
+import { EventDialog } from '@/features/schedule/EventDialog'
+import { MissingRehearsals } from '@/features/schedule/MissingRehearsals'
 import { songKeys } from '@/features/songs/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatDayMonth } from '@/lib/format'
@@ -38,6 +40,7 @@ export function PlanningPage() {
   const [base, setBase] = useState({ year: now.year, month: now.month })
   const [suggested, setSuggested] = useState<Map<string, string[]> | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [newService, setNewService] = useState(false)
   const queryClient = useQueryClient()
   const leader = ministry ? isLeader(ministry.id) : false
 
@@ -135,6 +138,10 @@ export function PlanningPage() {
 
   return (
     <>
+      {leader && ministry && (
+        <EventDialog open={newService} onOpenChange={setNewService} ministry={ministry} />
+      )}
+      {leader && ministry && <MissingRehearsals ministry={ministry} />}
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <span className="text-primary text-xs font-semibold tracking-wider">
@@ -171,6 +178,9 @@ export function PlanningPage() {
         </div>
         {leader && (
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setNewService(true)}>
+              <Plus aria-hidden="true" /> Novo culto
+            </Button>
             {suggested ? (
               <>
                 <Button variant="outline" onClick={() => setSuggested(null)}>

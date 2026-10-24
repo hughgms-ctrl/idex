@@ -49,6 +49,12 @@ export function EventCard({
           answers: data.answers,
           eligibility: data.eligibility,
         }).filter((c) => c.kind !== 'missing_role')
+        if (a.status === 'benched') {
+          conflicts.unshift({
+            kind: 'unavailable',
+            message: `${member.name} ficou de fora (${a.benched_reason ?? 'regra de horário'}).`,
+          })
+        }
         const first = conflicts[0]
         if (!first) return []
         const [suggestion] = suggestSubstitutes({
@@ -86,6 +92,7 @@ export function EventCard({
           <span className="text-muted-foreground text-sm">
             {event.title} {pad(p.hour)}h{p.minute ? pad(p.minute) : ''}
             {event.arrive_at && ` · chegada ${hour(event.arrive_at)}`}
+            {event.soundcheck_at && ` · som ${hour(event.soundcheck_at)}`}
           </span>
         </div>
         <span
@@ -122,7 +129,11 @@ export function EventCard({
                   {(a.ministry_role_id && data.roleName.get(a.ministry_role_id)) || 'Equipe'}
                 </span>
                 <span
-                  className={cn('truncate', mine ? 'text-primary font-semibold' : 'font-medium')}
+                  className={cn(
+                    'truncate',
+                    mine ? 'text-primary font-semibold' : 'font-medium',
+                    a.status === 'benched' && 'text-muted-foreground line-through',
+                  )}
                 >
                   {mine
                     ? 'Você'

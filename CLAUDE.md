@@ -39,7 +39,7 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - Líderes também batem ponto.
 
 ### Check-in
-- QR rotativo: token HMAC(eventId + janela de 30s) gerado e validado na Edge Function `checkin` com `QR_SECRET`; o líder exibe em tela cheia. Aceitar janela atual e anterior.
+- QR fixo por ministério (`ministry_settings.checkin_code`, impresso na igreja): leva ao ponto do evento do integrante com o ponto aberto agora; a segurança vem da localização (modo QR + localização). O QR rotativo antigo (HMAC 30 s, `QR_SECRET`) continua aceito.
 - Check-in exige geolocalização dentro de raio configurável da igreja (padrão 300 m); guardar lat/lng e precisão.
 - Registra `arrivedAt`; calcula atraso em minutos e lança no ledger automaticamente.
 
@@ -105,5 +105,11 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - Ensaio do culto: evento `rehearsal` com `events.service_event_id` (1 por culto, antes dele, mesmo ministério; apaga junto). Gatilhos copiam a equipe do culto para o ensaio e espelham inclusão/troca/remoção. Disponibilidade só pergunta pelo culto (vale para o ensaio).
   - Padrões em `ministry_settings` (`service_arrival_minutes`, `rehearsal_enabled`, `rehearsal_days_before`, `rehearsal_time`, `rehearsal_duration_min`), editáveis em Configurações → "Cultos e ensaios"; o diálogo do culto sugere e o líder ajusta por culto (na repetição semanal o ensaio mantém a mesma distância em dias).
   - Calendário para todos: culto verde-limão (`primary`), ensaio azul (`info`); cartões com borda e selo da mesma cor; número laranja = falta escala (só líder, ensaio ligado não conta).
+- [x] Fase 10 — regras de horário, quem fica de fora, QR fixo, cultos no Planejamento
+  - `ministry_settings`: culto (`service_arrival_minutes`, `service_tolerance_min`, `service_soundcheck_minutes`, `service_late_consequence` points|no_play) e ensaio (`rehearsal_mode` days_before|weekday + `rehearsal_weekday`, `rehearsal_arrival_minutes`, `rehearsal_tolerance_min`, `rehearsal_late_consequence` points|out_rehearsal|out_rehearsal_and_service). `events.soundcheck_at`. Tolerância por tipo em `rulesFromSettings(row, kind)`.
+  - Consequência pura em `points.ts` (`lateConsequence`); aplicada por `apply_late_consequence` (service_role): escala vira `benched` (+ `benched_reason`), avisa a pessoa e os líderes (`member_benched`). `process_absences` tira do culto quem faltou ao ensaio (regra "fora do ensaio e do culto") logo após o ensaio e não dá falta a quem está `benched`. Revisão do "esqueci" aprovada devolve à escala. Líder pode "Liberar mesmo assim" ou trocar (quem entra começa `scheduled`). Espelho culto→ensaio ignora mudança só de status.
+  - QR fixo: `/presenca/qr-fixo` (imprimir, gerar novo via `regenerate_checkin_code`), link `/ponto?c=<código>`; `checkin` resolve o evento por `resolveCheckinCode`.
+  - "Cultos sem ensaio/chegada" → `MissingRehearsals` cria pelas regras (Escala e Planejamento). Planejamento tem "Novo culto" (mesmo diálogo, avulso ou semanal, com ensaio). Escala mostra quem está sem função ("Equipe (sem função)").
+  - Horários "antes do início" são calculados em minutos a partir do início (não data+hora), para funcionar perto da meia-noite.
 - Produção: Supabase `jptpzpvysgnfulyoquex` (São Paulo) e Vercel `https://idex-eight.vercel.app`. Confirmação de e-mail desligada (`mailer_autoconfirm`) porque o SMTP padrão do Supabase só envia para a equipe do projeto; configurar SMTP próprio (ex.: Resend) para religar e usar link mágico.
 - Pendências conhecidas: o Cifra Club bloqueia (403) acessos vindos dos servidores do Supabase, então a importação automática falha em produção — o app mostra o botão "Abrir no Cifra Club" para copiar e colar a cifra.

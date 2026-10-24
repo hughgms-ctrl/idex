@@ -141,8 +141,8 @@ export function LiveEventPanel({
       </div>
 
       <Button asChild size="lg" className="min-h-[52px] rounded-2xl">
-        <Link to={`/presenca/qr/${event.id}`}>
-          <MonitorUp aria-hidden="true" /> Projetar QR no telão
+        <Link to="/presenca/qr-fixo">
+          <MonitorUp aria-hidden="true" /> QR do ponto (imprimir ou projetar)
         </Link>
       </Button>
 

@@ -58,6 +58,12 @@ const router = createBrowserRouter([
     ),
     children: [
       {
+        // QR fixo do ministério (tela cheia, para imprimir)
+        path: 'presenca/qr-fixo',
+        lazy: () =>
+          import('@/pages/attendance/FixedQrPage').then((m) => ({ Component: m.FixedQrPage })),
+      },
+      {
         // tela cheia, sem menu
         path: 'presenca/qr/:eventId',
         lazy: () =>

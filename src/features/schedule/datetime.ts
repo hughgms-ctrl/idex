@@ -39,3 +39,48 @@ export const EVENT_KIND_LABEL: Record<string, string> = {
   rehearsal: 'Ensaio',
   other: 'Outro',
 }
+
+/** "16:40" no fuso da igreja */
+export function hhmm(iso: string, tz = DEFAULT_TZ): string {
+  const p = localParts(iso, tz)
+  return `${pad(p.hour)}:${pad(p.minute)}`
+}
+
+type ToleranceSettings = {
+  late_tolerance_min: number
+  service_tolerance_min?: number | null
+  rehearsal_tolerance_min?: number | null
+}
+
+/** Linhas de horário de um evento: chegada (limite), passagem de som, início. */
+export function eventTimeRows(
+  event: {
+    kind: string
+    starts_at: string
+    arrive_at?: string | null
+    soundcheck_at?: string | null
+  },
+  settings?: ToleranceSettings | null,
+): { label: string; time: string; strong?: boolean }[] {
+  const tolerance =
+    (event.kind === 'service'
+      ? settings?.service_tolerance_min
+      : event.kind === 'rehearsal'
+        ? settings?.rehearsal_tolerance_min
+        : null) ??
+    settings?.late_tolerance_min ??
+    null
+  const call = event.arrive_at ?? null
+  const rows: { label: string; time: string; strong?: boolean }[] = []
+  if (call) rows.push({ label: 'Chegada', time: hhmm(call), strong: true })
+  if (tolerance != null) {
+    const limit = new Date(new Date(call ?? event.starts_at).getTime() + tolerance * 60_000)
+    rows.push({ label: 'Limite (tolerância)', time: hhmm(limit.toISOString()) })
+  }
+  if (event.soundcheck_at) rows.push({ label: 'Passagem de som', time: hhmm(event.soundcheck_at) })
+  rows.push({
+    label: event.kind === 'rehearsal' ? 'Início do ensaio' : 'Início',
+    time: hhmm(event.starts_at),
+  })
+  return rows
+}

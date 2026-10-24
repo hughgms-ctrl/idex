@@ -44,6 +44,7 @@ const schema = z
     date: z.string().regex(DATE, { message: 'Informe a data' }),
     time: z.string().regex(TIME, { message: 'Informe o horário' }),
     arrival: z.string(),
+    soundcheck: z.string(),
     durationMin: z.number().int().min(15).max(720),
     location: z.string().trim().max(120),
     repeat: z.boolean(),
@@ -51,6 +52,7 @@ const schema = z
     hasRehearsal: z.boolean(),
     rehearsalDate: z.string(),
     rehearsalTime: z.string(),
+    rehearsalArrival: z.string(),
   })
   .refine((v) => !v.repeat || DATE.test(v.repeatUntil), {
     message: 'Informe até quando repete',
@@ -66,6 +68,19 @@ const schema = z
       message: 'A chegada precisa ser antes do início',
       path: ['arrival'],
     },
+  )
+  .refine(
+    (v) =>
+      v.kind !== 'service' || !v.soundcheck || (TIME.test(v.soundcheck) && v.soundcheck <= v.time),
+    { message: 'A passagem de som precisa ser antes do início', path: ['soundcheck'] },
+  )
+  .refine(
+    (v) =>
+      v.kind !== 'service' ||
+      !v.hasRehearsal ||
+      !v.rehearsalArrival ||
+      (TIME.test(v.rehearsalArrival) && v.rehearsalArrival <= v.rehearsalTime),
+    { message: 'A chegada precisa ser antes do início do ensaio', path: ['rehearsalArrival'] },
   )
   .refine(
     (v) =>
@@ -127,7 +142,12 @@ export function EventDialog({
   const rehearsalDefaults = {
     rehearsal_days_before: settings?.rehearsal_days_before ?? 3,
     rehearsal_time: settings?.rehearsal_time ?? '20:00',
+    rehearsal_mode: settings?.rehearsal_mode ?? 'days_before',
+    rehearsal_weekday: settings?.rehearsal_weekday ?? null,
   }
+  const soundcheckMin = settings?.service_soundcheck_minutes ?? null
+  const rehearsalArrivalMin = settings?.rehearsal_arrival_minutes ?? 20
+  const defaultRehearsalTime = rehearsalDefaults.rehearsal_time.slice(0, 5)
   const suggested = startDate ? defaultRehearsal(startDate, rehearsalDefaults) : null
   const existingRehearsal = rehearsal ? toLocalInputs(rehearsal.starts_at) : null
 
@@ -143,6 +163,13 @@ export function EventDialog({
           ? toLocalInputs(event.arrive_at).time
           : ''
         : defaultArrival(startTime, arrivalMin),
+      soundcheck: event
+        ? event.soundcheck_at
+          ? toLocalInputs(event.soundcheck_at).time
+          : ''
+        : soundcheckMin != null
+          ? defaultArrival(startTime, soundcheckMin)
+          : '',
       durationMin: event?.ends_at
         ? Math.round(
             (new Date(event.ends_at).getTime() - new Date(event.starts_at).getTime()) / 60_000,
@@ -153,7 +180,12 @@ export function EventDialog({
       repeatUntil: '',
       hasRehearsal: event ? Boolean(rehearsal) : (settings?.rehearsal_enabled ?? true),
       rehearsalDate: existingRehearsal?.date ?? suggested?.date ?? '',
-      rehearsalTime: existingRehearsal?.time ?? rehearsalDefaults.rehearsal_time.slice(0, 5),
+      rehearsalTime: existingRehearsal?.time ?? defaultRehearsalTime,
+      rehearsalArrival: rehearsal
+        ? rehearsal.arrive_at
+          ? toLocalInputs(rehearsal.arrive_at).time
+          : ''
+        : defaultArrival(defaultRehearsalTime, rehearsalArrivalMin),
     },
   })
   const { errors } = form.formState
@@ -173,6 +205,14 @@ export function EventDialog({
     if (!form.getFieldState('arrival').isDirty && TIME.test(value)) {
       form.setValue('arrival', defaultArrival(value, arrivalMin))
     }
+    if (!form.getFieldState('soundcheck').isDirty && TIME.test(value) && soundcheckMin != null) {
+      form.setValue('soundcheck', defaultArrival(value, soundcheckMin))
+    }
+  }
+  const onRehearsalTimeChange = (value: string) => {
+    if (!form.getFieldState('rehearsalArrival').isDirty && TIME.test(value)) {
+      form.setValue('rehearsalArrival', defaultArrival(value, rehearsalArrivalMin))
+    }
   }
 
   const save = useMutation({
@@ -184,25 +224,26 @@ export function EventDialog({
         title: v.title,
         location_name: v.location || null,
       }
-      const arrivalFor = (start: Date) => {
-        if (!isServiceKind(v) || !v.arrival) return null
-        const day = localDateKey(start)
-        return fromLocalInputs(day, v.arrival).toISOString()
-      }
+      // horário "antes do início": conta em minutos (vale perto da meia-noite)
+      const beforeStart = (start: Date, startTime: string, earlier: string) =>
+        new Date(start.getTime() - minutesBefore(startTime, earlier) * 60_000).toISOString()
+      const arrivalFor = (start: Date) =>
+        isServiceKind(v) && v.arrival ? beforeStart(start, v.time, v.arrival) : null
+      const soundcheckFor = (start: Date) =>
+        isServiceKind(v) && v.soundcheck ? beforeStart(start, v.time, v.soundcheck) : null
       const withTimes = (start: Date) => ({
         starts_at: start.toISOString(),
         ends_at: new Date(start.getTime() + v.durationMin * 60_000).toISOString(),
         arrive_at: arrivalFor(start),
+        soundcheck_at: soundcheckFor(start),
       })
       // o ensaio fica a mesma distância (em dias) antes de cada culto
       const offsetDays =
         isServiceKind(v) && v.hasRehearsal ? daysBetweenKeys(v.rehearsalDate, v.date) : 0
       const rehearsalDuration = settings?.rehearsal_duration_min ?? 120
       const rehearsalRow = (serviceId: string, serviceStart: Date) => {
-        const start = fromLocalInputs(
-          addDaysToKey(localDateKey(serviceStart), -offsetDays),
-          v.rehearsalTime,
-        )
+        const day = addDaysToKey(localDateKey(serviceStart), -offsetDays)
+        const start = fromLocalInputs(day, v.rehearsalTime)
         return {
           church_id: ministry.church_id,
           ministry_id: ministry.id,
@@ -211,6 +252,9 @@ export function EventDialog({
           location_name: v.location || null,
           starts_at: start.toISOString(),
           ends_at: new Date(start.getTime() + rehearsalDuration * 60_000).toISOString(),
+          arrive_at: v.rehearsalArrival
+            ? beforeStart(start, v.rehearsalTime, v.rehearsalArrival)
+            : null,
           service_event_id: serviceId,
           created_by: user.id,
         }
@@ -229,7 +273,12 @@ export function EventDialog({
             const { error: err } = rehearsal
               ? await supabase
                   .from('events')
-                  .update({ starts_at: row.starts_at, ends_at: row.ends_at, title: row.title })
+                  .update({
+                    starts_at: row.starts_at,
+                    ends_at: row.ends_at,
+                    arrive_at: row.arrive_at,
+                    title: row.title,
+                  })
                   .eq('id', rehearsal.id)
               : await supabase.from('events').insert(row)
             if (err) throw err
@@ -283,6 +332,7 @@ export function EventDialog({
     },
     onSuccess: async (count, v) => {
       await queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
+      await queryClient.invalidateQueries({ queryKey: ['planning'] })
       const withRehearsal = isServiceKind(v) && v.hasRehearsal ? ', cada um com ensaio' : ''
       toast.success(
         editing
@@ -363,6 +413,15 @@ export function EventDialog({
               <Input id="event-arrival" type="time" {...form.register('arrival')} />
             </FormField>
           )}
+          {isService && (
+            <FormField
+              id="event-soundcheck"
+              label="Passagem de som (opcional)"
+              error={errors.soundcheck?.message}
+            >
+              <Input id="event-soundcheck" type="time" {...form.register('soundcheck')} />
+            </FormField>
+          )}
           <FormField id="event-duration" label="Duração">
             <NativeSelect
               id="event-duration"
@@ -408,9 +467,26 @@ export function EventDialog({
                       />
                     </FormField>
                     <FormField id="rehearsal-time" label="Horário">
-                      <Input id="rehearsal-time" type="time" {...form.register('rehearsalTime')} />
+                      <Input
+                        id="rehearsal-time"
+                        type="time"
+                        {...form.register('rehearsalTime', {
+                          onChange: (e) => onRehearsalTimeChange(e.target.value),
+                        })}
+                      />
                     </FormField>
                   </div>
+                  <FormField
+                    id="rehearsal-arrival"
+                    label="Chegada para o ensaio"
+                    error={errors.rehearsalArrival?.message}
+                  >
+                    <Input
+                      id="rehearsal-arrival"
+                      type="time"
+                      {...form.register('rehearsalArrival')}
+                    />
+                  </FormField>
                   <p className="text-muted-foreground text-[13px]">
                     A equipe escalada no culto vai para o ensaio automaticamente.
                     {repeat && ' Nas outras semanas o ensaio fica a mesma distância do culto.'}
@@ -450,6 +526,15 @@ export function EventDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Minutos entre um horário anterior e o início (ex.: 23:50 → 00:10 = 20). */
+function minutesBefore(startTime: string, earlier: string): number {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    return (h ?? 0) * 60 + (m ?? 0)
+  }
+  return (toMin(startTime) - toMin(earlier) + 1440) % 1440
 }
 
 function isServiceKind(v: Values): boolean {

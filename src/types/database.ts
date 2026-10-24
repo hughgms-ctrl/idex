@@ -474,6 +474,7 @@ export type Database = {
           recurrence_parent_id: string | null
           recurrence_rule: string | null
           service_event_id: string | null
+          soundcheck_at: string | null
           starts_at: string
           title: string
           updated_at: string
@@ -496,6 +497,7 @@ export type Database = {
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
           service_event_id?: string | null
+          soundcheck_at?: string | null
           starts_at: string
           title: string
           updated_at?: string
@@ -517,6 +519,7 @@ export type Database = {
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
           service_event_id?: string | null
+          soundcheck_at?: string | null
           starts_at?: string
           title?: string
           updated_at?: string
@@ -900,6 +903,7 @@ export type Database = {
           availability_deadline: string | null
           availability_ends_on: string | null
           availability_starts_on: string | null
+          checkin_code: string
           checkin_mode: string
           checkin_radius_m: number | null
           checkin_request_deadline_hours: number
@@ -911,11 +915,19 @@ export type Database = {
           late_penalty_tiers: NonNullable<Json>
           late_tolerance_min: number
           ministry_id: string
+          rehearsal_arrival_minutes: number
           rehearsal_days_before: number
           rehearsal_duration_min: number
           rehearsal_enabled: boolean
+          rehearsal_late_consequence: string
+          rehearsal_mode: string
           rehearsal_time: string
+          rehearsal_tolerance_min: number
+          rehearsal_weekday: number | null
           service_arrival_minutes: number
+          service_late_consequence: string
+          service_soundcheck_minutes: number | null
+          service_tolerance_min: number
           updated_at: string
         }
         ComputedFields: never
@@ -924,6 +936,7 @@ export type Database = {
           availability_deadline?: string | null
           availability_ends_on?: string | null
           availability_starts_on?: string | null
+          checkin_code?: string
           checkin_mode?: string
           checkin_radius_m?: number | null
           checkin_request_deadline_hours?: number
@@ -935,11 +948,19 @@ export type Database = {
           late_penalty_tiers?: NonNullable<Json>
           late_tolerance_min?: number
           ministry_id: string
+          rehearsal_arrival_minutes?: number
           rehearsal_days_before?: number
           rehearsal_duration_min?: number
           rehearsal_enabled?: boolean
+          rehearsal_late_consequence?: string
+          rehearsal_mode?: string
           rehearsal_time?: string
+          rehearsal_tolerance_min?: number
+          rehearsal_weekday?: number | null
           service_arrival_minutes?: number
+          service_late_consequence?: string
+          service_soundcheck_minutes?: number | null
+          service_tolerance_min?: number
           updated_at?: string
         }
         Update: {
@@ -947,6 +968,7 @@ export type Database = {
           availability_deadline?: string | null
           availability_ends_on?: string | null
           availability_starts_on?: string | null
+          checkin_code?: string
           checkin_mode?: string
           checkin_radius_m?: number | null
           checkin_request_deadline_hours?: number
@@ -958,11 +980,19 @@ export type Database = {
           late_penalty_tiers?: NonNullable<Json>
           late_tolerance_min?: number
           ministry_id?: string
+          rehearsal_arrival_minutes?: number
           rehearsal_days_before?: number
           rehearsal_duration_min?: number
           rehearsal_enabled?: boolean
+          rehearsal_late_consequence?: string
+          rehearsal_mode?: string
           rehearsal_time?: string
+          rehearsal_tolerance_min?: number
+          rehearsal_weekday?: number | null
           service_arrival_minutes?: number
+          service_late_consequence?: string
+          service_soundcheck_minutes?: number | null
+          service_tolerance_min?: number
           updated_at?: string
         }
         Relationships: [
@@ -1249,6 +1279,7 @@ export type Database = {
       }
       schedule_assignments: {
         Row: {
+          benched_reason: string | null
           church_id: string
           created_at: string
           event_id: string
@@ -1260,6 +1291,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          benched_reason?: string | null
           church_id: string
           created_at?: string
           event_id: string
@@ -1270,6 +1302,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          benched_reason?: string | null
           church_id?: string
           created_at?: string
           event_id?: string
@@ -1575,6 +1608,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      apply_late_consequence: {
+        Args: {
+          p_event_id: string
+          p_ministry_member_id: string
+          p_reason?: string
+          p_scope: string
+        }
+        Returns: number
+      }
       can_edit_setlist: { Args: { p_setlist_id: string }; Returns: boolean }
       can_edit_setlist_of_event: { Args: { p_event_id: string }; Returns: boolean }
       can_justify_event: {
@@ -1676,6 +1718,7 @@ export type Database = {
         }
         Returns: string
       }
+      regenerate_checkin_code: { Args: { p_ministry_id: string }; Returns: string }
       requeue_stuck_notifications: { Args: Record<PropertyKey, never>; Returns: number }
       review_justification: {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
@@ -1691,7 +1734,7 @@ export type Database = {
       storage_song_id: { Args: { p_name: string }; Returns: string }
     }
     Enums: {
-      assignment_status: 'scheduled' | 'confirmed' | 'declined'
+      assignment_status: 'scheduled' | 'confirmed' | 'declined' | 'benched'
       checkin_source: 'qr' | 'geo' | 'request' | 'manual'
       church_role: 'owner' | 'member'
       cycle_status: 'open' | 'closing' | 'closed'
@@ -1701,7 +1744,11 @@ export type Database = {
       member_status: 'active' | 'inactive'
       ministry_member_role: 'leader' | 'member'
       notification_kind:
-        'schedule_reminder' | 'rehearsal_today' | 'points_deducted' | 'request_reviewed'
+        | 'schedule_reminder'
+        | 'rehearsal_today'
+        | 'points_deducted'
+        | 'request_reviewed'
+        | 'member_benched'
       notification_status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
       point_reason: 'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment'
       request_status: 'pending' | 'approved' | 'adjusted' | 'rejected'
@@ -1816,7 +1863,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      assignment_status: ['scheduled', 'confirmed', 'declined'],
+      assignment_status: ['scheduled', 'confirmed', 'declined', 'benched'],
       checkin_source: ['qr', 'geo', 'request', 'manual'],
       church_role: ['owner', 'member'],
       cycle_status: ['open', 'closing', 'closed'],
@@ -1830,6 +1877,7 @@ export const Constants = {
         'rehearsal_today',
         'points_deducted',
         'request_reviewed',
+        'member_benched',
       ],
       notification_status: ['pending', 'sending', 'sent', 'failed', 'skipped'],
       point_reason: ['cycle_start', 'late', 'absence', 'request_rejected', 'adjustment'],

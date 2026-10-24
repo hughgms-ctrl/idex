@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMyAvailability, useMyRoleIds, useUpcomingEvents } from '@/features/availability/queries'
 import { useChurch } from '@/features/church/church-context'
+import { eventTimeRows } from '@/features/schedule/datetime'
 import { PushCard } from '@/features/push/PushCard'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMyProfile } from '@/features/profile/queries'
@@ -113,8 +114,11 @@ export function DashboardPage() {
                 {formatEventDate(event.starts_at)}
               </span>
               {event.arrive_at && (
-                <span className="text-sm font-semibold">
-                  Chegada da equipe: {formatEventDate(event.arrive_at).split(' · ')[1]}
+                <span className="text-sm">
+                  {eventTimeRows(event, settings.data)
+                    .filter((r) => r.label !== 'Início' && r.label !== 'Início do ensaio')
+                    .map((r) => `${r.label.replace(' (tolerância)', '')} ${r.time}`)
+                    .join(' · ')}
                 </span>
               )}
               <span className="text-muted-foreground text-sm">

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { LocateFixed } from 'lucide-react'
 import { addDaysToKey, addMonths, localDateKey } from '@domain/time.ts'
+import { defaultArrival } from '@domain/schedule.ts'
 import { Link } from 'react-router'
 import { normalizeTiers } from '@domain/points.ts'
 
@@ -100,7 +101,10 @@ function useSaveSettings(ministryId: string, message: string) {
   })
 }
 
-// Padrões de horário: chegada da equipe e ensaio de cada culto.
+// Regras de horário do culto e do ensaio (chegada, tolerância, passagem de
+// som, consequência do atraso) e quando acontece o ensaio.
+const WEEKDAYS_FULL = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+
 function ServiceTimes({
   settings,
   canEdit,
@@ -108,104 +112,223 @@ function ServiceTimes({
   settings: Tables<'ministry_settings'>
   canEdit: boolean
 }) {
-  const save = useSaveSettings(settings.ministry_id, 'Horários salvos')
-  const [arrival, setArrival] = useState(String(settings.service_arrival_minutes))
-  const [enabled, setEnabled] = useState(settings.rehearsal_enabled)
-  const [daysBefore, setDaysBefore] = useState(String(settings.rehearsal_days_before))
-  const [time, setTime] = useState(settings.rehearsal_time.slice(0, 5))
-  const [duration, setDuration] = useState(String(settings.rehearsal_duration_min))
+  const save = useSaveSettings(settings.ministry_id, 'Regras de horário salvas')
+  const [v, setV] = useState({
+    serviceArrival: String(settings.service_arrival_minutes),
+    serviceTolerance: String(settings.service_tolerance_min),
+    soundcheck:
+      settings.service_soundcheck_minutes == null
+        ? ''
+        : String(settings.service_soundcheck_minutes),
+    serviceConsequence: settings.service_late_consequence,
+    rehearsalEnabled: settings.rehearsal_enabled,
+    rehearsalMode: settings.rehearsal_mode,
+    rehearsalWeekday: String(settings.rehearsal_weekday ?? 4),
+    daysBefore: String(settings.rehearsal_days_before),
+    rehearsalTime: settings.rehearsal_time.slice(0, 5),
+    rehearsalDuration: String(settings.rehearsal_duration_min),
+    rehearsalArrival: String(settings.rehearsal_arrival_minutes),
+    rehearsalTolerance: String(settings.rehearsal_tolerance_min),
+    rehearsalConsequence: settings.rehearsal_late_consequence,
+  })
+  const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setV({ ...v, [k]: e.target.value })
+  const num = (x: string) => Math.round(Number(x))
+
+  // exemplo com horários reais (culto às 18h; ensaio no horário configurado)
+  const ex = (base: string, minus: number) => defaultArrival(base, minus)
+  const plus = (base: string, add: number) => {
+    const [h, m] = base.split(':').map(Number)
+    const t = ((((h ?? 0) * 60 + (m ?? 0) + add) % 1440) + 1440) % 1440
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+  }
+  const sArrive = ex('18:00', num(v.serviceArrival) || 0)
+  const rArrive = ex(v.rehearsalTime || '19:30', num(v.rehearsalArrival) || 0)
 
   const submit = () => {
-    const a = Number(arrival)
-    const d = Number(duration)
-    if (!Number.isInteger(a) || a < 0 || a > 360)
-      return toast.error('Chegada: de 0 a 360 minutos antes')
-    if (!/^\d{2}:\d{2}$/.test(time)) return toast.error('Informe o horário do ensaio')
-    if (!Number.isInteger(d) || d < 15 || d > 600)
-      return toast.error('Duração do ensaio: de 15 a 600 minutos')
+    const ints = [
+      v.serviceArrival,
+      v.serviceTolerance,
+      v.rehearsalArrival,
+      v.rehearsalTolerance,
+      v.rehearsalDuration,
+    ]
+    if (ints.some((x) => !/^\d+$/.test(x)))
+      return toast.error('Use só números inteiros nos minutos')
+    if (v.soundcheck && !/^\d+$/.test(v.soundcheck))
+      return toast.error('Passagem de som: minutos antes do culto')
+    if (!/^\d{2}:\d{2}$/.test(v.rehearsalTime)) return toast.error('Informe o horário do ensaio')
     save.mutate({
-      service_arrival_minutes: a,
-      rehearsal_enabled: enabled,
-      rehearsal_days_before: Number(daysBefore),
-      rehearsal_time: time,
-      rehearsal_duration_min: d,
+      service_arrival_minutes: num(v.serviceArrival),
+      service_tolerance_min: num(v.serviceTolerance),
+      service_soundcheck_minutes: v.soundcheck ? num(v.soundcheck) : null,
+      service_late_consequence: v.serviceConsequence,
+      rehearsal_enabled: v.rehearsalEnabled,
+      rehearsal_mode: v.rehearsalMode,
+      rehearsal_weekday: num(v.rehearsalWeekday),
+      rehearsal_days_before: num(v.daysBefore),
+      rehearsal_time: v.rehearsalTime,
+      rehearsal_duration_min: num(v.rehearsalDuration),
+      rehearsal_arrival_minutes: num(v.rehearsalArrival),
+      rehearsal_tolerance_min: num(v.rehearsalTolerance),
+      rehearsal_late_consequence: v.rehearsalConsequence,
     })
   }
 
+  const minutes = (id: keyof typeof v, label: string, hint?: string) => (
+    <FormField id={`rt-${id}`} label={label} hint={hint}>
+      <Input
+        id={`rt-${id}`}
+        type="number"
+        min={0}
+        inputMode="numeric"
+        value={String(v[id])}
+        disabled={!canEdit}
+        onChange={set(id)}
+      />
+    </FormField>
+  )
+
   return (
     <section className="flex flex-col gap-2">
-      <SectionTitle title="Cultos e ensaios" />
-      <Panel className="gap-4">
-        <p className="text-muted-foreground text-[13px]">
-          Valem como sugestão ao criar cultos (cada culto pode ter os seus). Atraso, abertura do
-          ponto e “esqueci de registrar” contam a partir do horário de chegada.
-        </p>
-        <FormField id="st-arrival" label="Equipe chega quantos minutos antes do culto?">
-          <Input
-            id="st-arrival"
-            type="number"
-            min={0}
-            max={360}
-            inputMode="numeric"
-            value={arrival}
+      <SectionTitle title="Regras de horário" />
+      <p className="text-muted-foreground text-[13px]">
+        Valem como padrão ao criar cultos e ensaios (cada um pode ter os seus horários). Atraso e
+        abertura do ponto contam a partir da chegada; depois da tolerância, além de perder pontos, a
+        pessoa pode ficar de fora.
+      </p>
+
+      <Panel className="border-l-primary gap-4 border-l-4">
+        <h3 className="text-primary text-sm font-semibold tracking-wider">CULTO</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {minutes('serviceArrival', 'Chegada (min antes do culto)')}
+          {minutes('serviceTolerance', 'Tolerância (min)')}
+          {minutes('soundcheck', 'Passagem de som (min antes)', 'Deixe vazio se não houver')}
+        </div>
+        <FormField id="rt-serviceConsequence" label="Quem chega depois da tolerância">
+          <NativeSelect
+            id="rt-serviceConsequence"
+            value={v.serviceConsequence}
             disabled={!canEdit}
-            onChange={(e) => setArrival(e.target.value)}
-          />
+            onChange={set('serviceConsequence')}
+          >
+            <option value="points">Só perde pontos</option>
+            <option value="no_play">Perde pontos e não toca neste culto</option>
+          </NativeSelect>
         </FormField>
+        <p className="bg-secondary rounded-xl px-3 py-2 text-[13px]">
+          Exemplo, culto às <strong>18:00</strong>: chegar até <strong>{sArrive}</strong>, limite{' '}
+          <strong>{plus(sArrive, num(v.serviceTolerance) || 0)}</strong>
+          {v.soundcheck && (
+            <>
+              , passagem de som <strong>{ex('18:00', num(v.soundcheck))}</strong> em ponto
+            </>
+          )}
+          .
+        </p>
+      </Panel>
+
+      <Panel className="border-l-info gap-4 border-l-4">
+        <h3 className="text-info text-sm font-semibold tracking-wider">ENSAIO</h3>
         <Label className="min-h-11 cursor-pointer font-normal">
           <Checkbox
-            checked={enabled}
+            checked={v.rehearsalEnabled}
             disabled={!canEdit}
-            onCheckedChange={(v) => setEnabled(v === true)}
+            onCheckedChange={(x) => setV({ ...v, rehearsalEnabled: x === true })}
           />
           Todo culto tem ensaio
         </Label>
-        {enabled && (
-          <div className="grid grid-cols-2 gap-3">
-            <FormField id="st-days" label="Ensaio">
+        {v.rehearsalEnabled && (
+          <>
+            <FormField id="rt-mode" label="Quando">
               <NativeSelect
-                id="st-days"
-                value={daysBefore}
+                id="rt-mode"
+                value={v.rehearsalMode}
                 disabled={!canEdit}
-                onChange={(e) => setDaysBefore(e.target.value)}
+                onChange={set('rehearsalMode')}
               >
-                <option value="0">No mesmo dia</option>
-                {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                  <option key={n} value={n}>
-                    {n} {n === 1 ? 'dia antes' : 'dias antes'}
-                  </option>
-                ))}
+                <option value="weekday">Sempre no mesmo dia da semana</option>
+                <option value="days_before">Alguns dias antes do culto</option>
               </NativeSelect>
             </FormField>
-            <FormField id="st-time" label="Horário do ensaio">
-              <Input
-                id="st-time"
-                type="time"
-                value={time}
+            <div className="grid grid-cols-2 gap-3">
+              {v.rehearsalMode === 'weekday' ? (
+                <FormField id="rt-weekday" label="Dia">
+                  <NativeSelect
+                    id="rt-weekday"
+                    value={v.rehearsalWeekday}
+                    disabled={!canEdit}
+                    onChange={set('rehearsalWeekday')}
+                  >
+                    {WEEKDAYS_FULL.map((d, i) => (
+                      <option key={d} value={i}>
+                        Toda {d}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              ) : (
+                <FormField id="rt-days" label="Dias antes">
+                  <NativeSelect
+                    id="rt-days"
+                    value={v.daysBefore}
+                    disabled={!canEdit}
+                    onChange={set('daysBefore')}
+                  >
+                    <option value="0">No mesmo dia</option>
+                    {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                      <option key={n} value={n}>
+                        {n} {n === 1 ? 'dia antes' : 'dias antes'}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              )}
+              <FormField id="rt-rtime" label="Começa às">
+                <Input
+                  id="rt-rtime"
+                  type="time"
+                  value={v.rehearsalTime}
+                  disabled={!canEdit}
+                  onChange={set('rehearsalTime')}
+                />
+              </FormField>
+              {minutes('rehearsalDuration', 'Duração (min)')}
+              {minutes('rehearsalArrival', 'Chegada (min antes)')}
+              {minutes('rehearsalTolerance', 'Tolerância (min)')}
+            </div>
+            <FormField id="rt-rcons" label="Quem chega depois da tolerância (ou falta)">
+              <NativeSelect
+                id="rt-rcons"
+                value={v.rehearsalConsequence}
                 disabled={!canEdit}
-                onChange={(e) => setTime(e.target.value)}
-              />
+                onChange={set('rehearsalConsequence')}
+              >
+                <option value="points">Só perde pontos</option>
+                <option value="out_rehearsal">Perde pontos e fica fora do ensaio</option>
+                <option value="out_rehearsal_and_service">
+                  Perde pontos e fica fora do ensaio e do culto
+                </option>
+              </NativeSelect>
             </FormField>
-            <FormField id="st-duration" label="Duração (min)">
-              <Input
-                id="st-duration"
-                type="number"
-                min={15}
-                max={600}
-                inputMode="numeric"
-                value={duration}
-                disabled={!canEdit}
-                onChange={(e) => setDuration(e.target.value)}
-              />
-            </FormField>
-          </div>
-        )}
-        {canEdit && (
-          <Button className="self-start" onClick={submit} disabled={save.isPending}>
-            {save.isPending ? 'Salvando…' : 'Salvar horários'}
-          </Button>
+            <p className="bg-secondary rounded-xl px-3 py-2 text-[13px]">
+              Exemplo: ensaio às <strong>{v.rehearsalTime || '—'}</strong>, chegar até{' '}
+              <strong>{rArrive}</strong>, limite{' '}
+              <strong>{plus(rArrive, num(v.rehearsalTolerance) || 0)}</strong>
+              {v.rehearsalConsequence === 'out_rehearsal_and_service' &&
+                '; depois disso não participa do ensaio nem do culto'}
+              {v.rehearsalConsequence === 'out_rehearsal' &&
+                '; depois disso não participa do ensaio'}
+              .
+            </p>
+          </>
         )}
       </Panel>
+      {canEdit && (
+        <Button className="self-start" onClick={submit} disabled={save.isPending}>
+          {save.isPending ? 'Salvando…' : 'Salvar regras de horário'}
+        </Button>
+      )}
     </section>
   )
 }
@@ -338,12 +461,12 @@ const CHECKIN_MODES = [
   {
     value: 'qr',
     title: 'Só QR Code',
-    text: 'A pessoa lê o QR que você projeta. Não pede localização.',
+    text: 'A pessoa lê o QR do ministério. Não pede localização (dá para bater de longe com foto do QR).',
   },
   {
     value: 'qr_geo',
     title: 'QR Code + localização',
-    text: 'Lê o QR e precisa estar perto da igreja. O mais seguro.',
+    text: 'Lê o QR e precisa estar perto da igreja. O mais seguro com QR fixo.',
   },
   {
     value: 'geo',
@@ -362,7 +485,14 @@ function CheckinMode({
   const save = useSaveSettings(settings.ministry_id, 'Forma do ponto salva')
   return (
     <section className="flex flex-col gap-2">
-      <SectionTitle title="Como bater o ponto" />
+      <SectionTitle
+        title="Como bater o ponto"
+        action={
+          <Link to="/presenca/qr-fixo" className="text-primary text-sm">
+            QR do ponto
+          </Link>
+        }
+      />
       <div role="radiogroup" aria-label="Como bater o ponto" className="flex flex-col gap-2">
         {CHECKIN_MODES.map((m) => {
           const on = settings.checkin_mode === m.value
@@ -603,7 +733,7 @@ function MinistryRules({
           {field('min', 'Mínimo')}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {field('tolerance', 'Tolerância (min)')}
+          {field('tolerance', 'Tolerância de outros eventos (min)')}
           {field('absence', 'Falta sem aviso (−)')}
         </div>
         <fieldset className="grid grid-cols-3 gap-3">

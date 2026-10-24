@@ -20,6 +20,7 @@ type Result = {
   delta: number
   balance: number | null
   distanceM: number | null
+  consequence?: { scope: string; message: string } | null
 }
 type Step =
   | { name: 'intro' }
@@ -61,7 +62,8 @@ export function CheckinPage() {
   const queryClient = useQueryClient()
   const [params] = useSearchParams()
   // QR lido pela câmera do celular: /ponto?q=…
-  const qrFromLink = params.get('q')
+  // QR lido pela câmera do celular: rotativo (?q=) ou fixo do ministério (?c=)
+  const qrFromLink = params.get('q') ?? (params.get('c') ? `c:${params.get('c')}` : null)
   const { ministry, memberships } = useChurch()
   const settings = useMinistrySettings(ministry?.id)
   const mode: Mode = (settings.data?.checkin_mode as Mode | undefined) ?? 'qr_geo'
@@ -82,7 +84,7 @@ export function CheckinPage() {
   useEffect(() => stop, [stop])
 
   const send = useCallback(
-    async (target: { qr: string } | { eventId: string }) => {
+    async (target: { qr: string } | { code: string } | { eventId: string }) => {
       stop()
       setStep({ name: 'sending' })
       try {
@@ -146,7 +148,7 @@ export function CheckinPage() {
     setStep({ name: 'intro' })
   }
 
-  const canUseLink = qrFromLink && mode !== 'geo'
+  const canUseLink = qrFromLink && (mode !== 'geo' || qrFromLink.startsWith('c:'))
   const intro = (() => {
     if (settings.isPending) return null
     if (canUseLink) {
@@ -160,7 +162,11 @@ export function CheckinPage() {
           <Button
             size="lg"
             className="min-h-14 rounded-2xl text-[17px]"
-            onClick={() => void send({ qr: qrFromLink })}
+            onClick={() =>
+              void send(
+                qrFromLink.startsWith('c:') ? { code: qrFromLink.slice(2) } : { qr: qrFromLink },
+              )
+            }
           >
             {needsGeo ? 'Confirmar com minha localização' : 'Confirmar presença'}
           </Button>
@@ -339,6 +345,18 @@ function CheckinResult({ result }: { result: Result }) {
           </p>
         )}
       </div>
+      {result.consequence && (
+        <div className="border-destructive flex gap-3 rounded-2xl border p-4">
+          <TriangleAlert className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
+          <p className="text-sm leading-relaxed">
+            {result.consequence.message}.{' '}
+            {result.consequence.scope === 'event_and_service'
+              ? 'Pela regra do ministério, você não participa deste ensaio nem do culto.'
+              : 'Pela regra do ministério, você não participa deste evento.'}{' '}
+            O líder foi avisado.
+          </p>
+        </div>
+      )}
       <Button asChild size="lg" variant="outline">
         <Link to="/">Voltar ao início</Link>
       </Button>
