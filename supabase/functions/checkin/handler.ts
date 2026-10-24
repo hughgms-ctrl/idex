@@ -6,12 +6,18 @@ import { z } from 'zod'
 import type { Deps } from '../_shared/deps.ts'
 import { withinRadius } from '../_shared/domain/geo.ts'
 import { callTime } from '../_shared/domain/schedule.ts'
-import { attendanceOutcome, rulesFromSettings } from '../_shared/domain/points.ts'
-import { parseQrPayload, verifyQrToken } from '../_shared/domain/qr.ts'
+import {
+  attendanceOutcome,
+  consequenceReason,
+  lateConsequence,
+  rulesFromSettings,
+} from '../_shared/domain/points.ts'
+import { parseFixedCode, parseQrPayload, verifyQrToken } from '../_shared/domain/qr.ts'
 import { corsHeaders, errorJson, json } from '../_shared/http.ts'
 
 const bodySchema = z.object({
   qr: z.string().min(10).max(400).optional(),
+  code: z.string().max(400).optional(),
   eventId: z.uuid().optional(),
   lat: z.number().min(-90).max(90).nullable().optional(),
   lng: z.number().min(-180).max(180).nullable().optional(),
@@ -29,7 +35,13 @@ const OPEN_BEFORE_MS = 2 * 3_600_000 // check-in abre 2h antes da chegada
 
 export type CheckinDeps = Pick<
   Deps,
-  'getUserId' | 'loadEventContext' | 'recordAttendance' | 'logAttempt' | 'balanceFor'
+  | 'getUserId'
+  | 'loadEventContext'
+  | 'recordAttendance'
+  | 'logAttempt'
+  | 'balanceFor'
+  | 'applyConsequence'
+  | 'resolveCheckinCode'
 > & { qrSecret: string; now: () => number }
 
 export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Response> {
@@ -48,10 +60,28 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   const accuracy = body.accuracy ?? null
   const hasLocation = lat !== null && lng !== null
 
-  const payload = body.qr ? parseQrPayload(body.qr) : null
-  if (body.qr && !payload) return errorJson('Este QR não é de check-in do ide.x', 400)
-  const eventId = payload?.eventId ?? body.eventId
-  if (!eventId) return errorJson('Leia o QR Code que o líder está mostrando', 400)
+  // QR fixo (impresso) ou QR rotativo (telão)
+  const fixedCode = parseFixedCode(body.code ?? body.qr ?? '')
+  const payload = !fixedCode && body.qr ? parseQrPayload(body.qr) : null
+  if (body.qr && !payload && !fixedCode) return errorJson('Este QR não é de check-in do ide.x', 400)
+  let eventId = payload?.eventId ?? body.eventId
+  if (fixedCode) {
+    const found = await deps.resolveCheckinCode(fixedCode, userId, deps.now())
+    if (found.status !== 'ok') {
+      if (found.status === 'invalid') {
+        return errorJson('Este QR não vale mais. Peça ao líder o QR novo.', 400)
+      }
+      if (found.status === 'not_member') {
+        return errorJson('Você não faz parte deste ministério', 403)
+      }
+      return errorJson(
+        'Nenhum culto ou ensaio seu com ponto aberto agora (abre 2h antes da chegada).',
+        409,
+      )
+    }
+    eventId = found.eventId
+  }
+  if (!eventId) return errorJson('Leia o QR Code do ministério', 400)
 
   const ctx = await deps.loadEventContext(eventId, userId)
   if (!ctx) return errorJson('Evento não encontrado', 404)
@@ -72,7 +102,8 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   const mode = checkinMode(ctx.settings)
   const needsQr = mode !== 'geo'
   const needsGeo = mode !== 'qr'
-  if (needsQr && !payload) {
+  const hasQr = Boolean(payload || fixedCode)
+  if (needsQr && !hasQr) {
     return errorJson('Neste ministério o ponto é pelo QR Code. Leia o QR que o líder mostra.', 400)
   }
   if (needsGeo && !hasLocation) {
@@ -80,6 +111,12 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   }
 
   if (ctx.alreadyCheckedIn) return errorJson('Sua presença neste evento já está registrada', 409)
+  if (ctx.benched) {
+    return errorJson(
+      'Você está fora deste evento pela regra de atraso do ministério. Fale com o líder.',
+      403,
+    )
+  }
   if (!ctx.assigned) {
     await attempt('not_scheduled')
     return errorJson('Você não está escalado neste evento', 403)
@@ -95,7 +132,12 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
     return errorJson('O check-in deste evento não está aberto agora', 409)
   }
 
-  if (needsQr && !(await verifyQrToken(deps.qrSecret, ctx.event.id, payload!.token, now))) {
+  // o QR rotativo confere o token; o fixo já foi validado pelo código
+  if (
+    needsQr &&
+    payload &&
+    !(await verifyQrToken(deps.qrSecret, ctx.event.id, payload.token, now))
+  ) {
     await attempt('invalid_qr')
     return errorJson('QR expirado. Aponte a câmera para o QR de novo.', 400)
   }
@@ -128,7 +170,10 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
     eventStart: callTime(ctx.event),
     arrivedAt,
     justified: ctx.justified,
-    rules: rulesFromSettings(ctx.settings as Parameters<typeof rulesFromSettings>[0]),
+    rules: rulesFromSettings(
+      ctx.settings as Parameters<typeof rulesFromSettings>[0],
+      ctx.event.kind,
+    ),
   })
   try {
     await deps.recordAttendance({
@@ -137,7 +182,7 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
       arrivedAt,
       lateMinutes: outcome.lateMinutes,
       delta: outcome.delta,
-      source: payload && needsQr ? 'qr' : 'geo',
+      source: hasQr && needsQr ? 'qr' : 'geo',
       lat,
       lng,
       accuracyM: accuracy,
@@ -150,6 +195,28 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   }
   await attempt('ok', geo?.distanceM)
 
+  // Passou da tolerância: pode ficar de fora (regra do ministério)
+  const scope = lateConsequence({
+    kind: ctx.event.kind,
+    beyondTolerance: outcome.kind === 'late',
+    linkedToService: Boolean(ctx.event.service_event_id),
+    rule: ctx.settings,
+  })
+  const tolerance = rulesFromSettings(
+    ctx.settings as Parameters<typeof rulesFromSettings>[0],
+    ctx.event.kind,
+  ).lateToleranceMin
+  const limit = new Date(new Date(callTime(ctx.event)).getTime() + tolerance * 60_000)
+  const consequence = scope === 'none' ? null : consequenceReason(scope, hhmm(limit))
+  if (scope !== 'none') {
+    await deps.applyConsequence({
+      eventId: ctx.event.id,
+      memberId: ctx.member.id,
+      scope,
+      reason: consequence,
+    })
+  }
+
   return json({
     arrivedAt,
     kind: outcome.kind,
@@ -157,5 +224,14 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
     delta: outcome.delta,
     balance: await deps.balanceFor(ctx.member.id, ctx.event.id),
     distanceM: geo?.distanceM ?? null,
+    consequence: scope === 'none' ? null : { scope, message: consequence },
   })
+}
+
+function hhmm(date: Date): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }

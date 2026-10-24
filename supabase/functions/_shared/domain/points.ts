@@ -33,18 +33,34 @@ export const DEFAULT_RULES: PointRules = {
   requestDeadlineHours: 48,
 }
 
-/** Converte a linha de ministry_settings para as regras. */
-export function rulesFromSettings(row: {
-  late_tolerance_min: number
-  late_penalty_tiers: unknown
-  absence_penalty: number
-  cycle_starting_points: number
-  cycle_min_points: number
-  checkin_request_limit_per_cycle: number
-  checkin_request_deadline_hours: number
-}): PointRules {
+export type EventKind = 'service' | 'rehearsal' | 'other'
+
+/**
+ * Converte a linha de ministry_settings para as regras. A tolerância depende
+ * do tipo de evento (culto e ensaio têm a sua; outros usam a geral).
+ */
+export function rulesFromSettings(
+  row: {
+    late_tolerance_min: number
+    service_tolerance_min?: number | null
+    rehearsal_tolerance_min?: number | null
+    late_penalty_tiers: unknown
+    absence_penalty: number
+    cycle_starting_points: number
+    cycle_min_points: number
+    checkin_request_limit_per_cycle: number
+    checkin_request_deadline_hours: number
+  },
+  kind: EventKind | string = 'other',
+): PointRules {
+  const tolerance =
+    kind === 'service'
+      ? row.service_tolerance_min
+      : kind === 'rehearsal'
+        ? row.rehearsal_tolerance_min
+        : null
   return {
-    lateToleranceMin: row.late_tolerance_min,
+    lateToleranceMin: tolerance ?? row.late_tolerance_min,
     lateTiers: normalizeTiers(row.late_penalty_tiers),
     absencePenalty: row.absence_penalty,
     startingPoints: row.cycle_starting_points,
@@ -201,4 +217,43 @@ export function nextCycleRange(
     Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, start.getUTCDate() - 1),
   )
   return { startsOn: start.toISOString().slice(0, 10), endsOn: end.toISOString().slice(0, 10) }
+}
+
+// ---------------------------------------------------------------------------
+// Quem passa da tolerância pode ficar de fora (regra do ministério)
+// ---------------------------------------------------------------------------
+
+export type LateConsequenceRule = {
+  service_late_consequence?: string | null // 'points' | 'no_play'
+  rehearsal_late_consequence?: string | null // 'points' | 'out_rehearsal' | 'out_rehearsal_and_service'
+}
+
+/** 'none' | fica fora deste evento | fica fora do ensaio e do culto dele */
+export type ConsequenceScope = 'none' | 'event' | 'event_and_service'
+
+export function lateConsequence(params: {
+  kind: EventKind | string
+  /** chegou depois da tolerância (e não tinha justificativa aprovada) */
+  beyondTolerance: boolean
+  /** o ensaio está ligado a um culto? */
+  linkedToService: boolean
+  rule: LateConsequenceRule
+}): ConsequenceScope {
+  const { kind, beyondTolerance, linkedToService, rule } = params
+  if (!beyondTolerance) return 'none'
+  if (kind === 'service') return rule.service_late_consequence === 'no_play' ? 'event' : 'none'
+  if (kind === 'rehearsal') {
+    if (rule.rehearsal_late_consequence === 'out_rehearsal') return 'event'
+    if (rule.rehearsal_late_consequence === 'out_rehearsal_and_service') {
+      return linkedToService ? 'event_and_service' : 'event'
+    }
+  }
+  return 'none'
+}
+
+/** Texto do motivo, para a escala e os avisos. */
+export function consequenceReason(scope: ConsequenceScope, limit: string): string {
+  if (scope === 'event_and_service') return `Chegou depois de ${limit}: fora do ensaio e do culto`
+  if (scope === 'event') return `Chegou depois de ${limit}: fora deste evento`
+  return ''
 }

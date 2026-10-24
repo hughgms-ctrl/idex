@@ -9,6 +9,8 @@ export type EventContext = {
     id: string
     church_id: string
     ministry_id: string
+    kind: string
+    service_event_id: string | null
     starts_at: string
     arrive_at: string | null
     ends_at: string | null
@@ -20,6 +22,8 @@ export type EventContext = {
   settings: Record<string, any>
   member: { id: string; status: string } | null
   assigned: boolean
+  /** ficou de fora pela regra de atraso (status 'benched') */
+  benched: boolean
   alreadyCheckedIn: boolean
   justified: boolean
 }
@@ -64,7 +68,9 @@ export function makeDeps(
       const event = await must<any>(
         service
           .from('events')
-          .select('id, church_id, ministry_id, starts_at, arrive_at, ends_at, lat, lng, radius_m')
+          .select(
+            'id, church_id, ministry_id, kind, service_event_id, starts_at, arrive_at, ends_at, lat, lng, radius_m',
+          )
           .eq('id', eventId)
           .maybeSingle(),
       )
@@ -94,6 +100,7 @@ export function makeDeps(
         ),
       ])
       let assigned = false
+      let benched = false
       let alreadyCheckedIn = false
       let justified = false
       if (member) {
@@ -101,7 +108,7 @@ export function makeDeps(
           must<any[]>(
             service
               .from('schedule_assignments')
-              .select('id')
+              .select('id, status')
               .eq('event_id', eventId)
               .eq('ministry_member_id', member.id)
               .neq('status', 'declined'),
@@ -123,10 +130,11 @@ export function makeDeps(
           ),
         ])
         assigned = a.length > 0
+        benched = a.length > 0 && a.every((x: any) => x.status === 'benched')
         alreadyCheckedIn = c.length > 0
         justified = j.length > 0
       }
-      return { event, church, settings, member, assigned, alreadyCheckedIn, justified }
+      return { event, church, settings, member, assigned, benched, alreadyCheckedIn, justified }
     },
 
     recordAttendance: (args: {
@@ -200,7 +208,7 @@ export function makeDeps(
       const event = await must<any>(
         service
           .from('events')
-          .select('id, ministry_id, starts_at, arrive_at')
+          .select('id, ministry_id, kind, service_event_id, starts_at, arrive_at')
           .eq('id', request.event_id)
           .single(),
       )
@@ -238,6 +246,77 @@ export function makeDeps(
           p_note: args.note,
         }),
       ),
+
+    /** Tira (ou devolve) a pessoa da escala pela regra de atraso. */
+    applyConsequence: (args: {
+      eventId: string
+      memberId: string
+      scope: 'none' | 'event' | 'event_and_service'
+      reason: string | null
+    }) =>
+      must<number>(
+        service.rpc('apply_late_consequence', {
+          p_event_id: args.eventId,
+          p_ministry_member_id: args.memberId,
+          p_scope: args.scope,
+          p_reason: args.reason,
+        }),
+      ),
+
+    /**
+     * QR fixo: acha o evento do integrante com o ponto aberto agora
+     * (2h antes da chegada até o fim), o mais próximo do horário de chegada.
+     */
+    resolveCheckinCode: async (
+      code: string,
+      userId: string,
+      nowMs: number,
+    ): Promise<
+      { status: 'ok'; eventId: string } | { status: 'invalid' | 'not_member' | 'none' }
+    > => {
+      const settings = await must<any>(
+        service
+          .from('ministry_settings')
+          .select('ministry_id')
+          .eq('checkin_code', code)
+          .maybeSingle(),
+      )
+      if (!settings) return { status: 'invalid' }
+      const member = await must<any>(
+        service
+          .from('ministry_members')
+          .select('id')
+          .eq('ministry_id', settings.ministry_id)
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .maybeSingle(),
+      )
+      if (!member) return { status: 'not_member' }
+      const rows = await must<any[]>(
+        service
+          .from('schedule_assignments')
+          .select('event_id, events!inner(id, ministry_id, starts_at, arrive_at, ends_at)')
+          .eq('ministry_member_id', member.id)
+          .neq('status', 'declined')
+          .eq('events.ministry_id', settings.ministry_id)
+          .gte('events.starts_at', new Date(nowMs - 12 * 3_600_000).toISOString())
+          .lte('events.starts_at', new Date(nowMs + 8 * 3_600_000).toISOString()),
+      )
+      const open = rows
+        .map((r) => r.events)
+        .filter((e) => {
+          const start = new Date(e.starts_at).getTime()
+          const call = new Date(e.arrive_at ?? e.starts_at).getTime()
+          const end = e.ends_at ? new Date(e.ends_at).getTime() : start + 2 * 3_600_000
+          return nowMs >= call - 2 * 3_600_000 && nowMs <= end
+        })
+        .sort(
+          (a, b) =>
+            Math.abs(new Date(a.arrive_at ?? a.starts_at).getTime() - nowMs) -
+            Math.abs(new Date(b.arrive_at ?? b.starts_at).getTime() - nowMs),
+        )
+      return open[0] ? { status: 'ok', eventId: open[0].id } : { status: 'none' }
+    },
   }
 }
 

@@ -323,20 +323,34 @@ const fromMinutes = (total: number) => {
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
 }
 
-/** Horário de chegada padrão (HH:MM) para um culto às `time`. */
+/** Horário padrão (HH:MM) X minutos antes de `time` (chegada, passagem de som). */
 export function defaultArrival(time: string, minutesBefore: number): string {
   return fromMinutes(toMinutes(time) - Math.max(0, minutesBefore))
 }
 
-/** Data/hora padrão do ensaio de um culto no dia `dateKey`. */
+export type RehearsalDefaults = {
+  rehearsal_days_before: number
+  rehearsal_time: string
+  /** 'days_before' = N dias antes; 'weekday' = no último <dia da semana> antes do culto */
+  rehearsal_mode?: 'days_before' | 'weekday' | string
+  rehearsal_weekday?: number | null
+}
+
+/**
+ * Data/hora padrão do ensaio de um culto no dia `dateKey`: N dias antes, ou
+ * no último <dia da semana> antes do culto (mesmo dia da semana = mesmo dia).
+ */
 export function defaultRehearsal(
   dateKey: string,
-  defaults: Pick<ServiceDefaults, 'rehearsal_days_before' | 'rehearsal_time'>,
+  defaults: RehearsalDefaults,
 ): { date: string; time: string } {
-  return {
-    date: addDaysToKey(dateKey, -defaults.rehearsal_days_before),
-    time: defaults.rehearsal_time.slice(0, 5),
+  let days = defaults.rehearsal_days_before
+  if (defaults.rehearsal_mode === 'weekday' && defaults.rehearsal_weekday != null) {
+    const { year, month, day } = parseDateKey(dateKey)
+    const serviceWeekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+    days = (serviceWeekday - defaults.rehearsal_weekday + 7) % 7
   }
+  return { date: addDaysToKey(dateKey, -days), time: defaults.rehearsal_time.slice(0, 5) }
 }
 
 /** Quantos dias o ensaio fica antes do culto (para repetir nas outras semanas). */

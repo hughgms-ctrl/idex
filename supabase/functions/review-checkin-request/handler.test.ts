@@ -15,10 +15,13 @@ const SETTINGS = {
   cycle_min_points: 70,
   checkin_request_limit_per_cycle: 3,
   checkin_request_deadline_hours: 48,
+  rehearsal_tolerance_min: 10,
+  rehearsal_late_consequence: 'out_rehearsal_and_service',
 }
 
-function setup(over: Partial<ReviewDeps> = {}, status = 'pending') {
+function setup(over: Partial<ReviewDeps> = {}, status = 'pending', kind = 'service') {
   const applied: Record<string, unknown>[] = []
+  const consequences: Record<string, unknown>[] = []
   const deps: ReviewDeps = {
     getUserId: async (a) => (a ? 'lider' : null),
     isLeaderOfMember: async () => true,
@@ -29,7 +32,14 @@ function setup(over: Partial<ReviewDeps> = {}, status = 'pending') {
         ministry_member_id: 'mm1',
         declared_arrived_at: '2026-10-24T22:35:00Z',
       },
-      event: { id: 'e', ministry_id: 'm', starts_at: START },
+      event: {
+        id: 'e',
+        ministry_id: 'm',
+        kind,
+        service_event_id: kind === 'rehearsal' ? 'culto' : null,
+        starts_at: START,
+        arrive_at: null,
+      },
       settings: SETTINGS,
       justified: false,
     }),
@@ -37,9 +47,13 @@ function setup(over: Partial<ReviewDeps> = {}, status = 'pending') {
       applied.push(args)
       return null
     },
+    applyConsequence: async (args) => {
+      consequences.push(args)
+      return 1
+    },
     ...over,
   }
-  return { deps, applied }
+  return { deps, applied, consequences }
 }
 
 const post = async (deps: ReviewDeps, body: unknown, auth = 'Bearer t') => {
@@ -98,5 +112,14 @@ describe('revisão do "esqueci de registrar"', () => {
     ).toBe(409)
     expect((await post(setup().deps, { requestId: REQ, decision: 'approve' }, '')).status).toBe(401)
     expect((await post(setup().deps, { requestId: REQ, decision: 'adjust' })).status).toBe(400)
+  })
+
+  it('ensaio: recusado tira do culto; aprovado no horário devolve à escala', async () => {
+    const recusado = setup({}, 'pending', 'rehearsal')
+    await post(recusado.deps, { requestId: REQ, decision: 'reject' })
+    expect(recusado.consequences[0]).toMatchObject({ scope: 'event_and_service' })
+    const aprovado = setup({}, 'pending', 'rehearsal')
+    await post(aprovado.deps, { requestId: REQ, decision: 'approve' })
+    expect(aprovado.consequences[0]).toMatchObject({ scope: 'none' })
   })
 })

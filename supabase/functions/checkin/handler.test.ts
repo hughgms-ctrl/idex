@@ -15,6 +15,8 @@ function context(over: Partial<EventContext> = {}): EventContext {
       id: EVENT,
       church_id: 'c',
       ministry_id: 'm',
+      kind: 'service',
+      service_event_id: null,
       starts_at: new Date(START).toISOString(),
       arrive_at: null,
       ends_at: null,
@@ -38,15 +40,19 @@ function context(over: Partial<EventContext> = {}): EventContext {
     },
     member: { id: 'mm1', status: 'active' },
     assigned: true,
+    benched: false,
     alreadyCheckedIn: false,
     justified: false,
     ...over,
   }
 }
 
+const CODE = 'a1b2c3d4e5f60718293a4b5c'
+
 function setup(now: number, ctx: EventContext | null = context()) {
   const recorded: unknown[] = []
   const attempts: string[] = []
+  const consequences: unknown[] = []
   const deps: CheckinDeps = {
     getUserId: async (auth) => (auth ? 'u1' : null),
     loadEventContext: async () => ctx,
@@ -58,10 +64,16 @@ function setup(now: number, ctx: EventContext | null = context()) {
       attempts.push(a.outcome)
     },
     balanceFor: async () => 95,
+    applyConsequence: async (args) => {
+      consequences.push(args)
+      return 1
+    },
+    resolveCheckinCode: async (code) =>
+      code === CODE ? { status: 'ok', eventId: EVENT } : { status: 'invalid' },
     qrSecret: SECRET,
     now: () => now,
   }
-  return { deps, recorded, attempts }
+  return { deps, recorded, attempts, consequences }
 }
 
 async function post(deps: CheckinDeps, body: Record<string, unknown>, auth = 'Bearer t') {
@@ -213,5 +225,43 @@ describe('checkin', () => {
       ...IGREJA,
     })
     expect(ok.status).toBe(200)
+  })
+
+  describe('QR fixo e regras de atraso', () => {
+    it('QR fixo (endereço impresso) leva ao evento com ponto aberto', async () => {
+      const { deps, recorded } = setup(START)
+      const r = await post(deps, { qr: `https://idex.app/ponto?c=${CODE}`, ...IGREJA })
+      expect(r.status).toBe(200)
+      expect(recorded[0]).toMatchObject({ eventId: EVENT, source: 'qr' })
+      const old = await post(setup(START).deps, { code: 'f'.repeat(24), ...IGREJA })
+      expect(old.status).toBe(400)
+    })
+
+    it('atraso no ensaio com a regra "fora do ensaio e do culto"', async () => {
+      const ensaio = context({
+        settings: {
+          ...context().settings,
+          rehearsal_tolerance_min: 10,
+          rehearsal_late_consequence: 'out_rehearsal_and_service',
+        },
+      })
+      ensaio.event.kind = 'rehearsal'
+      ensaio.event.service_event_id = 'culto-1'
+      const now = START + 15 * 60_000
+      const { deps, consequences } = setup(now, ensaio)
+      const r = await post(deps, { code: CODE, ...IGREJA })
+      expect(r.status).toBe(200)
+      expect(r.body.consequence).toMatchObject({ scope: 'event_and_service' })
+      expect(consequences[0]).toMatchObject({ scope: 'event_and_service', memberId: 'mm1' })
+      // dentro da tolerância: nada acontece
+      const ok = setup(START + 5 * 60_000, ensaio)
+      await post(ok.deps, { code: CODE, ...IGREJA })
+      expect(ok.consequences).toHaveLength(0)
+    })
+
+    it('quem ficou de fora não bate ponto no culto', async () => {
+      const r = await post(setup(START, context({ benched: true })).deps, { code: CODE, ...IGREJA })
+      expect(r.status).toBe(403)
+    })
   })
 })

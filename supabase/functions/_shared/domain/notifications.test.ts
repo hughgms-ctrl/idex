@@ -99,3 +99,18 @@ describe('horário de chegada', () => {
     ).toContain('Chegada da equipe: *18h30*')
   })
 })
+
+describe('ficou de fora pela regra de horário', () => {
+  it('avisa a pessoa e o líder', () => {
+    const base = { eventTitle: 'Ensaio', scope: 'event_and_service', memberName: 'Bruno Lima' }
+    expect(renderMessage('member_benched', { ...base, self: true, name: 'Bruno' })).toContain(
+      'você ficou de fora do ensaio e do culto',
+    )
+    expect(renderMessage('member_benched', { ...base, self: false, name: 'Ana' })).toContain(
+      '*Bruno Lima* ficou de fora',
+    )
+    expect(renderPush('member_benched', { ...base, self: false }, 't').title).toBe(
+      'Bruno Lima ficou de fora',
+    )
+  })
+})

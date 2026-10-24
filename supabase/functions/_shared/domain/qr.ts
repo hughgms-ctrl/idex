@@ -74,3 +74,28 @@ export async function verifyQrToken(
   }
   return false
 }
+
+// ---------------------------------------------------------------------------
+// QR fixo do ministério (impresso na parede): leva ao ponto do evento do
+// integrante que estiver com o ponto aberto. A segurança vem da localização.
+// ---------------------------------------------------------------------------
+
+const FIXED_CODE = /^[0-9a-f]{24}$/
+
+export function fixedQrUrl(appOrigin: string, code: string): string {
+  return `${appOrigin.replace(/\/+$/, '')}/ponto?c=${code}`
+}
+
+/** Código do QR fixo, do conteúdo puro ou do endereço com ?c=. */
+export function parseFixedCode(raw: string): string | null {
+  let code = raw.trim()
+  if (/^https?:\/\//i.test(code)) {
+    try {
+      code = new URL(code).searchParams.get('c') ?? ''
+    } catch {
+      return null
+    }
+  }
+  code = code.toLowerCase()
+  return FIXED_CODE.test(code) ? code : null
+}

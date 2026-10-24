@@ -2,7 +2,11 @@
 import { DEFAULT_TZ, localParts } from './time.ts'
 
 export type NotificationKind =
-  'schedule_reminder' | 'rehearsal_today' | 'points_deducted' | 'request_reviewed'
+  | 'schedule_reminder'
+  | 'rehearsal_today'
+  | 'points_deducted'
+  | 'request_reviewed'
+  | 'member_benched'
 
 export type NotificationPayload = {
   name?: string | null
@@ -10,6 +14,10 @@ export type NotificationPayload = {
   eventTitle?: string | null
   eventStartsAt?: string | null
   arriveAt?: string | null // chegada da equipe
+  soundcheckAt?: string | null // passagem de som
+  memberName?: string | null // quem ficou de fora (aviso ao líder)
+  scope?: string | null // event | event_and_service
+  self?: boolean | null // o aviso é para a própria pessoa?
   role?: string | null
   delta?: number | null
   reason?: string | null
@@ -48,7 +56,9 @@ export function renderMessage(
 ): string {
   const hi = p.name ? `Olá, ${p.name.split(' ')[0]}!` : 'Olá!'
   const link = p.appUrl ? `\n\nAbra o ide.x: ${p.appUrl}` : ''
-  const arrival = p.arriveAt ? ` Chegada da equipe: *${hourOf(p.arriveAt, tz)}*.` : ''
+  const arrival =
+    (p.arriveAt ? ` Chegada da equipe: *${hourOf(p.arriveAt, tz)}*.` : '') +
+    (p.soundcheckAt ? ` Passagem de som: *${hourOf(p.soundcheckAt, tz)}*.` : '')
   switch (kind) {
     case 'schedule_reminder':
       return `${hi} Lembrete: você está escalado(a)${p.role ? ` como *${p.role}*` : ''} no *${p.eventTitle}* de ${when(p.eventStartsAt, tz)}.${arrival} Se não puder ir, avise o líder pelo app o quanto antes.${link}`
@@ -56,6 +66,15 @@ export function renderMessage(
       return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.${arrival || ' Chegue no horário.'} Bata o ponto pelo app. 🎶${link}`
     case 'points_deducted':
       return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
+    case 'member_benched': {
+      const where =
+        p.scope === 'event_and_service'
+          ? 'do ensaio e do culto'
+          : `do *${p.eventTitle ?? 'evento'}*`
+      return p.self
+        ? `${hi} Pela regra de horário do ministério, você ficou de fora ${where}${p.reason ? ` (${p.reason.toLowerCase()})` : ''}. Fale com o líder se precisar.${link}`
+        : `${hi} *${p.memberName ?? 'Um integrante'}* ficou de fora ${where} pela regra de horário (${p.eventTitle ?? ''}). Veja a escala e chame um substituto.${link}`
+    }
     case 'request_reviewed': {
       const what =
         p.kind === 'justificativa'
@@ -107,5 +126,12 @@ export function renderPush(
       return { title: 'Pontos descontados', body: plain, url: '/presenca', tag }
     case 'request_reviewed':
       return { title: 'Seu pedido foi analisado', body: plain, url: '/presenca', tag }
+    case 'member_benched':
+      return {
+        title: p.self ? 'Você ficou de fora' : `${p.memberName ?? 'Integrante'} ficou de fora`,
+        body: plain,
+        url: '/escalas',
+        tag,
+      }
   }
 }

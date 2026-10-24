@@ -267,6 +267,16 @@ describe('chegada e ensaio do culto', () => {
       defaultRehearsal('2026-11-01', { rehearsal_days_before: 3, rehearsal_time: '20:00:00' }),
     ).toEqual({ date: '2026-10-29', time: '20:00' })
     expect(daysBetweenKeys('2026-10-29', '2026-11-01')).toBe(3)
+    // "toda quinta": culto no domingo 01/11 → quinta 29/10; culto na quarta 04/11 → quinta 29/10
+    const quinta = {
+      rehearsal_days_before: 3,
+      rehearsal_time: '19:30',
+      rehearsal_mode: 'weekday',
+      rehearsal_weekday: 4,
+    }
+    expect(defaultRehearsal('2026-11-01', quinta).date).toBe('2026-10-29')
+    expect(defaultRehearsal('2026-11-04', quinta).date).toBe('2026-10-29')
+    expect(defaultRehearsal('2026-11-05', quinta).date).toBe('2026-11-05')
   })
 
   it('regras de horário usam a chegada quando existe', () => {

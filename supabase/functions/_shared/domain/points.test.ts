@@ -6,8 +6,9 @@ import {
   checkCheckinRequest,
   DEFAULT_RULES as R,
   isEligibleAtClose,
-  latePenalty,
+  lateConsequence,
   lateMinutes,
+  latePenalty,
   nextCycleRange,
   normalizeTiers,
   reviewOutcome,
@@ -195,5 +196,52 @@ describe('ciclo', () => {
       startsOn: '2027-01-01',
       endsOn: '2027-03-31',
     })
+  })
+})
+
+describe('regras por tipo de evento', () => {
+  const row = {
+    late_tolerance_min: 10,
+    service_tolerance_min: 10,
+    rehearsal_tolerance_min: 5,
+    late_penalty_tiers: [
+      { upToMin: 20, points: 5 },
+      { upToMin: null, points: 10 },
+    ],
+    absence_penalty: 20,
+    cycle_starting_points: 100,
+    cycle_min_points: 70,
+    checkin_request_limit_per_cycle: 3,
+    checkin_request_deadline_hours: 48,
+  }
+
+  it('cada tipo usa a sua tolerância', () => {
+    expect(rulesFromSettings(row, 'rehearsal').lateToleranceMin).toBe(5)
+    expect(rulesFromSettings(row, 'service').lateToleranceMin).toBe(10)
+    expect(
+      rulesFromSettings({ ...row, service_tolerance_min: null }, 'service').lateToleranceMin,
+    ).toBe(10)
+  })
+
+  it('atraso no ensaio pode tirar do ensaio e do culto', () => {
+    const rule = {
+      rehearsal_late_consequence: 'out_rehearsal_and_service',
+      service_late_consequence: 'no_play',
+    }
+    expect(
+      lateConsequence({ kind: 'rehearsal', beyondTolerance: true, linkedToService: true, rule }),
+    ).toBe('event_and_service')
+    expect(
+      lateConsequence({ kind: 'rehearsal', beyondTolerance: true, linkedToService: false, rule }),
+    ).toBe('event')
+    expect(
+      lateConsequence({ kind: 'rehearsal', beyondTolerance: false, linkedToService: true, rule }),
+    ).toBe('none')
+    expect(
+      lateConsequence({ kind: 'service', beyondTolerance: true, linkedToService: false, rule }),
+    ).toBe('event')
+    expect(
+      lateConsequence({ kind: 'service', beyondTolerance: true, linkedToService: false, rule: {} }),
+    ).toBe('none')
   })
 })

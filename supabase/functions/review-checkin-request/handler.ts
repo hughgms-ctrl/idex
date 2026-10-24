@@ -3,7 +3,13 @@
 import { z } from 'zod'
 
 import type { Deps } from '../_shared/deps.ts'
-import { reviewOutcome, rulesFromSettings, type ReviewDecision } from '../_shared/domain/points.ts'
+import {
+  consequenceReason,
+  lateConsequence,
+  reviewOutcome,
+  rulesFromSettings,
+  type ReviewDecision,
+} from '../_shared/domain/points.ts'
 import { callTime } from '../_shared/domain/schedule.ts'
 import { corsHeaders, errorJson, json } from '../_shared/http.ts'
 
@@ -30,7 +36,7 @@ const STATUS = { approve: 'approved', adjust: 'adjusted', reject: 'rejected' } a
 
 export type ReviewDeps = Pick<
   Deps,
-  'getUserId' | 'isLeaderOfMember' | 'loadRequest' | 'applyReview'
+  'getUserId' | 'isLeaderOfMember' | 'loadRequest' | 'applyReview' | 'applyConsequence'
 >
 
 export async function handleReviewCheckinRequest(
@@ -64,7 +70,10 @@ export async function handleReviewCheckinRequest(
     declaredArrivedAt: loaded.request.declared_arrived_at,
     review,
     justified: loaded.justified,
-    rules: rulesFromSettings(loaded.settings as Parameters<typeof rulesFromSettings>[0]),
+    rules: rulesFromSettings(
+      loaded.settings as Parameters<typeof rulesFromSettings>[0],
+      loaded.event.kind,
+    ),
   })
   await deps.applyReview({
     requestId: body.requestId,
@@ -75,5 +84,24 @@ export async function handleReviewCheckinRequest(
     reviewerId,
     note: body.note ?? null,
   })
-  return json({ status: STATUS[body.decision], ...outcome })
+  // Regra de atraso: recusado conta como falta; aprovado no horário devolve
+  // a pessoa à escala se ela tinha ficado de fora por "faltou ao ensaio".
+  const scope = lateConsequence({
+    kind: loaded.event.kind,
+    beyondTolerance: outcome.kind === 'late' || outcome.kind === 'absent',
+    linkedToService: Boolean(loaded.event.service_event_id),
+    rule: loaded.settings,
+  })
+  await deps.applyConsequence({
+    eventId: loaded.event.id,
+    memberId: loaded.request.ministry_member_id,
+    scope,
+    reason:
+      scope === 'none'
+        ? null
+        : outcome.kind === 'absent'
+          ? 'Pedido recusado: fora do ensaio e do culto'
+          : consequenceReason(scope, 'a tolerância'),
+  })
+  return json({ status: STATUS[body.decision], ...outcome, consequence: scope })
 }
