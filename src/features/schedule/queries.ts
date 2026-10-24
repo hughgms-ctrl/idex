@@ -140,3 +140,22 @@ export function useLinkedRehearsal(serviceId: string | undefined) {
     },
   })
 }
+
+/** Ensaios ligados aos cultos da lista (mesmo que caiam em outro mês). */
+export function useRehearsalsFor(serviceIds: string[]) {
+  const ids = [...serviceIds].sort()
+  return useQuery({
+    queryKey: [...scheduleKeys.all, 'rehearsals-for', ids.join(',')],
+    enabled: ids.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, service_event_id, starts_at, arrive_at')
+        .in('service_event_id', ids)
+      if (error) throw error
+      return new Map(data.map((r) => [r.service_event_id as string, r]))
+    },
+  })
+}
+
+export type LinkedRehearsal = { id: string; starts_at: string; arrive_at: string | null }

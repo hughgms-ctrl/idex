@@ -1,11 +1,12 @@
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { AlertCircle } from 'lucide-react'
 import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
 import { localParts } from '@domain/time.ts'
 
 import { EVENT_KIND_LABEL } from '@/features/schedule/datetime'
-import type { ScheduleEvent } from '@/features/schedule/queries'
+import type { LinkedRehearsal, ScheduleEvent } from '@/features/schedule/queries'
 import type { ScheduleData } from '@/features/schedule/useScheduleData'
+import { formatEventDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -19,12 +20,16 @@ export function EventCard({
   data,
   myMemberId,
   leader,
+  rehearsal = null,
 }: {
   event: ScheduleEvent
   data: ScheduleData
   myMemberId?: string
   leader: boolean
+  /** ensaio ligado a este culto (aparece dentro do cartão) */
+  rehearsal?: LinkedRehearsal | null
 }) {
+  const navigate = useNavigate()
   const p = localParts(event.starts_at)
   const assignments = [...event.schedule_assignments].sort(
     (a, b) =>
@@ -108,6 +113,23 @@ export function EventCard({
           {EVENT_KIND_LABEL[event.kind]?.toUpperCase()}
         </span>
       </div>
+      {rehearsal && (
+        <div className="border-info/50 bg-info/10 flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-[13px]">
+          <span className="text-info">
+            <strong>Ensaio:</strong> {formatEventDate(rehearsal.starts_at)}
+            {rehearsal.arrive_at && ` · chegada ${hour(rehearsal.arrive_at)}`}
+          </span>
+          {leader && (
+            <Link
+              to={`/escalas/${rehearsal.id}?remarcar=1`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-info shrink-0 font-semibold underline"
+            >
+              Remarcar
+            </Link>
+          )}
+        </div>
+      )}
       {assignments.length === 0 ? (
         <p className="text-muted-foreground text-[13px]">
           {event.service_event_id
@@ -166,10 +188,20 @@ export function EventCard({
         ? 'border-l-primary'
         : 'border-l-border',
   )
+  // cartão clicável (líder abre a escala); o "Remarcar" do ensaio é outro link
   return leader ? (
-    <Link to={`/escalas/${event.id}`} className={cn(className, 'hover:border-input')}>
+    <div
+      role="link"
+      tabIndex={0}
+      aria-label={`Abrir ${event.title}`}
+      onClick={() => navigate(`/escalas/${event.id}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') navigate(`/escalas/${event.id}`)
+      }}
+      className={cn(className, 'hover:border-input cursor-pointer')}
+    >
       {content}
-    </Link>
+    </div>
   ) : (
     <section className={className}>{content}</section>
   )

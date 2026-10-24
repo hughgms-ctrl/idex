@@ -16,7 +16,7 @@ import { EventCard } from '@/features/schedule/EventCard'
 import { EventDialog } from '@/features/schedule/EventDialog'
 import { MissingRehearsals } from '@/features/schedule/MissingRehearsals'
 import { MonthCalendar } from '@/features/schedule/MonthCalendar'
-import { scheduleKeys } from '@/features/schedule/queries'
+import { scheduleKeys, useRehearsalsFor } from '@/features/schedule/queries'
 import { UnavailabilityDialog } from '@/features/schedule/UnavailabilityDialog'
 import { useScheduleData } from '@/features/schedule/useScheduleData'
 import { errorMessage } from '@/lib/errors'
@@ -35,15 +35,20 @@ export function SchedulePage() {
   const leader = ministry ? isLeader(ministry.id) : false
   const myMember = memberships.find((m) => m.ministry_id === ministry?.id)
   const data = useScheduleData(ministry?.id, selected.year, selected.month)
+  // o ensaio de cada culto aparece dentro do cartão do culto (não sozinho)
+  const listed = data.events.filter((e) => !e.service_event_id)
+  const rehearsals = useRehearsalsFor(
+    listed.filter((e) => e.kind === 'service').map((e) => e.id),
+  ).data
 
   if (!ministry) return <PageHeader title="Escala" description="Nenhum ministério cadastrado." />
 
   const months = [0, 1, 2].map((d) => addMonths(base.year, base.month, d))
   const events = onlyMine
-    ? data.events.filter((e) =>
+    ? listed.filter((e) =>
         e.schedule_assignments.some((a) => a.ministry_member_id === myMember?.id),
       )
-    : data.events
+    : listed
 
   return (
     <>
@@ -167,7 +172,13 @@ export function SchedulePage() {
         <div className="flex flex-col gap-4">
           {events.map((event) => (
             <div key={event.id} id={`dia-${localDateKey(event.starts_at)}`} className="scroll-mt-4">
-              <EventCard event={event} data={data} myMemberId={myMember?.id} leader={leader} />
+              <EventCard
+                event={event}
+                data={data}
+                myMemberId={myMember?.id}
+                leader={leader}
+                rehearsal={rehearsals?.get(event.id) ?? null}
+              />
             </div>
           ))}
         </div>

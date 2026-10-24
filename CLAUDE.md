@@ -122,5 +122,6 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - [x] Fase 13 — ensaio móvel
   - O compromisso é com o culto: disponibilidade só pergunta pelo culto e a equipe do ensaio vem dele (Fases 7 e 9).
   - "Remarcar ensaio" (botão na tela do ensaio e atalho na do culto, `?remarcar=1`): o diálogo muda dia/horário e a chegada acompanha com a mesma antecedência (`initialArrivalOffset`). Gatilho `events_notify_rescheduled` avisa a equipe escalada (`event_rescheduled`, com horário novo e antigo) quando `starts_at` muda para o futuro.
+  - Lista da Escala: ensaios ligados a um culto não aparecem como cartão próprio (continuam no calendário); o cartão do culto mostra "Ensaio: dia · hora · chegada" (`useRehearsalsFor`) e, só para o líder, "Remarcar". Remarcar é só do líder (policy `events_update` + interface).
 - Produção: Supabase `jptpzpvysgnfulyoquex` (São Paulo) e Vercel `https://idex-eight.vercel.app`. Confirmação de e-mail desligada (`mailer_autoconfirm`) porque o SMTP padrão do Supabase só envia para a equipe do projeto; configurar SMTP próprio (ex.: Resend) para religar e usar link mágico.
 - Pendências conhecidas: o Cifra Club bloqueia (403) acessos vindos dos servidores do Supabase, então a importação automática falha em produção — o app mostra o botão "Abrir no Cifra Club" para copiar e colar a cifra.
