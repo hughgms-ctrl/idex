@@ -87,3 +87,15 @@ describe('aviso no celular', () => {
     expect(push.url).toBe('/escalas')
   })
 })
+
+describe('horário de chegada', () => {
+  it('lembrete e ensaio do dia avisam a chegada da equipe', () => {
+    const arriveAt = '2026-11-01T21:30:00Z' // 18h30 em SP
+    expect(
+      renderMessage('schedule_reminder', { eventTitle: 'Culto', eventStartsAt: SUNDAY, arriveAt }),
+    ).toContain('Chegada da equipe: *18h30*')
+    expect(
+      renderMessage('rehearsal_today', { eventTitle: 'Ensaio', eventStartsAt: SUNDAY, arriveAt }),
+    ).toContain('Chegada da equipe: *18h30*')
+  })
+})

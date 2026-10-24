@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import {
   assignmentConflicts,
+  callTime,
+  daysBetweenKeys,
+  defaultArrival,
+  defaultRehearsal,
   buildWeeklyRule,
   isEligible,
   isUnavailable,
@@ -248,5 +252,25 @@ describe('respostas de disponibilidade', () => {
       ['Bia', true],
       ['Ana', false],
     ])
+  })
+})
+
+describe('chegada e ensaio do culto', () => {
+  it('chegada padrão: X minutos antes do culto', () => {
+    expect(defaultArrival('19:00', 30)).toBe('18:30')
+    expect(defaultArrival('09:15', 45)).toBe('08:30')
+    expect(defaultArrival('19:00', 0)).toBe('19:00')
+  })
+
+  it('ensaio padrão: N dias antes, no horário configurado', () => {
+    expect(
+      defaultRehearsal('2026-11-01', { rehearsal_days_before: 3, rehearsal_time: '20:00:00' }),
+    ).toEqual({ date: '2026-10-29', time: '20:00' })
+    expect(daysBetweenKeys('2026-10-29', '2026-11-01')).toBe(3)
+  })
+
+  it('regras de horário usam a chegada quando existe', () => {
+    expect(callTime({ starts_at: 'A', arrive_at: 'B' })).toBe('B')
+    expect(callTime({ starts_at: 'A', arrive_at: null })).toBe('A')
   })
 })

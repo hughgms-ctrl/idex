@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import type { Deps } from '../_shared/deps.ts'
 import { reviewOutcome, rulesFromSettings, type ReviewDecision } from '../_shared/domain/points.ts'
+import { callTime } from '../_shared/domain/schedule.ts'
 import { corsHeaders, errorJson, json } from '../_shared/http.ts'
 
 const bodySchema = z.discriminatedUnion('decision', [
@@ -59,7 +60,7 @@ export async function handleReviewCheckinRequest(
       ? { decision: 'adjust', arrivedAt: body.arrivedAt }
       : { decision: body.decision }
   const outcome = reviewOutcome({
-    eventStart: loaded.event.starts_at,
+    eventStart: callTime(loaded.event),
     declaredArrivedAt: loaded.request.declared_arrived_at,
     review,
     justified: loaded.justified,

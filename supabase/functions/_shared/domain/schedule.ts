@@ -59,6 +59,14 @@ export type EligibilityInfo = {
   eligible: ReadonlySet<string>
 }
 
+/**
+ * Horário de referência das regras (atraso, abertura do ponto, "esqueci"):
+ * a chegada da equipe, se o líder definiu; senão, o início do evento.
+ */
+export function callTime(event: { starts_at: string; arrive_at?: string | null }): string {
+  return event.arrive_at ?? event.starts_at
+}
+
 export function eventEnd(event: Pick<EventLike, 'starts_at' | 'ends_at'>): Date {
   return event.ends_at
     ? new Date(event.ends_at)
@@ -294,4 +302,48 @@ export function suggestSubstitutes(params: {
         a.member.name.localeCompare(b.member.name, 'pt-BR'),
     )
     .slice(0, limit)
+}
+
+// ---------------------------------------------------------------------------
+// Chegada e ensaio de cada culto
+// ---------------------------------------------------------------------------
+
+export type ServiceDefaults = {
+  service_arrival_minutes: number
+  rehearsal_days_before: number
+  rehearsal_time: string // HH:MM ou HH:MM:SS
+}
+
+const toMinutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+const fromMinutes = (total: number) => {
+  const t = ((total % 1440) + 1440) % 1440
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+}
+
+/** Horário de chegada padrão (HH:MM) para um culto às `time`. */
+export function defaultArrival(time: string, minutesBefore: number): string {
+  return fromMinutes(toMinutes(time) - Math.max(0, minutesBefore))
+}
+
+/** Data/hora padrão do ensaio de um culto no dia `dateKey`. */
+export function defaultRehearsal(
+  dateKey: string,
+  defaults: Pick<ServiceDefaults, 'rehearsal_days_before' | 'rehearsal_time'>,
+): { date: string; time: string } {
+  return {
+    date: addDaysToKey(dateKey, -defaults.rehearsal_days_before),
+    time: defaults.rehearsal_time.slice(0, 5),
+  }
+}
+
+/** Quantos dias o ensaio fica antes do culto (para repetir nas outras semanas). */
+export function daysBetweenKeys(fromKey: string, toKey: string): number {
+  const a = parseDateKey(fromKey)
+  const b = parseDateKey(toKey)
+  return Math.round(
+    (Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86_400_000,
+  )
 }

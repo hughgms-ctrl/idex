@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 import type { Deps } from '../_shared/deps.ts'
 import { withinRadius } from '../_shared/domain/geo.ts'
+import { callTime } from '../_shared/domain/schedule.ts'
 import { attendanceOutcome, rulesFromSettings } from '../_shared/domain/points.ts'
 import { parseQrPayload, verifyQrToken } from '../_shared/domain/qr.ts'
 import { corsHeaders, errorJson, json } from '../_shared/http.ts'
@@ -24,7 +25,7 @@ export function checkinMode(settings: Record<string, unknown>): CheckinMode {
   return mode === 'qr' || mode === 'geo' ? mode : 'qr_geo'
 }
 
-const OPEN_BEFORE_MS = 2 * 3_600_000 // check-in abre 2h antes do início
+const OPEN_BEFORE_MS = 2 * 3_600_000 // check-in abre 2h antes da chegada
 
 export type CheckinDeps = Pick<
   Deps,
@@ -85,9 +86,11 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   }
 
   const now = deps.now()
+  // o ponto abre 2h antes da CHEGADA da equipe (ou do início, sem chegada definida)
   const start = new Date(ctx.event.starts_at).getTime()
+  const call = new Date(callTime(ctx.event)).getTime()
   const end = ctx.event.ends_at ? new Date(ctx.event.ends_at).getTime() : start + 2 * 3_600_000
-  if (now < start - OPEN_BEFORE_MS || now > end) {
+  if (now < call - OPEN_BEFORE_MS || now > end) {
     await attempt('out_of_time')
     return errorJson('O check-in deste evento não está aberto agora', 409)
   }
@@ -122,7 +125,7 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
 
   const arrivedAt = new Date(now).toISOString()
   const outcome = attendanceOutcome({
-    eventStart: ctx.event.starts_at,
+    eventStart: callTime(ctx.event),
     arrivedAt,
     justified: ctx.justified,
     rules: rulesFromSettings(ctx.settings as Parameters<typeof rulesFromSettings>[0]),

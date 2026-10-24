@@ -16,6 +16,7 @@ function context(over: Partial<EventContext> = {}): EventContext {
       church_id: 'c',
       ministry_id: 'm',
       starts_at: new Date(START).toISOString(),
+      arrive_at: null,
       ends_at: null,
       lat: null,
       lng: null,
@@ -196,5 +197,21 @@ describe('checkin', () => {
       })
       expect(r.status).toBe(200)
     })
+  })
+
+  it('atraso conta a partir do horário de chegada definido pelo líder', async () => {
+    const withArrival = context()
+    withArrival.event.arrive_at = new Date(START - 30 * 60_000).toISOString() // chegar 30 min antes
+    // chega no horário do culto = 30 min atrasado em relação à chegada
+    const { deps } = setup(START, withArrival)
+    const r = await post(deps, { qr: await qrPayload(SECRET, EVENT, START), ...IGREJA })
+    expect(r.body).toMatchObject({ kind: 'late', lateMinutes: 30, delta: -10 })
+    // e o ponto abre 2h antes da chegada (2h30 antes do culto)
+    const early = START - 150 * 60_000 + 60_000
+    const ok = await post(setup(early, withArrival).deps, {
+      qr: await qrPayload(SECRET, EVENT, early),
+      ...IGREJA,
+    })
+    expect(ok.status).toBe(200)
   })
 })

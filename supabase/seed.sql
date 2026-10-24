@@ -112,6 +112,12 @@ cross join lateral (
 ) as e(kind, title, local_start)
 where m.name = 'Louvor';
 
+-- Culto: equipe chega 30 min antes; o ensaio de quinta é o ensaio desse culto
+update public.events set arrive_at = starts_at - interval '30 minutes' where title = 'Culto de domingo';
+update public.events r set service_event_id = c.id, title = 'Ensaio · Culto de domingo'
+from public.events c
+where r.title = 'Ensaio' and c.title = 'Culto de domingo' and c.ministry_id = r.ministry_id;
+
 -- Algumas músicas (cifras curtas, só de exemplo)
 insert into public.songs (church_id, ministry_id, title, artist, original_key, bpm, time_signature, chordpro, created_by)
 select m.church_id, m.id, s.title, s.artist, s.key, s.bpm, '4/4', s.chordpro, '11111111-1111-4111-8111-000000000001'

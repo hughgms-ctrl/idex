@@ -458,6 +458,7 @@ export type Database = {
       }
       events: {
         Row: {
+          arrive_at: string | null
           church_id: string
           created_at: string
           created_by: string | null
@@ -472,12 +473,14 @@ export type Database = {
           radius_m: number | null
           recurrence_parent_id: string | null
           recurrence_rule: string | null
+          service_event_id: string | null
           starts_at: string
           title: string
           updated_at: string
         }
         ComputedFields: never
         Insert: {
+          arrive_at?: string | null
           church_id: string
           created_at?: string
           created_by?: string | null
@@ -492,11 +495,13 @@ export type Database = {
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
+          service_event_id?: string | null
           starts_at: string
           title: string
           updated_at?: string
         }
         Update: {
+          arrive_at?: string | null
           church_id?: string
           created_at?: string
           created_by?: string | null
@@ -511,6 +516,7 @@ export type Database = {
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
+          service_event_id?: string | null
           starts_at?: string
           title?: string
           updated_at?: string
@@ -536,6 +542,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'events'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'events_service_link_fk'
+            columns: ['service_event_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id', 'church_id']
           },
         ]
       }
@@ -898,6 +911,11 @@ export type Database = {
           late_penalty_tiers: NonNullable<Json>
           late_tolerance_min: number
           ministry_id: string
+          rehearsal_days_before: number
+          rehearsal_duration_min: number
+          rehearsal_enabled: boolean
+          rehearsal_time: string
+          service_arrival_minutes: number
           updated_at: string
         }
         ComputedFields: never
@@ -917,6 +935,11 @@ export type Database = {
           late_penalty_tiers?: NonNullable<Json>
           late_tolerance_min?: number
           ministry_id: string
+          rehearsal_days_before?: number
+          rehearsal_duration_min?: number
+          rehearsal_enabled?: boolean
+          rehearsal_time?: string
+          service_arrival_minutes?: number
           updated_at?: string
         }
         Update: {
@@ -935,6 +958,11 @@ export type Database = {
           late_penalty_tiers?: NonNullable<Json>
           late_tolerance_min?: number
           ministry_id?: string
+          rehearsal_days_before?: number
+          rehearsal_duration_min?: number
+          rehearsal_enabled?: boolean
+          rehearsal_time?: string
+          service_arrival_minutes?: number
           updated_at?: string
         }
         Relationships: [

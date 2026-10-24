@@ -9,6 +9,7 @@ export type NotificationPayload = {
   church?: string | null
   eventTitle?: string | null
   eventStartsAt?: string | null
+  arriveAt?: string | null // chegada da equipe
   role?: string | null
   delta?: number | null
   reason?: string | null
@@ -20,6 +21,11 @@ export type NotificationPayload = {
 
 const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
 const pad = (n: number) => String(n).padStart(2, '0')
+
+function hourOf(iso: string, tz: string): string {
+  const p = localParts(iso, tz)
+  return `${pad(p.hour)}h${p.minute ? pad(p.minute) : ''}`
+}
 
 function when(iso: string | null | undefined, tz: string): string {
   if (!iso) return ''
@@ -42,11 +48,12 @@ export function renderMessage(
 ): string {
   const hi = p.name ? `Olá, ${p.name.split(' ')[0]}!` : 'Olá!'
   const link = p.appUrl ? `\n\nAbra o ide.x: ${p.appUrl}` : ''
+  const arrival = p.arriveAt ? ` Chegada da equipe: *${hourOf(p.arriveAt, tz)}*.` : ''
   switch (kind) {
     case 'schedule_reminder':
-      return `${hi} Lembrete: você está escalado(a)${p.role ? ` como *${p.role}*` : ''} no *${p.eventTitle}* de ${when(p.eventStartsAt, tz)}. Se não puder ir, avise o líder pelo app o quanto antes.${link}`
+      return `${hi} Lembrete: você está escalado(a)${p.role ? ` como *${p.role}*` : ''} no *${p.eventTitle}* de ${when(p.eventStartsAt, tz)}.${arrival} Se não puder ir, avise o líder pelo app o quanto antes.${link}`
     case 'rehearsal_today':
-      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}. Chegue no horário e bata o ponto pelo app. 🎶${link}`
+      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.${arrival || ' Chegue no horário.'} Bata o ponto pelo app. 🎶${link}`
     case 'points_deducted':
       return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
     case 'request_reviewed': {

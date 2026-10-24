@@ -10,6 +10,7 @@ export type EventContext = {
     church_id: string
     ministry_id: string
     starts_at: string
+    arrive_at: string | null
     ends_at: string | null
     lat: number | null
     lng: number | null
@@ -63,7 +64,7 @@ export function makeDeps(
       const event = await must<any>(
         service
           .from('events')
-          .select('id, church_id, ministry_id, starts_at, ends_at, lat, lng, radius_m')
+          .select('id, church_id, ministry_id, starts_at, arrive_at, ends_at, lat, lng, radius_m')
           .eq('id', eventId)
           .maybeSingle(),
       )
@@ -199,7 +200,7 @@ export function makeDeps(
       const event = await must<any>(
         service
           .from('events')
-          .select('id, ministry_id, starts_at')
+          .select('id, ministry_id, starts_at, arrive_at')
           .eq('id', request.event_id)
           .single(),
       )
