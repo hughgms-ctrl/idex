@@ -136,13 +136,34 @@ export function useAudioEngine() {
       setError(null)
       try {
         const e = await ensure()
-        await e.player.load(nextUrl)
+        // Baixa e decodifica aqui (e não pelo player.load) para dizer o motivo
+        // da falha. `no-store`: uma resposta guardada sem CORS quebraria o fetch.
+        let res: Response
+        try {
+          res = await fetch(nextUrl, { cache: 'no-store' })
+        } catch {
+          throw new Error('Não foi possível baixar o áudio (internet ou armazenamento).')
+        }
+        if (!res.ok) {
+          throw new Error(
+            `O link do áudio venceu ou o arquivo não foi achado (erro ${res.status}).`,
+          )
+        }
+        const data = await res.arrayBuffer()
+        let decoded: AudioBuffer
+        try {
+          decoded = await e.Tone.getContext().decodeAudioData(data)
+        } catch {
+          throw new Error('Este aparelho não abre este formato no player. Prefira MP3.')
+        }
+        e.player.buffer = new e.Tone.ToneAudioBuffer(decoded)
         clock.current = { offset: 0, startedAt: 0 }
         setDuration(e.player.buffer.duration)
         setPosition(0)
         setUrl(nextUrl)
-      } catch {
-        setError('Não foi possível carregar este áudio.')
+      } catch (err) {
+        setUrl(null)
+        setError(err instanceof Error ? err.message : 'Não foi possível carregar este áudio.')
       } finally {
         setLoading(false)
       }
