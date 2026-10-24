@@ -14,6 +14,36 @@ type Engine = {
   shift: InstanceType<ToneModule['PitchShift']>
   click: InstanceType<ToneModule['Synth']>
   clickId: number | null
+  // Quando o Web Audio não decodifica o arquivo (alguns m4a), o próprio
+  // <audio> do aparelho decodifica e o som passa pelo mesmo PitchShift.
+  media: { audio: HTMLAudioElement; source: MediaElementAudioSourceNode } | null
+}
+
+function releaseMedia(e: Engine) {
+  if (!e.media) return
+  e.media.audio.pause()
+  e.media.audio.removeAttribute('src')
+  e.media.audio.load()
+  e.media.source.disconnect()
+  e.media = null
+}
+
+/** Abre o arquivo pelo <audio> (precisa de CORS no armazenamento, que o R2 já libera). */
+async function openMedia(e: Engine, url: string): Promise<number> {
+  const audio = new Audio()
+  audio.crossOrigin = 'anonymous'
+  audio.preload = 'auto'
+  audio.preservesPitch = false // o tom é corrigido pelo PitchShift, igual ao outro modo
+  const ready = new Promise<void>((resolve, reject) => {
+    audio.addEventListener('loadedmetadata', () => resolve(), { once: true })
+    audio.addEventListener('error', () => reject(new Error('media')), { once: true })
+  })
+  audio.src = url
+  await ready
+  const source = e.Tone.getContext().createMediaElementSource(audio)
+  e.Tone.connect(source, e.shift)
+  e.media = { audio, source }
+  return Number.isFinite(audio.duration) ? audio.duration : 0
 }
 
 /**
@@ -46,7 +76,7 @@ export function useAudioEngine() {
       envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02 },
       volume: -8,
     }).toDestination()
-    engine.current = { Tone, player, shift, click, clickId: null }
+    engine.current = { Tone, player, shift, click, clickId: null, media: null }
     return engine.current
   }, [])
 
@@ -54,12 +84,14 @@ export function useAudioEngine() {
     const e = engine.current
     if (!e) return
     e.player.playbackRate = settings.current.rate
+    if (e.media) e.media.audio.playbackRate = settings.current.rate
     e.shift.pitch = pitchShiftFor(settings.current.semitones, settings.current.rate)
   }, [])
 
   const currentPosition = useCallback(() => {
     const e = engine.current
     if (!e) return 0
+    if (e.media) return e.media.audio.currentTime
     return playingRef.current
       ? positionAt({
           offset: clock.current.offset,
@@ -98,8 +130,13 @@ export function useAudioEngine() {
     if (!e || !playingRef.current) return
     clock.current.offset = currentPosition()
     playingRef.current = false
-    e.player.onstop = () => undefined
-    e.player.stop()
+    if (e.media) {
+      e.media.audio.onended = null
+      e.media.audio.pause()
+    } else {
+      e.player.onstop = () => undefined
+      e.player.stop()
+    }
     setPlaying(false)
     setPosition(clock.current.offset)
     if (settings.current.metronome) stopMetronome()
@@ -107,6 +144,26 @@ export function useAudioEngine() {
 
   const play = useCallback(async () => {
     const e = await ensure()
+    const ended = () => {
+      if (!playingRef.current) return
+      playingRef.current = false
+      clock.current.offset = 0
+      setPlaying(false)
+      setPosition(0)
+      if (settings.current.metronome) stopMetronome()
+    }
+    if (e.media) {
+      const { audio } = e.media
+      if (clock.current.offset >= audio.duration - 0.05) clock.current.offset = 0
+      applyPitch()
+      audio.currentTime = clock.current.offset
+      audio.onended = ended
+      await audio.play()
+      playingRef.current = true
+      setPlaying(true)
+      if (settings.current.metronome) startMetronome()
+      return
+    }
     if (!e.player.loaded) {
       // só o metrônomo
       if (settings.current.metronome) startMetronome()
@@ -115,14 +172,7 @@ export function useAudioEngine() {
     if (clock.current.offset >= e.player.buffer.duration - 0.05) clock.current.offset = 0
     applyPitch()
     clock.current.startedAt = e.Tone.now()
-    e.player.onstop = () => {
-      if (!playingRef.current) return
-      playingRef.current = false
-      clock.current.offset = 0
-      setPlaying(false)
-      setPosition(0)
-      if (settings.current.metronome) stopMetronome()
-    }
+    e.player.onstop = ended
     e.player.start(undefined, clock.current.offset)
     playingRef.current = true
     setPlaying(true)
@@ -136,6 +186,7 @@ export function useAudioEngine() {
       setError(null)
       try {
         const e = await ensure()
+        releaseMedia(e)
         // Baixa e decodifica aqui (e não pelo player.load) para dizer o motivo
         // da falha. `no-store`: uma resposta guardada sem CORS quebraria o fetch.
         let res: Response
@@ -150,15 +201,25 @@ export function useAudioEngine() {
           )
         }
         const data = await res.arrayBuffer()
-        let decoded: AudioBuffer
+        let decoded: AudioBuffer | null = null
         try {
           decoded = await e.Tone.getContext().decodeAudioData(data)
         } catch {
-          throw new Error('Este aparelho não abre este formato no player. Prefira MP3.')
+          // segue pelo <audio> do aparelho
         }
-        e.player.buffer = new e.Tone.ToneAudioBuffer(decoded)
+        let length: number
+        if (decoded) {
+          e.player.buffer = new e.Tone.ToneAudioBuffer(decoded)
+          length = e.player.buffer.duration
+        } else {
+          try {
+            length = await openMedia(e, nextUrl)
+          } catch {
+            throw new Error('Este aparelho não abre este formato no player. Prefira MP3.')
+          }
+        }
         clock.current = { offset: 0, startedAt: 0 }
-        setDuration(e.player.buffer.duration)
+        setDuration(length)
         setPosition(0)
         setUrl(nextUrl)
       } catch (err) {
@@ -245,6 +306,7 @@ export function useAudioEngine() {
       playingRef.current = false
       e.Tone.getTransport().stop()
       e.Tone.getTransport().cancel()
+      releaseMedia(e)
       e.player.dispose()
       e.shift.dispose()
       e.click.dispose()
