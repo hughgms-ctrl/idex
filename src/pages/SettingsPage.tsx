@@ -11,6 +11,9 @@ import { PageHeader } from '@/components/PageHeader'
 import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NativeSelect } from '@/components/ui/native-select'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useChurch } from '@/features/church/church-context'
 import { ministryKeys, useMinistrySettings } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
@@ -43,6 +46,13 @@ export function SettingsPage() {
           key={`igreja-${churchRow.data.updated_at}`}
           church={churchRow.data}
           canEdit={isOwner}
+        />
+      )}
+      {ministry && settings.data && (
+        <ServiceTimes
+          key={`horarios-${settings.data.updated_at}`}
+          settings={settings.data}
+          canEdit={isLeader(ministry.id)}
         />
       )}
       {ministry && settings.data && (
@@ -88,6 +98,116 @@ function useSaveSettings(ministryId: string, message: string) {
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
+}
+
+// Padrões de horário: chegada da equipe e ensaio de cada culto.
+function ServiceTimes({
+  settings,
+  canEdit,
+}: {
+  settings: Tables<'ministry_settings'>
+  canEdit: boolean
+}) {
+  const save = useSaveSettings(settings.ministry_id, 'Horários salvos')
+  const [arrival, setArrival] = useState(String(settings.service_arrival_minutes))
+  const [enabled, setEnabled] = useState(settings.rehearsal_enabled)
+  const [daysBefore, setDaysBefore] = useState(String(settings.rehearsal_days_before))
+  const [time, setTime] = useState(settings.rehearsal_time.slice(0, 5))
+  const [duration, setDuration] = useState(String(settings.rehearsal_duration_min))
+
+  const submit = () => {
+    const a = Number(arrival)
+    const d = Number(duration)
+    if (!Number.isInteger(a) || a < 0 || a > 360)
+      return toast.error('Chegada: de 0 a 360 minutos antes')
+    if (!/^\d{2}:\d{2}$/.test(time)) return toast.error('Informe o horário do ensaio')
+    if (!Number.isInteger(d) || d < 15 || d > 600)
+      return toast.error('Duração do ensaio: de 15 a 600 minutos')
+    save.mutate({
+      service_arrival_minutes: a,
+      rehearsal_enabled: enabled,
+      rehearsal_days_before: Number(daysBefore),
+      rehearsal_time: time,
+      rehearsal_duration_min: d,
+    })
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionTitle title="Cultos e ensaios" />
+      <Panel className="gap-4">
+        <p className="text-muted-foreground text-[13px]">
+          Valem como sugestão ao criar cultos (cada culto pode ter os seus). Atraso, abertura do
+          ponto e “esqueci de registrar” contam a partir do horário de chegada.
+        </p>
+        <FormField id="st-arrival" label="Equipe chega quantos minutos antes do culto?">
+          <Input
+            id="st-arrival"
+            type="number"
+            min={0}
+            max={360}
+            inputMode="numeric"
+            value={arrival}
+            disabled={!canEdit}
+            onChange={(e) => setArrival(e.target.value)}
+          />
+        </FormField>
+        <Label className="min-h-11 cursor-pointer font-normal">
+          <Checkbox
+            checked={enabled}
+            disabled={!canEdit}
+            onCheckedChange={(v) => setEnabled(v === true)}
+          />
+          Todo culto tem ensaio
+        </Label>
+        {enabled && (
+          <div className="grid grid-cols-2 gap-3">
+            <FormField id="st-days" label="Ensaio">
+              <NativeSelect
+                id="st-days"
+                value={daysBefore}
+                disabled={!canEdit}
+                onChange={(e) => setDaysBefore(e.target.value)}
+              >
+                <option value="0">No mesmo dia</option>
+                {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? 'dia antes' : 'dias antes'}
+                  </option>
+                ))}
+              </NativeSelect>
+            </FormField>
+            <FormField id="st-time" label="Horário do ensaio">
+              <Input
+                id="st-time"
+                type="time"
+                value={time}
+                disabled={!canEdit}
+                onChange={(e) => setTime(e.target.value)}
+              />
+            </FormField>
+            <FormField id="st-duration" label="Duração (min)">
+              <Input
+                id="st-duration"
+                type="number"
+                min={15}
+                max={600}
+                inputMode="numeric"
+                value={duration}
+                disabled={!canEdit}
+                onChange={(e) => setDuration(e.target.value)}
+              />
+            </FormField>
+          </div>
+        )}
+        {canEdit && (
+          <Button className="self-start" onClick={submit} disabled={save.isPending}>
+            {save.isPending ? 'Salvando…' : 'Salvar horários'}
+          </Button>
+        )}
+      </Panel>
+    </section>
+  )
 }
 
 // Período da programação que a equipe responde ("posso / não posso").

@@ -20,6 +20,7 @@ import {
   useNextEvent,
   useOpenCycle,
 } from '@/features/ministries/queries'
+import { cn } from '@/lib/utils'
 import { formatDate, formatDayMonth, formatEventDate, relativeDays } from '@/lib/format'
 
 const EVENT_KIND: Record<string, string> = {
@@ -100,12 +101,22 @@ export function DashboardPage() {
         ) : event ? (
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-1">
-              <span className="text-primary text-xs font-semibold tracking-wider">
+              <span
+                className={cn(
+                  'text-xs font-semibold tracking-wider',
+                  event.kind === 'rehearsal' ? 'text-info' : 'text-primary',
+                )}
+              >
                 {EVENT_KIND[event.kind] ?? 'PRÓXIMO EVENTO'}
               </span>
               <span className="font-display text-[22px] font-bold">
                 {formatEventDate(event.starts_at)}
               </span>
+              {event.arrive_at && (
+                <span className="text-sm font-semibold">
+                  Chegada da equipe: {formatEventDate(event.arrive_at).split(' · ')[1]}
+                </span>
+              )}
               <span className="text-muted-foreground text-sm">
                 {[event.location_name, event.title].filter(Boolean).join(' · ')}
                 {settings.data && ` · tolerância de ${settings.data.late_tolerance_min} min`}

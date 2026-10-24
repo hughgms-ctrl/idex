@@ -107,22 +107,21 @@ export function SchedulePage() {
         </Button>
       </div>
 
-      {leader && (
-        <MonthCalendar
-          year={selected.year}
-          month={selected.month}
-          events={data.events}
-          onSelectDay={(key, hasEvents) => {
-            if (hasEvents) {
-              document
-                .getElementById(`dia-${key}`)
-                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            } else {
-              setEventDialog({ date: key })
-            }
-          }}
-        />
-      )}
+      <MonthCalendar
+        leader={leader}
+        year={selected.year}
+        month={selected.month}
+        events={data.events}
+        onSelectDay={(key, hasEvents) => {
+          if (hasEvents) {
+            document
+              .getElementById(`dia-${key}`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          } else if (leader) {
+            setEventDialog({ date: key })
+          }
+        }}
+      />
 
       {myMember && (
         <div className="flex gap-2">

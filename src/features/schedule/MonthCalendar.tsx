@@ -4,17 +4,25 @@ import { WEEKDAY_SHORT } from '@/features/schedule/datetime'
 import type { ScheduleEvent } from '@/features/schedule/queries'
 import { cn } from '@/lib/utils'
 
-// Calendário compacto do mês (visão do líder): pontos nos dias com evento.
+const KIND_DOT: Record<string, string> = {
+  service: 'bg-primary',
+  rehearsal: 'bg-info',
+  other: 'bg-muted-foreground',
+}
+
+// Calendário compacto do mês: um ponto por evento (culto verde, ensaio azul).
 export function MonthCalendar({
   year,
   month,
   events,
   onSelectDay,
+  leader = false,
 }: {
   year: number
   month: number
   events: ScheduleEvent[]
   onSelectDay: (dateKey: string, hasEvents: boolean) => void
+  leader?: boolean
 }) {
   const first = zonedToUtc(year, month, 1, 12)
   const startWeekday = localParts(first).weekday
@@ -45,7 +53,10 @@ export function MonthCalendar({
         {cells.map((key, i) => {
           if (!key) return <span key={`empty-${i}`} />
           const dayEvents = byDay.get(key) ?? []
-          const unfilled = dayEvents.some((e) => e.schedule_assignments.length === 0)
+          // ensaio ligado a culto recebe a equipe do culto: não conta como pendente
+          const unfilled = dayEvents.some(
+            (e) => e.schedule_assignments.length === 0 && !e.service_event_id,
+          )
           return (
             <button
               key={key}
@@ -55,6 +66,7 @@ export function MonthCalendar({
               className={cn(
                 'hover:bg-secondary flex h-11 flex-col items-center justify-center gap-0.5 rounded-lg font-mono text-[13px]',
                 key === today && 'ring-primary ring-1',
+                leader && unfilled && 'text-warning font-semibold',
               )}
             >
               {Number(key.slice(8))}
@@ -64,7 +76,7 @@ export function MonthCalendar({
                     key={e.id}
                     className={cn(
                       'size-1.5 rounded-full',
-                      unfilled ? 'bg-warning' : e.kind === 'rehearsal' ? 'bg-info' : 'bg-primary',
+                      KIND_DOT[e.kind] ?? 'bg-muted-foreground',
                     )}
                   />
                 ))}
@@ -72,6 +84,19 @@ export function MonthCalendar({
             </button>
           )
         })}
+      </div>
+      <div className="text-muted-foreground mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px]">
+        <span className="flex items-center gap-1.5">
+          <span className="bg-primary size-2 rounded-full" /> Culto
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="bg-info size-2 rounded-full" /> Ensaio
+        </span>
+        {leader && (
+          <span>
+            <span className="text-warning font-mono font-semibold">12</span> = falta montar a escala
+          </span>
+        )}
       </div>
     </div>
   )

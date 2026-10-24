@@ -15,7 +15,12 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { useChurch } from '@/features/church/church-context'
 import { EVENT_KIND_LABEL } from '@/features/schedule/datetime'
 import { EventDialog } from '@/features/schedule/EventDialog'
-import { scheduleKeys, useEvent, type ScheduleEvent } from '@/features/schedule/queries'
+import {
+  scheduleKeys,
+  useEvent,
+  useLinkedRehearsal,
+  type ScheduleEvent,
+} from '@/features/schedule/queries'
 import { useScheduleData, type ScheduleData } from '@/features/schedule/useScheduleData'
 import { errorMessage } from '@/lib/errors'
 import { formatEventDate } from '@/lib/format'
@@ -164,7 +169,11 @@ function Editor({
       <PageHeader
         eyebrow={EVENT_KIND_LABEL[event.kind]?.toUpperCase()}
         title={event.title}
-        description={[formatEventDate(event.starts_at), event.location_name]
+        description={[
+          formatEventDate(event.starts_at),
+          event.arrive_at && `chegada ${formatEventDate(event.arrive_at).split(' · ')[1]}`,
+          event.location_name,
+        ]
           .filter(Boolean)
           .join(' · ')}
         action={
@@ -180,6 +189,8 @@ function Editor({
           )
         }
       />
+
+      <LinkedEvent event={event} />
 
       {event.kind === 'service' && (
         <Button asChild variant="outline" className="self-start">
@@ -433,4 +444,42 @@ function AnswersSummary({ event, data }: { event: ScheduleEvent; data: ScheduleD
       <p className="text-muted-foreground text-sm">{none} sem resposta (podem ser escalados)</p>
     </Panel>
   )
+}
+
+// Culto ↔ ensaio dele
+function LinkedEvent({ event }: { event: ScheduleEvent }) {
+  const rehearsal = useLinkedRehearsal(event.kind === 'service' ? event.id : undefined).data
+  const service = useEvent(event.service_event_id ?? undefined).data
+  if (event.kind === 'service' && rehearsal) {
+    return (
+      <Link
+        to={`/escalas/${rehearsal.id}`}
+        className="border-info/60 bg-info/10 text-info flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-sm"
+      >
+        <span>
+          <strong>Ensaio:</strong> {formatEventDate(rehearsal.starts_at)}
+        </span>
+        <span aria-hidden="true">›</span>
+      </Link>
+    )
+  }
+  if (service) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Link
+          to={`/escalas/${service.id}`}
+          className="border-primary/60 bg-primary/10 text-primary flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-sm"
+        >
+          <span>
+            <strong>Ensaio do culto:</strong> {formatEventDate(service.starts_at)}
+          </span>
+          <span aria-hidden="true">›</span>
+        </Link>
+        <p className="text-muted-foreground text-[13px]">
+          Quem é escalado no culto entra neste ensaio automaticamente.
+        </p>
+      </div>
+    )
+  }
+  return null
 }

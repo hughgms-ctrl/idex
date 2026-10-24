@@ -112,7 +112,7 @@ export function AvailabilityPage() {
             : `${formatDate(period.startsOn)} A ${formatDate(period.endsOn)}`
         }
         title="Quando você pode servir?"
-        description="Toque em “Posso” ou “Não posso” em cada data. Se não responder, o líder pode escalar você normalmente."
+        description="Toque em “Posso” ou “Não posso” em cada culto (vale também para o ensaio dele). Se não responder, o líder pode escalar você normalmente."
       />
       {deadline && <p className="text-warning text-sm">Responda até {formatDate(deadline)}.</p>}
 
@@ -174,6 +174,11 @@ export function AvailabilityPage() {
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
+                    {e.rehearsal_at && (
+                      <span className="text-info text-[13px] font-medium">
+                        Ensaio: {formatEventDate(e.rehearsal_at)}
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button

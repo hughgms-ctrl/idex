@@ -33,15 +33,26 @@ export function useUpcomingEvents(
       if (!period) return []
       const from = dayStart(period.startsOn)
       const now = new Date().toISOString()
+      // ensaio ligado a culto não aparece sozinho: vai junto do culto
       const { data, error } = await supabase
         .from('events')
-        .select('id, church_id, kind, title, starts_at, ends_at, location_name')
+        .select('id, church_id, kind, title, starts_at, arrive_at, ends_at, location_name')
         .eq('ministry_id', ministryId ?? '')
+        .is('service_event_id', null)
         .gte('starts_at', from > now ? from : now)
         .lt('starts_at', dayStart(addDaysToKey(period.endsOn, 1)))
         .order('starts_at')
       if (error) throw error
-      return data
+      const ids = data.filter((e) => e.kind === 'service').map((e) => e.id)
+      const { data: rehearsals, error: err } = ids.length
+        ? await supabase
+            .from('events')
+            .select('service_event_id, starts_at')
+            .in('service_event_id', ids)
+        : { data: [], error: null }
+      if (err) throw err
+      const rehearsalOf = new Map(rehearsals.map((r) => [r.service_event_id, r.starts_at]))
+      return data.map((e) => ({ ...e, rehearsal_at: rehearsalOf.get(e.id) ?? null }))
     },
   })
 }

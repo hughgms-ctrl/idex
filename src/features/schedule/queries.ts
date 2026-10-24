@@ -14,7 +14,7 @@ export const scheduleKeys = {
 }
 
 const EVENT_SELECT =
-  'id, church_id, ministry_id, kind, title, starts_at, ends_at, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status)'
+  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, ends_at, service_event_id, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status)'
 
 export function useMonthEvents(ministryId: string | undefined, year: number, month: number) {
   return useQuery({
@@ -120,6 +120,23 @@ export function useMyUpcomingAssignments(memberId: string | undefined, limit = 3
       return data
         .sort((a, b) => a.events.starts_at.localeCompare(b.events.starts_at))
         .slice(0, limit)
+    },
+  })
+}
+
+/** Ensaio ligado a um culto (pode cair no mês anterior). */
+export function useLinkedRehearsal(serviceId: string | undefined) {
+  return useQuery({
+    queryKey: [...scheduleKeys.all, 'rehearsal-of', serviceId ?? ''],
+    enabled: Boolean(serviceId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, title, starts_at, ends_at')
+        .eq('service_event_id', serviceId ?? '')
+        .maybeSingle()
+      if (error) throw error
+      return data
     },
   })
 }

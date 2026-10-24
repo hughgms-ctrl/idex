@@ -66,7 +66,7 @@ export function useNextEvent(ministryId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('id, title, kind, starts_at, location_name')
+        .select('id, title, kind, starts_at, arrive_at, location_name')
         .eq('ministry_id', ministryId ?? '')
         .gte('starts_at', new Date().toISOString())
         .order('starts_at')

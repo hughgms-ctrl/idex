@@ -9,6 +9,10 @@ import type { ScheduleData } from '@/features/schedule/useScheduleData'
 import { cn } from '@/lib/utils'
 
 const pad = (n: number) => String(n).padStart(2, '0')
+const hour = (iso: string) => {
+  const t = localParts(iso)
+  return `${pad(t.hour)}h${t.minute ? pad(t.minute) : ''}`
+}
 
 export function EventCard({
   event,
@@ -81,15 +85,29 @@ export function EventCard({
           </span>
           <span className="text-muted-foreground text-sm">
             {event.title} {pad(p.hour)}h{p.minute ? pad(p.minute) : ''}
+            {event.arrive_at && ` · chegada ${hour(event.arrive_at)}`}
           </span>
         </div>
-        <span className="text-muted-foreground text-xs">{EVENT_KIND_LABEL[event.kind]}</span>
+        <span
+          className={cn(
+            'shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold',
+            event.kind === 'rehearsal'
+              ? 'bg-info/15 text-info'
+              : event.kind === 'service'
+                ? 'bg-primary/15 text-primary'
+                : 'bg-secondary text-muted-foreground',
+          )}
+        >
+          {EVENT_KIND_LABEL[event.kind]?.toUpperCase()}
+        </span>
       </div>
       {assignments.length === 0 ? (
         <p className="text-muted-foreground text-[13px]">
-          {leader
-            ? 'Ninguém escalado ainda. Toque para montar a escala.'
-            : 'Escala ainda não montada.'}
+          {event.service_event_id
+            ? 'A equipe escalada no culto entra aqui automaticamente.'
+            : leader
+              ? 'Ninguém escalado ainda. Toque para montar a escala.'
+              : 'Escala ainda não montada.'}
         </p>
       ) : (
         <ul className="grid grid-cols-2 gap-1.5">
@@ -129,7 +147,14 @@ export function EventCard({
     </>
   )
 
-  const className = 'flex flex-col gap-2.5 rounded-[18px] border bg-card p-3.5 text-left'
+  const className = cn(
+    'flex flex-col gap-2.5 rounded-[18px] border border-l-4 bg-card p-3.5 text-left',
+    event.kind === 'rehearsal'
+      ? 'border-l-info'
+      : event.kind === 'service'
+        ? 'border-l-primary'
+        : 'border-l-border',
+  )
   return leader ? (
     <Link to={`/escalas/${event.id}`} className={cn(className, 'hover:border-input')}>
       {content}
