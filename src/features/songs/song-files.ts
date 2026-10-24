@@ -46,7 +46,7 @@ export function useSongFiles(songId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('song_files')
-        .select('id, name, kind, storage_path, size_bytes, created_at')
+        .select('id, name, kind, storage_path, size_bytes, bpm, musical_key, created_at')
         .eq('song_id', songId)
         .order('created_at')
       if (error) throw error
@@ -76,4 +76,40 @@ export function sizeLabel(bytes: number | null): string {
   return bytes > 1024 * 1024
     ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
     : `${Math.ceil(bytes / 1024)} KB`
+}
+
+/** Envia um arquivo da música (Storage + registro). Áudio pode levar BPM e tom. */
+export async function uploadSongFile(params: {
+  churchId: string
+  songId: string
+  file: File
+  name?: string
+  bpm?: number | null
+  musicalKey?: string | null
+}): Promise<void> {
+  const { churchId, songId, file } = params
+  if (file.size > MAX_BYTES) throw new Error(`"${file.name}" passa de 50 MB`)
+  const { mime, kind } = fileInfo(file)
+  if (kind === 'other') throw new Error(`"${file.name}": envie áudio, PDF ou imagem`)
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
+  const path = `${churchId}/${songId}/${crypto.randomUUID()}.${ext}`
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, { contentType: mime, upsert: false })
+  if (error) throw error
+  const { error: err } = await supabase.from('song_files').insert({
+    church_id: churchId,
+    song_id: songId,
+    name: (params.name?.trim() || file.name).slice(0, 200),
+    kind,
+    storage_path: path,
+    mime_type: mime,
+    size_bytes: file.size,
+    bpm: kind === 'audio' ? (params.bpm ?? null) : null,
+    musical_key: kind === 'audio' ? (params.musicalKey ?? null) : null,
+  })
+  if (err) {
+    await supabase.storage.from(BUCKET).remove([path])
+    throw err
+  }
 }

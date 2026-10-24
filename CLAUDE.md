@@ -1,6 +1,6 @@
 # ide.x — Gestão de ministério de louvor
 
-SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já suporta outros ministérios no futuro (mídia, infantil, recepção). O player de multitracks é OUTRO produto — aqui só arquivos de referência por música (áudio/PDF/imagem) tocados no player nativo do navegador; nada de mixagem, multipistas ou edição de áudio.
+SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já suporta outros ministérios no futuro (mídia, infantil, recepção). O player de multitracks é OUTRO produto — aqui só arquivos de referência por música (áudio/PDF/imagem); o player de ensaio muda tom, andamento e tem metrônomo (Tone.js, carregado só na página de áudios), mas nada de mixagem, multipistas ou edição de áudio.
 
 ## Stack e hospedagem
 - Repositório no GitHub; deploy do front na Vercel (preview por PR, produção na `main`).
@@ -111,5 +111,9 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - QR fixo: `/presenca/qr-fixo` (imprimir, gerar novo via `regenerate_checkin_code`), link `/ponto?c=<código>`; `checkin` resolve o evento por `resolveCheckinCode`.
   - "Cultos sem ensaio/chegada" → `MissingRehearsals` cria pelas regras (Escala e Planejamento). Planejamento tem "Novo culto" (mesmo diálogo, avulso ou semanal, com ensaio). Escala mostra quem está sem função ("Equipe (sem função)").
   - Horários "antes do início" são calculados em minutos a partir do início (não data+hora), para funcionar perto da meia-noite.
+- [x] Fase 11 — página de áudios e correção de cifras coladas
+  - `/repertorio/:songId/audios`: líder envia áudio com nome, BPM e tom (`song_files.bpm/musical_key`; update só de `name`, `bpm`, `musical_key`), renomeia e apaga. Player (`useAudioEngine`, Tone.js lazy, MIT): tom ±12 meios tons via `PitchShift` compensando o `playbackRate` (`pitchShiftFor`), andamento 50–150% em BPM, metrônomo pelo Transport com acento no 1º tempo (`beatsPerBar` do compasso). Contas puras em `src/features/songs/audio-math.ts`. Tela da música mostra o atalho "Áudios" e só partituras/imagens.
+  - Cifra colada do Cifra Club vinha com espaço de largura zero (U+200B) e rótulos "[Intro] C": `cleanPastedText`, `isChordLine`, `looksLikeChordPro` mais rígido e `repairChordPro` ao ler (cifras já salvas voltam a transpor sem recadastrar).
+  - Build: o grupo `vendor` exclui libs de telas específicas (tone, chordsheetjs, qr-scanner, qrcode) para não irem no carregamento inicial.
 - Produção: Supabase `jptpzpvysgnfulyoquex` (São Paulo) e Vercel `https://idex-eight.vercel.app`. Confirmação de e-mail desligada (`mailer_autoconfirm`) porque o SMTP padrão do Supabase só envia para a equipe do projeto; configurar SMTP próprio (ex.: Resend) para religar e usar link mágico.
 - Pendências conhecidas: o Cifra Club bloqueia (403) acessos vindos dos servidores do Supabase, então a importação automática falha em produção — o app mostra o botão "Abrir no Cifra Club" para copiar e colar a cifra.

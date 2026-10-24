@@ -1,15 +1,15 @@
 import { useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { FileText, Image, Music2, Paperclip, Trash2, Upload } from 'lucide-react'
+import { Link } from 'react-router'
+import { FileText, Headphones, Image, Paperclip, Trash2, Upload } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
   BUCKET,
-  MAX_BYTES,
-  fileInfo,
   sizeLabel,
   songFileKeys,
+  uploadSongFile,
   useSongFiles,
 } from '@/features/songs/song-files'
 import { errorMessage } from '@/lib/errors'
@@ -32,30 +32,7 @@ export function SongFiles({
 
   const upload = useMutation({
     mutationFn: async (list: File[]) => {
-      for (const file of list) {
-        if (file.size > MAX_BYTES) throw new Error(`"${file.name}" passa de 50 MB`)
-        const { mime, kind } = fileInfo(file)
-        if (kind === 'other') throw new Error(`"${file.name}": envie áudio, PDF ou imagem`)
-        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
-        const path = `${churchId}/${songId}/${crypto.randomUUID()}.${ext}`
-        const { error } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, file, { contentType: mime, upsert: false })
-        if (error) throw error
-        const { error: err } = await supabase.from('song_files').insert({
-          church_id: churchId,
-          song_id: songId,
-          name: file.name.slice(0, 200),
-          kind,
-          storage_path: path,
-          mime_type: mime,
-          size_bytes: file.size,
-        })
-        if (err) {
-          await supabase.storage.from(BUCKET).remove([path])
-          throw err
-        }
-      }
+      for (const file of list) await uploadSongFile({ churchId, songId, file })
       return list.length
     },
     onSuccess: async (n) => {
@@ -79,89 +56,86 @@ export function SongFiles({
     onError: (err) => toast.error(errorMessage(err)),
   })
 
-  const list = files.data ?? []
-  if (!canEdit && list.length === 0) return null
+  const all = files.data ?? []
+  const audios = all.filter((f) => f.kind === 'audio')
+  const list = all.filter((f) => f.kind !== 'audio')
 
   return (
     <section aria-label="Áudios e arquivos" className="flex flex-col gap-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-[15px] font-semibold">
-          <Paperclip className="text-primary size-4" aria-hidden="true" /> Áudios e arquivos
-        </h2>
-        {canEdit && (
-          <>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,application/pdf,image/*"
-              className="hidden"
-              onChange={(e) => {
-                const chosen = Array.from(e.target.files ?? [])
-                e.target.value = ''
-                if (chosen.length) upload.mutate(chosen)
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={upload.isPending}
-              onClick={() => inputRef.current?.click()}
-            >
-              <Upload aria-hidden="true" /> {upload.isPending ? 'Enviando…' : 'Enviar arquivo'}
-            </Button>
-          </>
-        )}
-      </div>
-      {files.isPending ? (
-        <p className="text-muted-foreground text-sm">Carregando arquivos…</p>
-      ) : list.length === 0 ? (
-        <p className="text-muted-foreground text-[13px]">
-          Envie o áudio de referência (MP3, M4A, WAV…), o PDF da partitura ou uma imagem, até 50 MB.
-          A equipe ouve e abre aqui no app.
-        </p>
-      ) : (
+      <Button asChild variant="outline" className="min-h-12 justify-between rounded-2xl">
+        <Link to={`/repertorio/${songId}/audios`}>
+          <span className="flex items-center gap-2">
+            <Headphones className="text-primary size-4" aria-hidden="true" />
+            Áudios {audios.length > 0 && `(${audios.length})`}
+          </span>
+          <span className="text-muted-foreground text-xs">tom, andamento e metrônomo ›</span>
+        </Link>
+      </Button>
+
+      {(canEdit || list.length > 0) && (
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold">
+            <Paperclip className="text-primary size-4" aria-hidden="true" /> Partituras e imagens
+          </h2>
+          {canEdit && (
+            <>
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const chosen = Array.from(e.target.files ?? [])
+                  e.target.value = ''
+                  if (chosen.length) upload.mutate(chosen)
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={upload.isPending}
+                onClick={() => inputRef.current?.click()}
+              >
+                <Upload aria-hidden="true" /> {upload.isPending ? 'Enviando…' : 'Enviar'}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+      {list.length > 0 && (
         <ul className="flex flex-col gap-2">
           {list.map((f) => (
-            <li key={f.id} className="bg-card flex flex-col gap-2 rounded-2xl border p-3">
-              <div className="flex items-center gap-2">
-                {f.kind === 'audio' ? (
-                  <Music2 className="text-primary size-4 shrink-0" aria-hidden="true" />
-                ) : f.kind === 'image' ? (
-                  <Image className="text-primary size-4 shrink-0" aria-hidden="true" />
-                ) : (
-                  <FileText className="text-primary size-4 shrink-0" aria-hidden="true" />
-                )}
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{f.name}</span>
-                <span className="text-muted-foreground shrink-0 font-mono text-xs">
-                  {sizeLabel(f.size_bytes)}
-                </span>
-                {canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Apagar ${f.name}`}
-                    disabled={remove.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Apagar "${f.name}"?`)) remove.mutate(f)
-                    }}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                )}
-              </div>
-              {f.url &&
-                (f.kind === 'audio' ? (
-                  <audio controls preload="none" src={f.url} className="h-11 w-full">
-                    Seu navegador não toca este áudio.
-                  </audio>
-                ) : (
-                  <Button asChild variant="secondary" size="sm" className="self-start">
-                    <a href={f.url} target="_blank" rel="noopener noreferrer">
-                      {f.kind === 'pdf' ? 'Abrir PDF' : 'Abrir imagem'}
-                    </a>
-                  </Button>
-                ))}
+            <li key={f.id} className="bg-card flex items-center gap-2 rounded-2xl border p-3">
+              {f.kind === 'image' ? (
+                <Image className="text-primary size-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <FileText className="text-primary size-4 shrink-0" aria-hidden="true" />
+              )}
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{f.name}</span>
+              <span className="text-muted-foreground shrink-0 font-mono text-xs">
+                {sizeLabel(f.size_bytes)}
+              </span>
+              {f.url && (
+                <Button asChild variant="secondary" size="sm">
+                  <a href={f.url} target="_blank" rel="noopener noreferrer">
+                    Abrir
+                  </a>
+                </Button>
+              )}
+              {canEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Apagar ${f.name}`}
+                  disabled={remove.isPending}
+                  onClick={() => {
+                    if (window.confirm(`Apagar "${f.name}"?`)) remove.mutate(f)
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              )}
             </li>
           ))}
         </ul>

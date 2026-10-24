@@ -70,7 +70,11 @@ export default defineConfig(({ mode }) => ({
               test: /node_modules[\\/](react|react-dom|scheduler|react-router)[\\/]/,
             },
             { name: 'supabase', test: /node_modules[\\/]@supabase[\\/]/ },
-            { name: 'vendor', test: /node_modules[\\/]/ },
+            // bibliotecas só de algumas telas (cifra, QR, áudio) ficam nos blocos delas
+            {
+              name: 'vendor',
+              test: /^(?!.*[\\/]node_modules[\\/](tone|standardized-audio-context|automation-events|chordsheetjs|qr-scanner|qrcode)[\\/]).*[\\/]node_modules[\\/]/,
+            },
           ],
         },
       },

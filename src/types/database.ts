@@ -1433,12 +1433,14 @@ export type Database = {
       }
       song_files: {
         Row: {
+          bpm: number | null
           church_id: string
           created_at: string
           created_by: string | null
           id: string
           kind: string
           mime_type: string | null
+          musical_key: string | null
           name: string
           size_bytes: number | null
           song_id: string
@@ -1446,24 +1448,28 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          bpm?: number | null
           church_id: string
           created_at?: string
           created_by?: string | null
           id?: string
           kind: string
           mime_type?: string | null
+          musical_key?: string | null
           name: string
           size_bytes?: number | null
           song_id: string
           storage_path: string
         }
         Update: {
+          bpm?: number | null
           church_id?: string
           created_at?: string
           created_by?: string | null
           id?: string
           kind?: string
           mime_type?: string | null
+          musical_key?: string | null
           name?: string
           size_bytes?: number | null
           song_id?: string
