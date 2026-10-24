@@ -6,14 +6,14 @@ import { FileText, Headphones, Image, Paperclip, Trash2, Upload } from 'lucide-r
 
 import { Button } from '@/components/ui/button'
 import {
-  BUCKET,
+  deleteSongFile,
   sizeLabel,
   songFileKeys,
   uploadSongFile,
   useSongFiles,
+  type StoredFile,
 } from '@/features/songs/song-files'
 import { errorMessage } from '@/lib/errors'
-import { supabase } from '@/lib/supabase'
 
 // Áudios de referência, PDFs e imagens da música. Todos ouvem; o líder envia.
 export function SongFiles({
@@ -46,11 +46,8 @@ export function SongFiles({
   })
 
   const remove = useMutation({
-    mutationFn: async (file: { id: string; storage_path: string }) => {
-      const { error } = await supabase.storage.from(BUCKET).remove([file.storage_path])
-      if (error) throw error
-      const { error: err } = await supabase.from('song_files').delete().eq('id', file.id)
-      if (err) throw err
+    mutationFn: async (file: StoredFile) => {
+      await deleteSongFile(file)
     },
     onSuccess: invalidate,
     onError: (err) => toast.error(errorMessage(err)),

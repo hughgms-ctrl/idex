@@ -1444,6 +1444,7 @@ export type Database = {
           name: string
           size_bytes: number | null
           song_id: string
+          storage_backend: string
           storage_path: string
         }
         ComputedFields: never
@@ -1459,6 +1460,7 @@ export type Database = {
           name: string
           size_bytes?: number | null
           song_id: string
+          storage_backend?: string
           storage_path: string
         }
         Update: {
@@ -1473,6 +1475,7 @@ export type Database = {
           name?: string
           size_bytes?: number | null
           song_id?: string
+          storage_backend?: string
           storage_path?: string
         }
         Relationships: [

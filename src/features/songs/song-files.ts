@@ -1,9 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 
+import { invokeFunction } from '@/lib/functions'
 import { supabase } from '@/lib/supabase'
 
 export const BUCKET = 'song-files'
+/** Limite no Storage do Supabase (plano gratuito). */
 export const MAX_BYTES = 50 * 1024 * 1024
+/** Limite no Cloudflare R2. */
+export const R2_MAX_BYTES = 100 * 1024 * 1024
+
+// O app usa o R2 quando ele estiver configurado no servidor; senão, o Supabase.
+let r2Enabled: Promise<boolean> | null = null
+export function isR2Enabled(): Promise<boolean> {
+  r2Enabled ??= invokeFunction<{ r2: boolean }>('song-storage', { action: 'config' })
+    .then((c) => c.r2)
+    .catch(() => {
+      r2Enabled = null // tenta de novo na próxima vez
+      return false
+    })
+  return r2Enabled
+}
+
+export type StoredFile = { id: string; storage_path: string; storage_backend: string }
 
 const EXT_MIME: Record<string, string> = {
   mp3: 'audio/mpeg',
@@ -46,28 +64,64 @@ export function useSongFiles(songId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('song_files')
-        .select('id, name, kind, storage_path, size_bytes, bpm, musical_key, created_at')
+        .select(
+          'id, name, kind, storage_path, storage_backend, size_bytes, bpm, musical_key, created_at',
+        )
         .eq('song_id', songId)
         .order('created_at')
       if (error) throw error
       if (data.length === 0) return []
-      // links temporários (o bucket é privado)
-      const { data: signed, error: err } = await supabase.storage.from(BUCKET).createSignedUrls(
-        data.map((f) => f.storage_path),
-        6 * 3600,
-      )
-      if (err) throw err
-      const url = new Map(signed.map((s) => [s.path, s.signedUrl]))
-      return data.map((f) => ({ ...f, url: url.get(f.storage_path) ?? null }))
+      // links temporários (tudo é privado): Supabase e R2
+      const url = new Map<string, string>()
+      const local = data.filter((f) => f.storage_backend !== 'r2')
+      const remote = data.filter((f) => f.storage_backend === 'r2')
+      if (local.length) {
+        const { data: signed, error: err } = await supabase.storage.from(BUCKET).createSignedUrls(
+          local.map((f) => f.storage_path),
+          6 * 3600,
+        )
+        if (err) throw err
+        const byPath = new Map(signed.map((x) => [x.path, x.signedUrl]))
+        for (const f of local) {
+          const u = byPath.get(f.storage_path)
+          if (u) url.set(f.id, u)
+        }
+      }
+      if (remote.length) {
+        const { urls } = await invokeFunction<{ urls: Record<string, string> }>('song-storage', {
+          action: 'download',
+          fileIds: remote.map((f) => f.id),
+        })
+        for (const [id, u] of Object.entries(urls)) url.set(id, u)
+      }
+      return data.map((f) => ({ ...f, url: url.get(f.id) ?? null }))
     },
     staleTime: 3 * 3600_000,
   })
 }
 
-/** Apaga do Storage os arquivos de uma música (antes de apagar a música). */
+/** Apaga um arquivo (onde quer que esteja) e o registro dele. */
+export async function deleteSongFile(file: StoredFile): Promise<void> {
+  if (file.storage_backend === 'r2') {
+    await invokeFunction('song-storage', { action: 'delete', fileIds: [file.id] })
+    return
+  }
+  const { error } = await supabase.storage.from(BUCKET).remove([file.storage_path])
+  if (error) throw error
+  const { error: err } = await supabase.from('song_files').delete().eq('id', file.id)
+  if (err) throw err
+}
+
+/** Apaga os arquivos de uma música (antes de apagar a música). */
 export async function removeSongStorage(songId: string) {
-  const { data } = await supabase.from('song_files').select('storage_path').eq('song_id', songId)
-  const paths = (data ?? []).map((f) => f.storage_path)
+  const { data } = await supabase
+    .from('song_files')
+    .select('id, storage_path, storage_backend')
+    .eq('song_id', songId)
+  const rows = data ?? []
+  const remote = rows.filter((f) => f.storage_backend === 'r2').map((f) => f.id)
+  if (remote.length) await invokeFunction('song-storage', { action: 'delete', fileIds: remote })
+  const paths = rows.filter((f) => f.storage_backend !== 'r2').map((f) => f.storage_path)
   if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
 }
 
@@ -88,21 +142,39 @@ export async function uploadSongFile(params: {
   musicalKey?: string | null
 }): Promise<void> {
   const { churchId, songId, file } = params
-  if (file.size > MAX_BYTES) {
-    throw new Error(
-      fileInfo(file).kind === 'audio'
-        ? `"${file.name}" passa de 50 MB. Exporte em MP3 (fica bem menor) e envie de novo.`
-        : `"${file.name}" passa de 50 MB`,
-    )
-  }
   const { mime, kind } = fileInfo(file)
   if (kind === 'other') throw new Error(`"${file.name}": envie áudio, PDF ou imagem`)
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
-  const path = `${churchId}/${songId}/${crypto.randomUUID()}.${ext}`
-  const { error } = await supabase.storage
-    .from(BUCKET)
-    .upload(path, file, { contentType: mime, upsert: false })
-  if (error) throw error
+  const useR2 = await isR2Enabled()
+  const limit = useR2 ? R2_MAX_BYTES : MAX_BYTES
+  if (file.size > limit) {
+    const mb = Math.round(limit / 1024 / 1024)
+    throw new Error(
+      kind === 'audio'
+        ? `"${file.name}" passa de ${mb} MB. Exporte em MP3 (fica bem menor) e envie de novo.`
+        : `"${file.name}" passa de ${mb} MB`,
+    )
+  }
+  let path: string
+  if (useR2) {
+    // o arquivo vai direto do aparelho para o R2, por um link de 15 minutos
+    const { key, url } = await invokeFunction<{ key: string; url: string }>('song-storage', {
+      action: 'upload',
+      songId,
+      fileName: file.name,
+      contentType: mime,
+      size: file.size,
+    })
+    const put = await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': mime } })
+    if (!put.ok) throw new Error('Não foi possível enviar o arquivo. Tente de novo.')
+    path = key
+  } else {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
+    path = `${churchId}/${songId}/${crypto.randomUUID()}.${ext}`
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, file, { contentType: mime, upsert: false })
+    if (error) throw error
+  }
   const { error: err } = await supabase.from('song_files').insert({
     church_id: churchId,
     song_id: songId,
@@ -113,9 +185,10 @@ export async function uploadSongFile(params: {
     size_bytes: file.size,
     bpm: kind === 'audio' ? (params.bpm ?? null) : null,
     musical_key: kind === 'audio' ? (params.musicalKey ?? null) : null,
+    storage_backend: useR2 ? 'r2' : 'supabase',
   })
   if (err) {
-    await supabase.storage.from(BUCKET).remove([path])
+    if (!useR2) await supabase.storage.from(BUCKET).remove([path])
     throw err
   }
 }

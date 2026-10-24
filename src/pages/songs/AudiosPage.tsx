@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ArrowLeft, Music2, Pause, Pencil, Play, Timer, Trash2, Upload } from 'lucide-react'
 
@@ -13,7 +13,13 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useChurch } from '@/features/church/church-context'
 import { beatsPerBar, effectiveBpm, formatClock, rateForBpm } from '@/features/songs/audio-math'
-import { BUCKET, songFileKeys, uploadSongFile, useSongFiles } from '@/features/songs/song-files'
+import {
+  deleteSongFile,
+  isR2Enabled,
+  songFileKeys,
+  uploadSongFile,
+  useSongFiles,
+} from '@/features/songs/song-files'
 import { useSong } from '@/features/songs/queries'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { errorMessage } from '@/lib/errors'
@@ -25,6 +31,7 @@ type AudioFile = {
   id: string
   name: string
   storage_path: string
+  storage_backend: string
   url: string | null
   bpm: number | null
   musical_key: string | null
@@ -327,10 +334,7 @@ function AudioRow({
 
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.storage.from(BUCKET).remove([file.storage_path])
-      if (error) throw error
-      const { error: err } = await supabase.from('song_files').delete().eq('id', file.id)
-      if (err) throw err
+      await deleteSongFile(file)
     },
     onSuccess: invalidate,
     onError: (err) => toast.error(errorMessage(err)),
@@ -441,6 +445,8 @@ function UploadAudio({
   const [name, setName] = useState('')
   const [bpm, setBpm] = useState(defaultBpm ? String(defaultBpm) : '')
   const [key, setKey] = useState(defaultKey ?? '')
+  const r2 = useQuery({ queryKey: ['song-storage-r2'], queryFn: isR2Enabled, staleTime: Infinity })
+  const maxMb = r2.data ? 100 : 50
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -467,8 +473,8 @@ function UploadAudio({
     <section className="flex flex-col gap-3 rounded-2xl border border-dashed p-4">
       <h2 className="text-[15px] font-semibold">Enviar áudio</h2>
       <p className="text-muted-foreground text-[13px]">
-        MP3, M4A, AAC, WAV, OGG ou FLAC, até 50 MB. Prefira <strong>MP3</strong>: uma música inteira
-        cabe com folga (WAV ocupa cerca de 10 MB por minuto).
+        MP3, M4A, AAC, WAV, OGG ou FLAC, até {maxMb} MB. Prefira <strong>MP3</strong>: uma música
+        inteira cabe com folga (WAV ocupa cerca de 10 MB por minuto).
       </p>
       <input
         ref={inputRef}
