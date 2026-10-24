@@ -421,7 +421,18 @@ function RoleSlot({
                 })
               : []
           return (
-            <li key={a.id} className="bg-secondary flex flex-col gap-2 rounded-xl px-3 py-2">
+            <li
+              key={a.id}
+              className={cn(
+                'bg-secondary flex flex-col gap-2 rounded-xl border border-transparent px-3 py-2',
+                benched && 'border-destructive/60',
+                !benched &&
+                  conflicts.length > 0 &&
+                  (conflicts.some((c) => c.kind === 'unavailable')
+                    ? 'border-destructive/60'
+                    : 'border-warning/60'),
+              )}
+            >
               <div className="flex items-center gap-2">
                 <span
                   className={cn(

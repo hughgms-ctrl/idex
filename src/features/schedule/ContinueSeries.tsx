@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Repeat } from 'lucide-react'
-import { extendWeeklySeries } from '@domain/schedule.ts'
-import { localDateKey } from '@domain/time.ts'
+import { extendWeeklySeries, type SeriesOccurrence } from '@domain/schedule.ts'
+import { addDaysToKey, localDateKey } from '@domain/time.ts'
 
 import { useUser } from '@/auth/auth-context'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { scheduleKeys } from '@/features/schedule/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatDate } from '@/lib/format'
@@ -71,6 +73,10 @@ function useWeeklySeries(ministryId: string) {
   })
 }
 
+// "Não continuar" esconde o aviso daquela série até ela ganhar datas novas
+const DISMISS_KEY = 'idex.series-dismissed'
+const dismissKey = (s: Pending) => `${s.parent.id}:${s.last.starts_at}`
+
 // Aviso no Planejamento: a repetição semanal parou antes do fim do trimestre
 // → continua com os mesmos horários (e o ensaio, se o último culto tinha).
 export function ContinueSeries({
@@ -83,6 +89,13 @@ export function ContinueSeries({
   const user = useUser()
   const queryClient = useQueryClient()
   const series = useWeeklySeries(ministry.id)
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(DISMISS_KEY) ?? '[]') as string[]
+    } catch {
+      return []
+    }
+  })
   const [recent] = useState(() => Date.now() - 30 * 86_400_000)
   const pending = (series.data ?? [])
     .filter((s) => new Date(s.last.starts_at).getTime() > recent)
@@ -93,7 +106,7 @@ export function ContinueSeries({
     .filter((s) => s.next.length > 0)
 
   const extend = useMutation({
-    mutationFn: async (item: (typeof pending)[number]) => {
+    mutationFn: async (item: Pending & { next: SeriesOccurrence[] }) => {
       const { parent, last, next } = item
       const { data: created, error } = await supabase
         .from('events')
@@ -142,27 +155,108 @@ export function ContinueSeries({
     onError: (err) => toast.error(errorMessage(err)),
   })
 
-  if (pending.length === 0) return null
+  const visible = pending.filter((s) => !dismissed.includes(dismissKey(s)))
+  if (visible.length === 0) return null
   return (
     <section className="border-primary/50 bg-primary/5 flex flex-col gap-3 rounded-2xl border p-3.5">
-      {pending.map((s) => (
-        <div key={s.parent.id} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <p className="flex-1 text-sm">
-            <Repeat className="text-primary mr-1.5 inline size-4" aria-hidden="true" />
-            <strong>{s.parent.title}</strong> (toda semana) vai só até{' '}
-            <strong>{formatDate(localDateKey(s.last.starts_at))}</strong>. Faltam {s.next.length}{' '}
-            {s.next.length === 1 ? 'data' : 'datas'} até {formatDate(untilKey)}
-            {s.lastRehearsal ? ', com ensaio' : ''}.
-          </p>
-          <Button
-            className="min-h-11 shrink-0"
-            disabled={extend.isPending}
-            onClick={() => extend.mutate(s)}
-          >
-            {extend.isPending ? 'Criando…' : 'Continuar repetição'}
-          </Button>
-        </div>
+      {visible.map((s) => (
+        <SeriesRow
+          key={s.parent.id}
+          item={s}
+          untilKey={untilKey}
+          busy={extend.isPending}
+          onCreate={(next) => extend.mutate({ ...s, next })}
+          onDismiss={() => {
+            const list = [...dismissed, dismissKey(s)]
+            setDismissed(list)
+            try {
+              localStorage.setItem(DISMISS_KEY, JSON.stringify(list))
+            } catch {
+              // sem armazenamento: só esconde nesta visita
+            }
+          }}
+        />
       ))}
     </section>
+  )
+}
+
+type Pending = {
+  parent: Row
+  last: Row
+  lastRehearsal: { starts_at: string; ends_at: string | null; arrive_at: string | null } | null
+}
+
+/** Uma série: escolher até quando continuar (padrão: fim do trimestre). */
+function SeriesRow({
+  item,
+  untilKey,
+  busy,
+  onCreate,
+  onDismiss,
+}: {
+  item: Pending
+  untilKey: string
+  busy: boolean
+  onCreate: (next: SeriesOccurrence[]) => void
+  onDismiss: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [until, setUntil] = useState(untilKey)
+  const lastKey = localDateKey(item.last.starts_at)
+  const minKey = addDaysToKey(lastKey, 7)
+  const next = /^\d{4}-\d{2}-\d{2}$/.test(until)
+    ? extendWeeklySeries({ last: item.last, lastRehearsal: item.lastRehearsal, untilKey: until })
+    : []
+  const lastNew = next.at(-1)
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-sm">
+        <Repeat className="text-primary mr-1.5 inline size-4" aria-hidden="true" />
+        <strong>{item.parent.title}</strong> (toda semana) vai só até{' '}
+        <strong>{formatDate(lastKey)}</strong>.
+      </p>
+      {open ? (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`ate-${item.parent.id}`}>Continuar até</Label>
+            <Input
+              id={`ate-${item.parent.id}`}
+              type="date"
+              min={minKey}
+              value={until}
+              onChange={(e) => setUntil(e.target.value)}
+              className="sm:max-w-56"
+            />
+          </div>
+          <p className="text-muted-foreground text-[13px]">
+            {next.length === 0
+              ? `Escolha uma data a partir de ${formatDate(minKey)}.`
+              : `Vai criar ${next.length} ${next.length === 1 ? 'data' : 'datas'}: de ${formatDate(localDateKey(next[0]!.starts_at))} a ${formatDate(localDateKey(lastNew!.starts_at))}${item.lastRehearsal ? ', cada uma com ensaio' : ''}.`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="min-h-11"
+              disabled={busy || next.length === 0}
+              onClick={() => onCreate(next)}
+            >
+              {busy ? 'Criando…' : `Criar ${next.length} ${next.length === 1 ? 'data' : 'datas'}`}
+            </Button>
+            <Button variant="ghost" className="min-h-11" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <Button className="min-h-11" onClick={() => setOpen(true)}>
+            Continuar repetição…
+          </Button>
+          <Button variant="ghost" className="min-h-11" onClick={onDismiss}>
+            Não continuar
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

@@ -118,7 +118,8 @@ export function MemberPicker({
                       }}
                       className={cn(
                         'bg-card hover:border-primary flex min-h-16 w-full items-center gap-3 rounded-2xl border p-3 text-left transition-colors',
-                        item.tone === 'no' && 'opacity-80',
+                        item.tone === 'no' && 'border-destructive/60 bg-destructive/5',
+                        item.tone === 'warn' && 'border-warning/60 bg-warning/5',
                       )}
                     >
                       <span
