@@ -41,7 +41,7 @@ type AudioFile = {
 // o tom e o andamento e toca o metrônomo junto.
 export function AudiosPage() {
   const { songId = '' } = useParams()
-  const { isLeader } = useChurch()
+  const { can } = useChurch()
   const song = useSong(songId)
   const files = useSongFiles(songId)
   const engine = useAudioEngine()
@@ -52,7 +52,7 @@ export function AudiosPage() {
   if (!song.data) return <ErrorState error="Música não encontrada." />
 
   const s = song.data
-  const canEdit = isLeader(s.ministry_id)
+  const canEdit = can(s.ministry_id, 'song_files')
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
   const current = selected ? (audios.find((a) => a.id === selected.id) ?? selected) : null
 

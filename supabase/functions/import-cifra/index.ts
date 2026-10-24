@@ -1,5 +1,5 @@
 // Edge Function: traz a cifra de uma música do Cifra Club para o editor.
-// Só o líder do ministério usa; aceita somente links https do Cifra Club.
+// Só o líder do ministério (ou quem tem a permissão de cifras) usa; aceita somente links https do Cifra Club.
 // Nada é salvo aqui: o texto volta para o app, onde o líder revisa e edita.
 import { createClient } from '@supabase/supabase-js'
 
@@ -19,8 +19,9 @@ Deno.serve((req) =>
       return data.user?.id ?? null
     },
     isLeader: async (authorization, ministryId) => {
-      const { data } = await clientFor(authorization).rpc('is_ministry_leader', {
+      const { data } = await clientFor(authorization).rpc('has_ministry_permission', {
         p_ministry_id: ministryId,
+        p_permission: 'songs',
       })
       return data === true
     },

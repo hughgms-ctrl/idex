@@ -58,6 +58,11 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
       ministries.find((m) => memberships.some((mm) => mm.ministry_id === m.id)) ??
       ministries[0] ??
       null
+    const isLeader = (id: string) =>
+      isOwner ||
+      memberships.some(
+        (mm) => mm.ministry_id === id && mm.role === 'leader' && mm.status === 'active',
+      )
     return {
       churches,
       church,
@@ -65,10 +70,19 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
       ministry,
       memberships,
       isOwner,
-      isLeader: (id: string) =>
-        isOwner ||
+      isLeader,
+      can: (id, permission) =>
+        isLeader(id) ||
         memberships.some(
-          (mm) => mm.ministry_id === id && mm.role === 'leader' && mm.status === 'active',
+          (mm) =>
+            mm.ministry_id === id &&
+            mm.status === 'active' &&
+            {
+              songs: mm.can_edit_songs,
+              song_files: mm.can_manage_song_files,
+              setlists: mm.can_edit_setlists,
+              announcements: mm.can_send_announcements,
+            }[permission],
         ),
       selectChurch,
       selectMinistry,

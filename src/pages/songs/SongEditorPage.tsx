@@ -75,7 +75,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
   const navigate = useNavigate()
   const user = useUser()
   const queryClient = useQueryClient()
-  const { ministry, isLeader } = useChurch()
+  const { ministry, isLeader, can } = useChurch()
   const [view, setView] = useState<'texto' | 'previa'>('texto')
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -174,8 +174,8 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
     onError: (err) => toast.error(errorMessage(err)),
   })
 
-  if (ministry && !isLeader(ministry.id)) {
-    return <ErrorState error="Só o líder do ministério cadastra músicas." />
+  if (ministry && !can(ministry.id, 'songs')) {
+    return <ErrorState error="Só o líder ou quem tem a permissão de cifras cadastra músicas." />
   }
 
   return (
@@ -313,7 +313,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
         </div>
 
         <div className="flex flex-wrap justify-between gap-2">
-          {song ? (
+          {song && ministry && isLeader(ministry.id) ? (
             <Button
               type="button"
               variant="ghost"

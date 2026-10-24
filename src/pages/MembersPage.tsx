@@ -150,7 +150,14 @@ function MemberList({
                 {functions || 'Sem função definida'}
               </span>
             </span>
-            {m.role === 'leader' && <Badge>LÍDER</Badge>}
+            {m.role === 'leader' ? (
+              <Badge>LÍDER</Badge>
+            ) : (
+              (m.can_edit_songs ||
+                m.can_manage_song_files ||
+                m.can_edit_setlists ||
+                m.can_send_announcements) && <Badge variant="outline">PERMISSÕES</Badge>
+            )}
           </>
         )
         return (

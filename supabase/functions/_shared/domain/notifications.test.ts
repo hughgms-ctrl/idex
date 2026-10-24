@@ -177,3 +177,25 @@ describe('ensaio remarcado', () => {
     )
   })
 })
+
+describe('aviso da central', () => {
+  it('manda o título e o texto escritos pelo líder', () => {
+    const text = renderMessage('announcement', {
+      name: 'Luiz Manoel',
+      title: 'Ensaio extra',
+      body: 'Sábado às 15h, tragam as cifras.',
+      appUrl: 'https://idex.app/',
+      path: '/',
+    })
+    expect(text).toBe(
+      'Olá, Luiz! *Ensaio extra*\n\nSábado às 15h, tragam as cifras.\n\nAbra o ide.x: https://idex.app/',
+    )
+    expect(
+      renderPush(
+        'announcement',
+        { title: 'Ensaio extra', body: 'Sábado às 15h', path: '/confirmar/e1' },
+        't',
+      ),
+    ).toEqual({ title: 'Ensaio extra', body: 'Sábado às 15h', url: '/confirmar/e1', tag: 't' })
+  })
+})

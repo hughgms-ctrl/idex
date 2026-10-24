@@ -18,7 +18,7 @@ export function SongPage() {
   const { songId = '' } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { isLeader } = useChurch()
+  const { can } = useChurch()
   const song = useSong(songId)
   const eventId = params.get('culto') ?? undefined
   const setlist = useSetlist(eventId)
@@ -62,7 +62,7 @@ export function SongPage() {
           <h1 className="truncate text-[17px] font-semibold">{s.title}</h1>
           {subtitle && <p className="text-muted-foreground truncate text-xs">{subtitle}</p>}
         </div>
-        {isLeader(s.ministry_id) && (
+        {can(s.ministry_id, 'songs') && (
           <Button asChild variant="ghost" size="icon" aria-label="Editar música">
             <Link to={`/repertorio/${s.id}/editar`}>
               <Pencil className="size-4" />
@@ -159,7 +159,11 @@ export function SongPage() {
       </div>
 
       <div className="px-5 pt-4">
-        <SongFiles songId={s.id} churchId={s.church_id} canEdit={isLeader(s.ministry_id)} />
+        <SongFiles
+          songId={s.id}
+          churchId={s.church_id}
+          canEdit={can(s.ministry_id, 'song_files')}
+        />
       </div>
 
       <article className="px-5 pt-4 pb-8">

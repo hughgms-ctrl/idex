@@ -21,11 +21,12 @@ function normalize(text: string): string {
 }
 
 export function RepertoirePage() {
-  const { ministry, isLeader } = useChurch()
+  const { ministry, isLeader, can } = useChurch()
   const songs = useSongs(ministry?.id)
   const nextServices = useNextServices(ministry?.id)
   const [query, setQuery] = useState('')
   const leader = ministry ? isLeader(ministry.id) : false
+  const canAddSongs = ministry ? can(ministry.id, 'songs') : false
   useOfflineNextSetlist(nextServices.data?.[0]?.id)
 
   const filtered = useMemo(() => {
@@ -41,13 +42,15 @@ export function RepertoirePage() {
       <PageHeader
         title="Cifras"
         action={
-          leader && (
+          canAddSongs && (
             <div className="flex gap-2">
-              <Button asChild variant="outline">
-                <Link to="/planejamento">
-                  <CalendarRange aria-hidden="true" /> Trimestre
-                </Link>
-              </Button>
+              {leader && (
+                <Button asChild variant="outline">
+                  <Link to="/planejamento">
+                    <CalendarRange aria-hidden="true" /> Trimestre
+                  </Link>
+                </Button>
+              )}
               <Button asChild>
                 <Link to="/repertorio/nova">
                   <Plus aria-hidden="true" /> Nova música

@@ -11,8 +11,18 @@ export type MyChurch = {
 
 export type MyMinistryMembership = Pick<
   Tables<'ministry_members'>,
-  'id' | 'ministry_id' | 'role' | 'status'
+  | 'id'
+  | 'ministry_id'
+  | 'role'
+  | 'status'
+  | 'can_edit_songs'
+  | 'can_manage_song_files'
+  | 'can_edit_setlists'
+  | 'can_send_announcements'
 >
+
+/** Permissões que o líder liga em cada integrante (o líder tem todas). */
+export type MinistryPermission = 'songs' | 'song_files' | 'setlists' | 'announcements'
 
 export type ChurchState = {
   churches: MyChurch[]
@@ -22,6 +32,7 @@ export type ChurchState = {
   memberships: MyMinistryMembership[]
   isOwner: boolean
   isLeader: (ministryId: string) => boolean
+  can: (ministryId: string, permission: MinistryPermission) => boolean
   selectChurch: (churchId: string) => void
   selectMinistry: (ministryId: string) => void
 }
