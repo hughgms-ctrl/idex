@@ -7,6 +7,7 @@ export const announcementKeys = {
   events: (ministryId: string) => ['announcements', 'events', ministryId] as const,
   audience: (ministryId: string, audience: string, eventId: string, memberIds: string[]) =>
     ['announcements', 'audience', ministryId, audience, eventId, memberIds] as const,
+  deliveries: (announcementId: string) => ['announcements', 'deliveries', announcementId] as const,
 }
 
 /** Últimos avisos do ministério (agendados primeiro). */
@@ -49,8 +50,8 @@ export function useUpcomingEvents(ministryId: string | undefined) {
   })
 }
 
-/** Quantas pessoas recebem o aviso com essa escolha. */
-export function useAudienceCount(
+/** Quem recebe o aviso com essa escolha e por onde (celular, WhatsApp). */
+export function useAudiencePeople(
   ministryId: string | undefined,
   audience: string,
   eventId: string,
@@ -60,11 +61,27 @@ export function useAudienceCount(
     queryKey: announcementKeys.audience(ministryId ?? '', audience, eventId, memberIds),
     enabled: Boolean(ministryId) && (audience !== 'event' || Boolean(eventId)),
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('count_announcement_audience', {
+      const { data, error } = await supabase.rpc('announcement_audience_people', {
         p_ministry_id: ministryId ?? '',
         p_audience: audience,
         ...(eventId ? { p_event_id: eventId } : {}),
         p_member_ids: memberIds,
+      })
+      if (error) throw error
+      return [...data].sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR'))
+    },
+  })
+}
+
+/** Situação de cada pessoa num aviso enviado. */
+export function useDeliveries(announcementId: string | null) {
+  return useQuery({
+    queryKey: announcementKeys.deliveries(announcementId ?? ''),
+    enabled: Boolean(announcementId),
+    refetchInterval: 20_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('announcement_deliveries', {
+        p_announcement_id: announcementId ?? '',
       })
       if (error) throw error
       return data

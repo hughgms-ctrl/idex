@@ -1846,6 +1846,32 @@ export type Database = {
         Returns: string
       }
       cycle_for_event: { Args: { p_event_id: string }; Returns: string }
+      announcement_audience_people: {
+        Args: {
+          p_audience: string
+          p_event_id?: string
+          p_member_ids?: string[]
+          p_ministry_id: string
+        }
+        Returns: {
+          full_name: string
+          has_push: boolean
+          has_whatsapp: boolean
+          profile_id: string
+        }[]
+      }
+      announcement_deliveries: {
+        Args: { p_announcement_id: string }
+        Returns: {
+          full_name: string
+          has_whatsapp: boolean
+          last_error: string | null
+          profile_id: string
+          push_sent_at: string | null
+          sent_at: string | null
+          status: Database['public']['Enums']['notification_status']
+        }[]
+      }
       count_announcement_audience: {
         Args: {
           p_audience: string
