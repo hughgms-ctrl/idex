@@ -7,6 +7,7 @@ import { FullScreenLoader } from '@/components/FullScreenLoader'
 import { Button } from '@/components/ui/button'
 import { useChurch } from '@/features/church/church-context'
 import { ChordSheet } from '@/features/songs/ChordSheet'
+import { SongFiles } from '@/features/songs/SongFiles'
 import { useSetlist, useSong } from '@/features/songs/queries'
 import { semitonesBetween, transposeKey } from '@/lib/music'
 import { cn } from '@/lib/utils'
@@ -155,6 +156,10 @@ export function SongPage() {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="px-5 pt-4">
+        <SongFiles songId={s.id} churchId={s.church_id} canEdit={isLeader(s.ministry_id)} />
       </div>
 
       <article className="px-5 pt-4 pb-8">

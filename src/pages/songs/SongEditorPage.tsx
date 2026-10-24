@@ -25,6 +25,7 @@ import { chordsOverWordsToChordPro, looksLikeChordPro } from '@/features/songs/c
 import { songKeys, useSong } from '@/features/songs/queries'
 import { errorMessage } from '@/lib/errors'
 import { KEY_OPTIONS, normalizeKey } from '@/lib/music'
+import { removeSongStorage } from '@/features/songs/song-files'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
 
@@ -161,6 +162,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
   const remove = useMutation({
     mutationFn: async () => {
       if (!song) return
+      await removeSongStorage(song.id)
       const { error } = await supabase.from('songs').delete().eq('id', song.id)
       if (error) throw error
     },

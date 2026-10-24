@@ -1,6 +1,6 @@
 # ide.x — Gestão de ministério de louvor
 
-SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já suporta outros ministérios no futuro (mídia, infantil, recepção). O player de multitracks é OUTRO produto — não implementar nada de áudio aqui.
+SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já suporta outros ministérios no futuro (mídia, infantil, recepção). O player de multitracks é OUTRO produto — aqui só arquivos de referência por música (áudio/PDF/imagem) tocados no player nativo do navegador; nada de mixagem, multipistas ou edição de áudio.
 
 ## Stack e hospedagem
 - Repositório no GitHub; deploy do front na Vercel (preview por PR, produção na `main`).
@@ -95,5 +95,10 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
   - Web Push sem dependências em `_shared/webpush.ts` (VAPID ES256 + aes128gcm com WebCrypto; teste decifra com `http_ece`, só devDependency). `push_subscriptions` (gravação só por `save_push_subscription`/`delete_push_subscription`); a fila tem dois canais: `notifications-dispatch` envia no celular (`push_sent_at` evita repetir) e no WhatsApp; só fica `skipped` quem não tem nenhum canal. Service worker: `public/push-sw.js` via `workbox.importScripts`.
   - Segredos: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` nas funções; `VITE_VAPID_PUBLIC_KEY` (pública) no front. Local: criados pelo `pnpm env:local`.
   - Tela `/instalar` (passo a passo Android/iPhone + ativar avisos); banner e tela compartilham o `beforeinstallprompt` (`install-prompt.ts`).
+- [x] Fase 8 — lista de funções editável, nomear líderes, arquivos das músicas
+  - Líder cadastra instrumento/voz na hora (`NewRoleInput`) em "Minhas funções", no editar integrante e em Ministérios (onde também renomeia/remove). Integrante só escolhe da lista.
+  - Nomear líder: caixa "Líder do ministério" no editar integrante (`ministry_members.role`); ninguém muda o próprio papel. Convite também pode ser como líder.
+  - Arquivos: bucket privado `song-files` (até 50 MB; áudio, PDF, imagem), caminho `{church_id}/{song_id}/{uuid}.{ext}`; tabela `song_files` (RLS: igreja vê, líder do ministério da música envia/apaga via `can_manage_song`; policies em `storage.objects` pelas pastas). Front: `src/features/songs/{SongFiles.tsx,song-files.ts}` com links assinados (6 h) e `<audio controls>`; apagar a música remove os arquivos do Storage antes.
+  - Testes de banco usam a data de São Paulo (`(now() at time zone 'America/Sao_Paulo')::date`), não `current_date` (UTC), senão falham entre 21h e meia-noite.
 - Produção: Supabase `jptpzpvysgnfulyoquex` (São Paulo) e Vercel `https://idex-eight.vercel.app`. Confirmação de e-mail desligada (`mailer_autoconfirm`) porque o SMTP padrão do Supabase só envia para a equipe do projeto; configurar SMTP próprio (ex.: Resend) para religar e usar link mágico.
 - Pendências conhecidas: o Cifra Club bloqueia (403) acessos vindos dos servidores do Supabase, então a importação automática falha em produção — o app mostra o botão "Abrir no Cifra Club" para copiar e colar a cifra.

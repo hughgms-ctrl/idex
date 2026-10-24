@@ -1370,6 +1370,61 @@ export type Database = {
           },
         ]
       }
+      song_files: {
+        Row: {
+          church_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          mime_type: string | null
+          name: string
+          size_bytes: number | null
+          song_id: string
+          storage_path: string
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          mime_type?: string | null
+          name: string
+          size_bytes?: number | null
+          song_id: string
+          storage_path: string
+        }
+        Update: {
+          church_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          mime_type?: string | null
+          name?: string
+          size_bytes?: number | null
+          song_id?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'song_files_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'song_files_song_id_church_id_fkey'
+            columns: ['song_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'songs'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
       songs: {
         Row: {
           artist: string | null
@@ -1498,6 +1553,7 @@ export type Database = {
         Args: { p_event_id: string; p_ministry_member_id: string }
         Returns: boolean
       }
+      can_manage_song: { Args: { p_song_id: string }; Returns: boolean }
       claim_notifications: {
         Args: { p_limit?: number }
         Returns: {
@@ -1603,6 +1659,8 @@ export type Database = {
       }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }
+      storage_church_id: { Args: { p_name: string }; Returns: string }
+      storage_song_id: { Args: { p_name: string }; Returns: string }
     }
     Enums: {
       assignment_status: 'scheduled' | 'confirmed' | 'declined'

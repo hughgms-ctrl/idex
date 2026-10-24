@@ -52,7 +52,7 @@ insert into ids select 'antigo', id from events where title = 'Antigo' and churc
 insert into ids select 'recente', id from events where title = 'Recente' and church_id = (select v from ids where k = 'church');
 insert into ids select 'futuro', id from events where title = 'Futuro' and church_id = (select v from ids where k = 'church');
 -- o evento antigo pertence ao ciclo aberto (que começou hoje): recua o início
-update cycles set starts_on = current_date - 10 where ministry_id = (select v from ids where k = 'louvor');
+update cycles set starts_on = (now() at time zone 'America/Sao_Paulo')::date - 10 where ministry_id = (select v from ids where k = 'louvor');
 
 insert into schedule_assignments (church_id, event_id, ministry_member_id)
 select (select v from ids where k = 'church'), e.v, m.v
@@ -152,18 +152,18 @@ reset role;
 -- Fechamento de ciclo
 -- -----------------------------------------------------------------------------
 -- Ciclo terminou ontem: vira "fechando" e o próximo abre com saldo cheio
-update cycles set ends_on = current_date - 1 where ministry_id = (select v from ids where k = 'louvor');
+update cycles set ends_on = (now() at time zone 'America/Sao_Paulo')::date - 1 where ministry_id = (select v from ids where k = 'louvor');
 select lives_ok('select public.close_due_cycles()', 'job de ciclos roda');
-select is((select status::text from cycles where ministry_id = (select v from ids where k = 'louvor') and ends_on = current_date - 1), 'closing', 'no primeiro dia ainda não fecha (prazo dos pedidos)');
+select is((select status::text from cycles where ministry_id = (select v from ids where k = 'louvor') and ends_on = (now() at time zone 'America/Sao_Paulo')::date - 1), 'closing', 'no primeiro dia ainda não fecha (prazo dos pedidos)');
 select is(
   (select count(*)::int from point_ledger pl join cycles c on c.id = pl.cycle_id
    where c.status = 'open' and c.ministry_id = (select v from ids where k = 'louvor') and pl.reason = 'cycle_start'),
   4, 'novo ciclo aberto com saldo cheio para os 4 integrantes');
 
 -- Prazo passou: calcula elegibilidade (m1: 100 − 20 − 20 = 60 < 70)
-update cycles set ends_on = current_date - 5, starts_on = current_date - 30 where status = 'closing' and ministry_id = (select v from ids where k = 'louvor');
+update cycles set ends_on = (now() at time zone 'America/Sao_Paulo')::date - 5, starts_on = (now() at time zone 'America/Sao_Paulo')::date - 30 where status = 'closing' and ministry_id = (select v from ids where k = 'louvor');
 select public.close_due_cycles();
-select is((select status::text from cycles where ministry_id = (select v from ids where k = 'louvor') and ends_on = current_date - 5), 'closed', 'ciclo fechado depois do prazo');
+select is((select status::text from cycles where ministry_id = (select v from ids where k = 'louvor') and ends_on = (now() at time zone 'America/Sao_Paulo')::date - 5), 'closed', 'ciclo fechado depois do prazo');
 select results_eq(
   format('select ministry_member_id, balance, eligible from cycle_eligibility where ministry_id = %L and ministry_member_id in (%L, %L) order by balance',
     (select v from ids where k = 'louvor'), (select v from ids where k = 'm1'), (select v from ids where k = 'm3')),
