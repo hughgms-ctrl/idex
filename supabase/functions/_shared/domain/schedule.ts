@@ -361,3 +361,91 @@ export function daysBetweenKeys(fromKey: string, toKey: string): number {
     (Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86_400_000,
   )
 }
+
+// ---------------------------------------------------------------------------
+// Continuar uma repetição semanal
+// ---------------------------------------------------------------------------
+
+type Times = {
+  starts_at: string
+  ends_at: string | null
+  arrive_at?: string | null
+  soundcheck_at?: string | null
+}
+export type SeriesOccurrence = {
+  starts_at: string
+  ends_at: string | null
+  arrive_at: string | null
+  soundcheck_at: string | null
+  rehearsal: { starts_at: string; ends_at: string | null; arrive_at: string | null } | null
+}
+
+/**
+ * Próximas semanas de uma série que parou antes de `untilKey` (inclusive):
+ * copia do último evento o horário (no fuso), a duração, a chegada e a
+ * passagem de som (em minutos antes do início) e, se ele tinha ensaio, o
+ * ensaio na mesma distância em dias e no mesmo horário.
+ */
+export function extendWeeklySeries(params: {
+  last: Times
+  lastRehearsal?: Times | null
+  untilKey: string
+  tz?: string
+}): SeriesOccurrence[] {
+  const { last, lastRehearsal, untilKey, tz = DEFAULT_TZ } = params
+  const start = new Date(last.starts_at).getTime()
+  const minutesBeforeStart = (iso: string | null | undefined) =>
+    iso ? Math.round((start - new Date(iso).getTime()) / 60_000) : null
+  const duration = last.ends_at ? new Date(last.ends_at).getTime() - start : null
+  const arrival = minutesBeforeStart(last.arrive_at)
+  const soundcheck = minutesBeforeStart(last.soundcheck_at)
+  const p = localParts(last.starts_at, tz)
+  const time = `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
+  const lastKey = localDateKey(last.starts_at, tz)
+
+  const reh = lastRehearsal
+    ? (() => {
+        const rs = new Date(lastRehearsal.starts_at).getTime()
+        const rp = localParts(lastRehearsal.starts_at, tz)
+        return {
+          daysBefore: daysBetweenKeys(localDateKey(lastRehearsal.starts_at, tz), lastKey),
+          time: `${String(rp.hour).padStart(2, '0')}:${String(rp.minute).padStart(2, '0')}`,
+          duration: lastRehearsal.ends_at ? new Date(lastRehearsal.ends_at).getTime() - rs : null,
+          arrival: lastRehearsal.arrive_at
+            ? Math.round((rs - new Date(lastRehearsal.arrive_at).getTime()) / 60_000)
+            : null,
+        }
+      })()
+    : null
+
+  const minus = (d: Date, min: number | null) =>
+    min == null ? null : new Date(d.getTime() - min * 60_000).toISOString()
+  const plus = (d: Date, ms: number | null) =>
+    ms == null ? null : new Date(d.getTime() + ms).toISOString()
+
+  return weeklyOccurrences({
+    firstDate: addDaysToKey(lastKey, 7),
+    time,
+    untilDate: untilKey,
+    tz,
+  }).map((d) => {
+    let rehearsal: SeriesOccurrence['rehearsal'] = null
+    if (reh) {
+      const day = parseDateKey(addDaysToKey(localDateKey(d, tz), -reh.daysBefore))
+      const [hh, mm] = reh.time.split(':').map(Number)
+      const rs = zonedToUtc(day.year, day.month, day.day, hh ?? 0, mm ?? 0, tz)
+      rehearsal = {
+        starts_at: rs.toISOString(),
+        ends_at: plus(rs, reh.duration),
+        arrive_at: minus(rs, reh.arrival),
+      }
+    }
+    return {
+      starts_at: d.toISOString(),
+      ends_at: plus(d, duration),
+      arrive_at: minus(d, arrival),
+      soundcheck_at: minus(d, soundcheck),
+      rehearsal,
+    }
+  })
+}

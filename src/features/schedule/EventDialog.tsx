@@ -523,7 +523,7 @@ export function EventDialog({
                   onCheckedChange={(v) => {
                     form.setValue('repeat', v === true)
                     if (v === true && !form.getValues('repeatUntil') && date) {
-                      form.setValue('repeatUntil', addDaysToKey(date, 7 * 12))
+                      form.setValue('repeatUntil', addDaysToKey(date, 7 * 26)) // ~6 meses
                     }
                   }}
                 />

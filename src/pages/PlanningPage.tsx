@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { ChevronLeft, ChevronRight, Plus, Sparkles } from 'lucide-react'
 import { analyzePlan, suggestFill, type PlannedService, type PlanRules } from '@domain/planning.ts'
-import { addMonths, localParts, monthRange } from '@domain/time.ts'
+import { addMonths, localDateKey, localParts, monthRange } from '@domain/time.ts'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FormField } from '@/components/FormField'
@@ -25,6 +25,7 @@ import { useMinistryRoles } from '@/features/ministries/queries'
 import { planningKeys, setlistOf, usePlanData, usePlanRules } from '@/features/planning/queries'
 import { MONTH_NAMES } from '@/features/schedule/datetime'
 import { EventDialog } from '@/features/schedule/EventDialog'
+import { ContinueSeries } from '@/features/schedule/ContinueSeries'
 import { MissingRehearsals } from '@/features/schedule/MissingRehearsals'
 import { songKeys } from '@/features/songs/queries'
 import { errorMessage } from '@/lib/errors'
@@ -140,6 +141,12 @@ export function PlanningPage() {
     <>
       {leader && ministry && (
         <EventDialog open={newService} onOpenChange={setNewService} ministry={ministry} />
+      )}
+      {leader && ministry && (
+        <ContinueSeries
+          ministry={ministry}
+          untilKey={localDateKey(new Date(end.getTime() - 60_000))}
+        />
       )}
       {leader && ministry && <MissingRehearsals ministry={ministry} />}
       <header className="flex flex-wrap items-end justify-between gap-4">

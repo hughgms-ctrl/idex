@@ -14,6 +14,7 @@ import {
   weeklyOccurrences,
   type EligibilityInfo,
   type MemberLike,
+  extendWeeklySeries,
 } from './schedule.ts'
 
 const VIOLAO = 'role-violao'
@@ -282,5 +283,47 @@ describe('chegada e ensaio do culto', () => {
   it('regras de horário usam a chegada quando existe', () => {
     expect(callTime({ starts_at: 'A', arrive_at: 'B' })).toBe('B')
     expect(callTime({ starts_at: 'A', arrive_at: null })).toBe('A')
+  })
+})
+
+describe('extendWeeklySeries', () => {
+  // último culto: domingo 17/01/2027 19h (SP), chegada 18h30, som 18h45; ensaio qui 14/01 20h, chegada 19h40
+  const last = {
+    starts_at: '2027-01-17T22:00:00.000Z',
+    ends_at: '2027-01-18T00:00:00.000Z',
+    arrive_at: '2027-01-17T21:30:00.000Z',
+    soundcheck_at: '2027-01-17T21:45:00.000Z',
+  }
+  const lastRehearsal = {
+    starts_at: '2027-01-14T23:00:00.000Z',
+    ends_at: '2027-01-15T01:00:00.000Z',
+    arrive_at: '2027-01-14T22:40:00.000Z',
+  }
+
+  it('completa os domingos até o fim do trimestre com os mesmos horários e o ensaio', () => {
+    const next = extendWeeklySeries({ last, lastRehearsal, untilKey: '2027-03-31' })
+    expect(next).toHaveLength(10)
+    expect(next[0]).toEqual({
+      starts_at: '2027-01-24T22:00:00.000Z',
+      ends_at: '2027-01-25T00:00:00.000Z',
+      arrive_at: '2027-01-24T21:30:00.000Z',
+      soundcheck_at: '2027-01-24T21:45:00.000Z',
+      rehearsal: {
+        starts_at: '2027-01-21T23:00:00.000Z',
+        ends_at: '2027-01-22T01:00:00.000Z',
+        arrive_at: '2027-01-21T22:40:00.000Z',
+      },
+    })
+    expect(next.at(-1)?.starts_at).toBe('2027-03-28T22:00:00.000Z')
+  })
+
+  it('sem ensaio no último culto, não cria ensaio; nada a completar devolve vazio', () => {
+    const next = extendWeeklySeries({ last, untilKey: '2027-01-31' })
+    expect(next.map((n) => n.starts_at)).toEqual([
+      '2027-01-24T22:00:00.000Z',
+      '2027-01-31T22:00:00.000Z',
+    ])
+    expect(next[0]?.rehearsal).toBeNull()
+    expect(extendWeeklySeries({ last, untilKey: '2027-01-23' })).toEqual([])
   })
 })
