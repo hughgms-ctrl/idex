@@ -13,20 +13,60 @@ const SECTION_RE =
 
 const PLACEHOLDER = '§§SECAO§§'
 
+// Copiar do Cifra Club traz caracteres invisíveis no começo das linhas
+// (espaço de largura zero) e espaços especiais; sem limpar, as linhas de
+// acordes não são reconhecidas e a cifra não muda de tom.
+const INVISIBLE = /[\u200B-\u200D\u2060\uFEFF]/g
+
+export function cleanPastedText(text: string): string {
+  return text
+    .replace(INVISIBLE, '')
+    .replace(/[\u00A0\u2007\u202F]/g, ' ')
+    .replace(/\t/g, '    ')
+    .replace(/\r\n?/g, '\n')
+}
+
+const CHORD_TOKEN =
+  /^\(?[A-G][#b]?(?:maj|min|dim|aug|sus|add|[mM]|[0-9]|[#b+°º()-])*(?:\/[A-G][#b]?)?\)?$/
+
+export function isChordToken(token: string): boolean {
+  return CHORD_TOKEN.test(token)
+}
+
+/** Linha só de acordes (ex.: "   C (C4) C  C9"). */
+export function isChordLine(line: string): boolean {
+  const tokens = line
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t && !/^[|/\\x0-9-]+$/i.test(t) && !/^x\d+$/i.test(t))
+  return tokens.length > 0 && tokens.every(isChordToken)
+}
+
+const BRACKET_LABEL = /^\s*\[([^\]]{2,40})\]\s*(.*)$/
+
 /** "Acordes sobre a letra" (texto colado de site/WhatsApp) → ChordPro. */
 export function chordsOverWordsToChordPro(
   text: string,
   meta: { title?: string; key?: string | null } = {},
 ): string {
   const labels: string[] = []
-  const prepared = text
-    .replace(/\r\n?/g, '\n')
+  const label = (name: string) => {
+    labels.push(capitalize(name.trim()))
+    return `${PLACEHOLDER}${labels.length - 1}`
+  }
+  const prepared = cleanPastedText(text)
     .split('\n')
-    .map((line) => {
+    .filter((line) => !/^\{(title|key|t|k):/i.test(line.trim()))
+    .flatMap((line) => {
       const m = line.match(SECTION_RE)
-      if (!m?.[1]) return line
-      labels.push(capitalize(m[1].trim()))
-      return `${PLACEHOLDER}${labels.length - 1}`
+      if (m?.[1]) return [label(m[1])]
+      // "[Intro] C  G" ou "[Pós-refrão]": rótulo entre colchetes (não acorde)
+      const b = line.match(BRACKET_LABEL)
+      if (b?.[1] && !isChordToken(b[1].trim())) {
+        const rest = b[2] ?? ''
+        return rest.trim() ? [label(b[1]), rest] : [label(b[1])]
+      }
+      return [line]
     })
     .join('\n')
   const song = new ChordsOverWordsParser().parse(prepared)
@@ -48,8 +88,27 @@ export function chordsOverWordsToChordPro(
   return [...header, body].join('\n').trim() + '\n'
 }
 
+/** Já está em ChordPro (acordes entre colchetes dentro da letra)? */
 export function looksLikeChordPro(text: string): boolean {
-  return /\[[A-G][^\]\s]{0,8}\]/.test(text) || /^\{[a-z_]+(:.*)?\}\s*$/m.test(text)
+  const lines = cleanPastedText(text).split('\n')
+  const chordLines = lines.filter((l) => isChordLine(l)).length
+  const inline = lines.filter((l) =>
+    [...l.matchAll(/\[([^\]]+)\]/g)].some((m) => isChordToken((m[1] ?? '').trim())),
+  ).length
+  if (chordLines >= 2 && chordLines > inline) return false
+  return inline > 0 || /^\{[a-z_]+(:.*)?\}\s*$/m.test(text)
+}
+
+/**
+ * Cifras salvas antes da correção ficaram como texto puro com cabeçalho
+ * ChordPro. Ao ler, convertemos de novo (mantendo título e tom).
+ */
+export function repairChordPro(text: string): string {
+  const clean = cleanPastedText(text)
+  if (looksLikeChordPro(clean)) return clean
+  const title = clean.match(/^\{title:\s*(.*?)\}\s*$/m)?.[1]
+  const key = clean.match(/^\{key:\s*(.*?)\}\s*$/m)?.[1]
+  return chordsOverWordsToChordPro(clean, { title, key })
 }
 
 export type SheetSegment = { chord: string; lyrics: string }
@@ -65,7 +124,7 @@ const PARAGRAPH_LABEL: Record<string, string> = {
 
 /** ChordPro → seções/linhas prontas para desenhar, já transpostas. */
 export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
-  let song = new ChordProParser().parse(chordpro || '')
+  let song = new ChordProParser().parse(repairChordPro(chordpro || ''))
   if (semitones) song = song.transpose(semitones)
   const sections: SheetSection[] = []
   for (const paragraph of song.paragraphs) {
@@ -88,7 +147,17 @@ export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
     }
     if (current.lines.length > 0 || current.label) sections.push(current)
   }
-  return sections.filter((s) => s.lines.length > 0 || s.label)
+  // rótulo seguido de linha em branco: junta com o parágrafo seguinte
+  const merged: SheetSection[] = []
+  for (const section of sections) {
+    const prev = merged[merged.length - 1]
+    if (prev && prev.label && prev.lines.length === 0 && !section.label) {
+      prev.lines.push(...section.lines)
+    } else if (section.lines.length > 0 || section.label) {
+      merged.push(section)
+    }
+  }
+  return merged
 }
 
 function capitalize(s: string): string {

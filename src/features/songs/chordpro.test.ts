@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   chordsOverWordsToChordPro,
+  isChordLine,
   looksLikeChordPro,
   readChordPro,
 } from '@/features/songs/chordpro'
@@ -59,5 +60,47 @@ describe('chordpro', () => {
     const sections = readChordPro('{start_of_chorus}\n[C]Santo, [G/B]santo\n{end_of_chorus}')
     expect(sections[0]?.label).toBe('Refrão')
     expect(sections[0]?.lines[0]?.segments.map((s) => s.chord)).toEqual(['C', 'G/B'])
+  })
+})
+
+describe('cifra copiada do Cifra Club', () => {
+  const Z = '​' // espaço de largura zero que o site coloca em cada linha
+  const colada = [
+    `${Z}[Intro] C`,
+    '',
+    `${Z}[Primeira Parte]`,
+    '',
+    `${Z}                      Dm7`,
+    `${Z}Linha inventada para teste`,
+    `${Z}F                C9`,
+    `${Z}  Outra linha qualquer`,
+    `${Z}            C (C4) C  C9/E`,
+    `${Z}Mais uma linha`,
+  ].join('\n')
+
+  it('converte mesmo com caracteres invisíveis e rótulos com acordes', () => {
+    const pro = chordsOverWordsToChordPro(colada, { key: 'C' })
+    expect(pro).not.toContain(Z)
+    expect(pro).toContain('{comment: Intro}')
+    expect(pro).toContain('{comment: Primeira parte}')
+    expect(pro).toMatch(/\[Dm7\]/)
+    const sheet = readChordPro(pro, 2)
+    const chords = sheet.flatMap((s) => s.lines.flatMap((l) => l.segments.map((g) => g.chord)))
+    expect(chords).toContain('Em7')
+  })
+
+  it('conserta cifra já salva sem conversão (cabeçalho + texto puro) e muda o tom', () => {
+    const salva = `{title: Teste}\n{key: C}\n${colada}`
+    expect(looksLikeChordPro(salva)).toBe(false)
+    const up = readChordPro(salva, 2)
+    const chords = up.flatMap((s) => s.lines.flatMap((l) => l.segments.map((g) => g.chord)))
+    expect(chords).toEqual(expect.arrayContaining(['D', 'Em7', 'G', 'D9']))
+    expect(up.map((s) => s.label)).toEqual(expect.arrayContaining(['Intro', 'Primeira parte']))
+  })
+
+  it('reconhece linhas só de acordes', () => {
+    expect(isChordLine('   C (C4) C  C9')).toBe(true)
+    expect(isChordLine('F7M  G/B  Am7(9)  Bb°')).toBe(true)
+    expect(isChordLine('E eu canto')).toBe(false)
   })
 })
