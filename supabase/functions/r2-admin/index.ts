@@ -1,6 +1,7 @@
 // Edge Function `r2-admin`: só com a chave de serviço (uso interno, uma vez).
 //   { "action": "cors" }    → libera o app (navegador) a enviar/baixar no bucket
 //   { "action": "migrate" } → move arquivos do Storage do Supabase para o R2 (lotes de 20)
+//   { "action": "selftest" } → grava, lê e apaga um arquivo de teste
 import { createClient } from '@supabase/supabase-js'
 
 import { corsHeaders, errorJson, json } from '../_shared/http.ts'
@@ -91,6 +92,23 @@ Deno.serve(async (req) => {
       .select('id', { count: 'exact', head: true })
       .eq('storage_backend', 'supabase')
     return json({ moved, failed, remaining: count ?? 0 })
+  }
+
+  if (action === 'selftest') {
+    // grava, lê e apaga um arquivo de teste (confere chave e permissões)
+    const key = `_teste/${crypto.randomUUID()}.txt`
+    const link = (method: 'PUT' | 'GET' | 'DELETE') =>
+      presignUrl({
+        method,
+        url: objectUrl(r2, key),
+        credentials: r2.credentials,
+        expiresSeconds: 300,
+      })
+    const put = await fetch(await link('PUT'), { method: 'PUT', body: 'ide.x ok' })
+    const get = await fetch(await link('GET'))
+    const text = await get.text()
+    const del = await fetch(await link('DELETE'), { method: 'DELETE' })
+    return json({ put: put.status, get: get.status, read: text, delete: del.status })
   }
 
   return errorJson('Ação desconhecida', 400)
