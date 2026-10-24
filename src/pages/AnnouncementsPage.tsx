@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { BellRing, Clock, Send, X } from 'lucide-react'
+import { BellRing, ChevronDown, Clock, Send, X } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FormField } from '@/components/FormField'
@@ -16,9 +16,16 @@ import { NativeSelect } from '@/components/ui/native-select'
 import {
   announcementKeys,
   useAnnouncements,
-  useAudienceCount,
+  useAudiencePeople,
+  useDeliveries,
   useUpcomingEvents,
 } from '@/features/announcements/queries'
+import {
+  deliveryLabel,
+  deliverySummary,
+  reachLabel,
+  type DeliveryTone,
+} from '@/features/announcements/delivery'
 import { fillTemplate, TEMPLATES, type TemplateId } from '@/features/announcements/templates'
 import { useChurch } from '@/features/church/church-context'
 import { useMinistryMembers } from '@/features/members/queries'
@@ -116,7 +123,7 @@ function NewAnnouncement({ ministryId, churchId }: { ministryId: string; churchI
   )
 
   const needsEvent = TEMPLATES.find((t) => t.id === template)?.needsEvent || audience === 'event'
-  const count = useAudienceCount(ministryId, audience, eventId, memberIds)
+  const people = useAudiencePeople(ministryId, audience, eventId, memberIds)
 
   const activeMembers = useMemo(
     () => (members.data ?? []).filter((m) => m.status === 'active'),
@@ -276,11 +283,6 @@ function NewAnnouncement({ ministryId, churchId }: { ministryId: string; churchI
         {audience === 'event' && !eventId && (
           <p className="text-muted-foreground text-xs">Escolha o evento acima.</p>
         )}
-        {count.data !== undefined && (audience !== 'event' || eventId) && (
-          <p className="text-muted-foreground text-xs">
-            {count.data === 1 ? '1 pessoa recebe' : `${count.data} pessoas recebem`} este aviso.
-          </p>
-        )}
       </fieldset>
 
       <fieldset className="flex flex-col gap-2">
@@ -329,6 +331,10 @@ function NewAnnouncement({ ministryId, churchId }: { ministryId: string; churchI
           No celular chega para quem ativou os avisos no app (no iPhone, só com o app instalado).
         </p>
       </fieldset>
+
+      {people.data && (audience !== 'event' || eventId) && (
+        <AudiencePreview people={people.data} channel={channel} />
+      )}
 
       <Button size="lg" disabled={invalid || save.isPending} onClick={() => save.mutate()}>
         {scheduled ? <Clock aria-hidden="true" /> : <Send aria-hidden="true" />}
@@ -418,9 +424,11 @@ function AnnouncementList({ ministryId }: { ministryId: string }) {
                   <span className="text-muted-foreground line-clamp-2 text-[13px]">{a.body}</span>
                   <span className="text-muted-foreground text-xs">
                     {formatEventDate(a.sent_at ?? a.send_at)} · {AUDIENCE_LABEL[a.audience]}
-                    {a.status === 'sent' &&
-                      ` · ${a.recipients_count === 1 ? '1 pessoa' : `${a.recipients_count ?? 0} pessoas`}`}
+                    {a.channel === 'push_whatsapp' ? ' · celular + WhatsApp' : ' · celular'}
                   </span>
+                  {a.status === 'sent' && (
+                    <DeliveryList announcementId={a.id} channel={a.channel} />
+                  )}
                 </div>
               </li>
             ))}
@@ -428,5 +436,123 @@ function AnnouncementList({ ministryId }: { ministryId: string }) {
         )}
       </Panel>
     </>
+  )
+}
+
+const TONE_CLASS: Record<DeliveryTone, string> = {
+  ok: 'text-primary',
+  wait: 'text-muted-foreground',
+  off: 'text-muted-foreground',
+  error: 'text-destructive',
+}
+
+function PersonRow({
+  name,
+  label,
+  tone,
+  detail,
+}: {
+  name: string
+  label: string
+  tone: DeliveryTone
+  detail?: string
+}) {
+  return (
+    <li className="flex items-center justify-between gap-3 py-1.5">
+      <span className={cn('truncate text-sm', tone === 'off' && 'text-muted-foreground')}>
+        {name}
+      </span>
+      <span className={cn('shrink-0 text-right text-xs', TONE_CLASS[tone])} title={detail}>
+        {tone === 'ok' ? '✓ ' : ''}
+        {label}
+      </span>
+    </li>
+  )
+}
+
+// Antes de enviar: quem vai receber e por onde
+function AudiencePreview({
+  people,
+  channel,
+}: {
+  people: { profile_id: string; full_name: string; has_push: boolean; has_whatsapp: boolean }[]
+  channel: string
+}) {
+  const rows = people.map((p) => ({ ...p, reach: reachLabel(p, channel) }))
+  const reachable = rows.filter((r) => r.reach.reachable).length
+  return (
+    <details className="group rounded-xl border p-3">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2">
+        <span className="text-sm">
+          <strong>
+            {reachable} de {rows.length}
+          </strong>{' '}
+          {rows.length === 1 ? 'pessoa vai receber' : 'pessoas vão receber'}
+        </span>
+        <span className="text-muted-foreground flex items-center gap-1 text-xs">
+          Ver quem
+          <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+        </span>
+      </summary>
+      <ul className="mt-1 divide-y">
+        {rows
+          .sort((a, b) => Number(b.reach.reachable) - Number(a.reach.reachable))
+          .map((r) => (
+            <PersonRow
+              key={r.profile_id}
+              name={r.full_name}
+              label={r.reach.label}
+              tone={r.reach.reachable ? 'ok' : 'off'}
+            />
+          ))}
+      </ul>
+      {reachable < rows.length && (
+        <p className="text-muted-foreground mt-2 text-xs">
+          Quem não ativou os avisos ativa em: foto no canto de cima → “Instalar app e avisos”.
+          {channel === 'push' && ' Ou envie por “Celular + WhatsApp”.'}
+        </p>
+      )}
+    </details>
+  )
+}
+
+// Depois de enviar: a situação de cada pessoa (carrega ao abrir)
+function DeliveryList({ announcementId, channel }: { announcementId: string; channel: string }) {
+  const [open, setOpen] = useState(false)
+  const deliveries = useDeliveries(open ? announcementId : null)
+  const list = deliveries.data ?? []
+  const summary = deliverySummary(list, channel)
+  return (
+    <details
+      className="group mt-1"
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary className="text-primary flex min-h-11 cursor-pointer list-none items-center gap-1 text-sm font-medium">
+        {deliveries.data
+          ? `Receberam: ${summary.received} de ${summary.total}${summary.waiting ? ` · ${summary.waiting} enviando` : ''}`
+          : 'Ver quem recebeu'}
+        <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+      </summary>
+      {deliveries.isPending ? (
+        <p className="text-muted-foreground text-xs">Carregando…</p>
+      ) : deliveries.error ? (
+        <p className="text-destructive text-xs">{errorMessage(deliveries.error)}</p>
+      ) : (
+        <ul className="divide-y">
+          {list
+            .map((d) => ({ d, l: deliveryLabel(d, channel) }))
+            .sort((a, b) => Number(b.l.tone === 'ok') - Number(a.l.tone === 'ok'))
+            .map(({ d, l }) => (
+              <PersonRow
+                key={d.profile_id}
+                name={d.full_name}
+                label={l.label}
+                tone={l.tone}
+                detail={l.detail}
+              />
+            ))}
+        </ul>
+      )}
+    </details>
   )
 }
