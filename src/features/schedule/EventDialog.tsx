@@ -63,7 +63,7 @@ const schema = z
     path: ['repeatUntil'],
   })
   .refine(
-    (v) => v.kind !== 'service' || !v.arrival || (TIME.test(v.arrival) && v.arrival <= v.time),
+    (v) => v.kind === 'other' || !v.arrival || (TIME.test(v.arrival) && v.arrival <= v.time),
     {
       message: 'A chegada precisa ser antes do início',
       path: ['arrival'],
@@ -147,6 +147,11 @@ export function EventDialog({
   }
   const soundcheckMin = settings?.service_soundcheck_minutes ?? null
   const rehearsalArrivalMin = settings?.rehearsal_arrival_minutes ?? 20
+  const initialArrivalOffset = event?.arrive_at
+    ? Math.round(
+        (new Date(event.starts_at).getTime() - new Date(event.arrive_at).getTime()) / 60_000,
+      )
+    : null
   const defaultRehearsalTime = rehearsalDefaults.rehearsal_time.slice(0, 5)
   const suggested = startDate ? defaultRehearsal(startDate, rehearsalDefaults) : null
   const existingRehearsal = rehearsal ? toLocalInputs(rehearsal.starts_at) : null
@@ -203,7 +208,11 @@ export function EventDialog({
   }
   const onTimeChange = (value: string) => {
     if (!form.getFieldState('arrival').isDirty && TIME.test(value)) {
-      form.setValue('arrival', defaultArrival(value, arrivalMin))
+      // mantém a mesma antecedência da chegada (ao remarcar, a chegada acompanha)
+      const minutes =
+        initialArrivalOffset ??
+        (form.getValues('kind') === 'rehearsal' ? rehearsalArrivalMin : arrivalMin)
+      form.setValue('arrival', defaultArrival(value, minutes))
     }
     if (!form.getFieldState('soundcheck').isDirty && TIME.test(value) && soundcheckMin != null) {
       form.setValue('soundcheck', defaultArrival(value, soundcheckMin))
@@ -228,7 +237,7 @@ export function EventDialog({
       const beforeStart = (start: Date, startTime: string, earlier: string) =>
         new Date(start.getTime() - minutesBefore(startTime, earlier) * 60_000).toISOString()
       const arrivalFor = (start: Date) =>
-        isServiceKind(v) && v.arrival ? beforeStart(start, v.time, v.arrival) : null
+        v.kind !== 'other' && v.arrival ? beforeStart(start, v.time, v.arrival) : null
       const soundcheckFor = (start: Date) =>
         isServiceKind(v) && v.soundcheck ? beforeStart(start, v.time, v.soundcheck) : null
       const withTimes = (start: Date) => ({
@@ -352,8 +361,18 @@ export function EventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Editar evento' : 'Novo culto ou ensaio'}</DialogTitle>
-          <DialogDescription>Horários no fuso de Brasília.</DialogDescription>
+          <DialogTitle>
+            {event?.service_event_id
+              ? 'Remarcar ensaio'
+              : editing
+                ? 'Editar evento'
+                : 'Novo culto ou ensaio'}
+          </DialogTitle>
+          <DialogDescription>
+            {event?.service_event_id
+              ? 'Mude o dia e o horário do ensaio. A equipe escalada recebe um aviso.'
+              : 'Horários no fuso de Brasília.'}
+          </DialogDescription>
         </DialogHeader>
         <form
           onSubmit={form.handleSubmit((v) => save.mutate(v))}
@@ -403,10 +422,10 @@ export function EventDialog({
               />
             </FormField>
           </div>
-          {isService && (
+          {kind !== 'other' && (
             <FormField
               id="event-arrival"
-              label="Chegada da equipe"
+              label={isService ? 'Chegada da equipe' : 'Chegada para o ensaio'}
               hint="Atraso e abertura do ponto contam a partir deste horário."
               error={errors.arrival?.message}
             >

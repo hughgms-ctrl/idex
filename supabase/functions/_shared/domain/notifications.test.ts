@@ -114,3 +114,22 @@ describe('ficou de fora pela regra de horário', () => {
     )
   })
 })
+
+describe('ensaio remarcado', () => {
+  it('avisa o novo horário, o antigo e a chegada', () => {
+    const text = renderMessage('event_rescheduled', {
+      name: 'Bruno',
+      kind: 'rehearsal',
+      eventTitle: 'Ensaio · Culto',
+      eventStartsAt: '2026-10-30T23:00:00Z', // sexta 20h
+      oldStartsAt: '2026-10-29T23:00:00Z', // quinta 20h
+      arriveAt: '2026-10-30T22:40:00Z',
+    })
+    expect(text).toContain('O ensaio *Ensaio · Culto* foi remarcado para *sexta, 30/10 às 20h*')
+    expect(text).toContain('(era quinta, 29/10 às 20h)')
+    expect(text).toContain('Chegada da equipe: *19h40*')
+    expect(renderPush('event_rescheduled', { kind: 'rehearsal' }, 't').title).toBe(
+      'Ensaio remarcado',
+    )
+  })
+})

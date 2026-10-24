@@ -1,8 +1,17 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertCircle, ArrowLeft, Copy, ListMusic, Pencil, Trash2, X } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarClock,
+  Copy,
+  ListMusic,
+  Pencil,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
 import { localParts } from '@domain/time.ts'
 
@@ -65,7 +74,8 @@ function Editor({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { ministry } = useChurch()
-  const [editOpen, setEditOpen] = useState(false)
+  const [params] = useSearchParams()
+  const [editOpen, setEditOpen] = useState(() => params.get('remarcar') === '1')
   const invalidate = () => queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
 
   const add = useMutation({
@@ -205,6 +215,11 @@ function Editor({
       />
 
       <EventTimes event={event} ministryId={event.ministry_id} />
+      {canEdit && event.service_event_id && (
+        <Button variant="outline" className="self-start" onClick={() => setEditOpen(true)}>
+          <CalendarClock aria-hidden="true" /> Remarcar ensaio
+        </Button>
+      )}
       <LinkedEvent event={event} />
 
       {event.kind === 'service' && (
@@ -516,7 +531,7 @@ function LinkedEvent({ event }: { event: ScheduleEvent }) {
         <span>
           <strong>Ensaio:</strong> {formatEventDate(rehearsal.starts_at)}
         </span>
-        <span aria-hidden="true">›</span>
+        <span className="text-xs underline">ver / remarcar ›</span>
       </Link>
     )
   }

@@ -1758,6 +1758,7 @@ export type Database = {
         | 'points_deducted'
         | 'request_reviewed'
         | 'member_benched'
+        | 'event_rescheduled'
       notification_status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
       point_reason: 'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment'
       request_status: 'pending' | 'approved' | 'adjusted' | 'rejected'
@@ -1887,6 +1888,7 @@ export const Constants = {
         'points_deducted',
         'request_reviewed',
         'member_benched',
+        'event_rescheduled',
       ],
       notification_status: ['pending', 'sending', 'sent', 'failed', 'skipped'],
       point_reason: ['cycle_start', 'late', 'absence', 'request_rejected', 'adjustment'],

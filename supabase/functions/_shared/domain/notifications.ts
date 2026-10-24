@@ -7,6 +7,7 @@ export type NotificationKind =
   | 'points_deducted'
   | 'request_reviewed'
   | 'member_benched'
+  | 'event_rescheduled'
 
 export type NotificationPayload = {
   name?: string | null
@@ -18,6 +19,7 @@ export type NotificationPayload = {
   memberName?: string | null // quem ficou de fora (aviso ao líder)
   scope?: string | null // event | event_and_service
   self?: boolean | null // o aviso é para a própria pessoa?
+  oldStartsAt?: string | null // horário antes de remarcar
   role?: string | null
   delta?: number | null
   reason?: string | null
@@ -66,6 +68,10 @@ export function renderMessage(
       return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.${arrival || ' Chegue no horário.'} Bata o ponto pelo app. 🎶${link}`
     case 'points_deducted':
       return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
+    case 'event_rescheduled': {
+      const what = p.kind === 'rehearsal' ? 'O ensaio' : 'O evento'
+      return `${hi} ${what} *${p.eventTitle ?? ''}* foi remarcado para *${when(p.eventStartsAt, tz)}*${p.oldStartsAt ? ` (era ${when(p.oldStartsAt, tz)})` : ''}.${arrival} Se não puder ir, avise o líder pelo app.${link}`
+    }
     case 'member_benched': {
       const where =
         p.scope === 'event_and_service'
@@ -126,6 +132,13 @@ export function renderPush(
       return { title: 'Pontos descontados', body: plain, url: '/presenca', tag }
     case 'request_reviewed':
       return { title: 'Seu pedido foi analisado', body: plain, url: '/presenca', tag }
+    case 'event_rescheduled':
+      return {
+        title: p.kind === 'rehearsal' ? 'Ensaio remarcado' : 'Evento remarcado',
+        body: plain,
+        url: '/escalas',
+        tag,
+      }
     case 'member_benched':
       return {
         title: p.self ? 'Você ficou de fora' : `${p.memberName ?? 'Integrante'} ficou de fora`,
