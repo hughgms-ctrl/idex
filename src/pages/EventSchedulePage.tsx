@@ -33,6 +33,10 @@ import {
   type ScheduleEvent,
 } from '@/features/schedule/queries'
 import { useScheduleData, type ScheduleData } from '@/features/schedule/useScheduleData'
+import {
+  REHEARSAL_STATUS_LABEL,
+  useServiceRehearsalAvailability,
+} from '@/features/availability/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatEventDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
@@ -222,6 +226,13 @@ function Editor({
         </Button>
       )}
       <LinkedEvent event={event} />
+      {canEdit && (event.kind === 'service' || event.service_event_id) && (
+        <RehearsalAnswers
+          serviceId={event.service_event_id ?? event.id}
+          memberIds={event.schedule_assignments.map((a) => a.ministry_member_id)}
+          data={data}
+        />
+      )}
 
       {event.kind === 'service' && (
         <Button asChild variant="outline" className="self-start">
@@ -525,6 +536,56 @@ function AnswersSummary({ event, data }: { event: ScheduleEvent; data: ScheduleD
 }
 
 // Culto ↔ ensaio dele
+/** O que a equipe disse sobre os dias de ensaio deste culto (só o líder vê). */
+function RehearsalAnswers({
+  serviceId,
+  memberIds,
+  data,
+}: {
+  serviceId: string
+  memberIds: string[]
+  data: ScheduleData
+}) {
+  const answers = useServiceRehearsalAvailability(serviceId).data ?? []
+  const team = new Set(memberIds)
+  const shown = answers.filter((a) => team.has(a.ministry_member_id) || a.status !== 'any')
+  const missing = [...team].filter((id) => !answers.some((a) => a.ministry_member_id === id))
+  if (shown.length === 0 && missing.length === 0) return null
+  const order = { none: 0, some: 1, any: 2 }
+  return (
+    <section className="bg-card flex flex-col gap-2 rounded-2xl border p-3.5">
+      <h2 className="text-info text-sm font-semibold">Dias para ensaiar</h2>
+      <ul className="flex flex-col gap-1.5">
+        {[...shown]
+          .sort((a, b) => order[a.status] - order[b.status])
+          .map((a) => (
+            <li key={a.ministry_member_id} className="text-sm">
+              <span className="font-medium">
+                {data.memberById.get(a.ministry_member_id)?.name ?? 'Integrante'}
+              </span>
+              {': '}
+              <span
+                className={cn(
+                  a.status === 'none' && 'text-destructive font-semibold',
+                  a.status === 'some' && 'text-warning font-semibold',
+                )}
+              >
+                {REHEARSAL_STATUS_LABEL[a.status].toLowerCase()}
+              </span>
+              {a.note && <span className="text-muted-foreground"> — {a.note}</span>}
+            </li>
+          ))}
+      </ul>
+      {missing.length > 0 && (
+        <p className="text-muted-foreground text-[13px]">
+          Sem resposta:{' '}
+          {missing.map((id) => data.memberById.get(id)?.name ?? 'Integrante').join(', ')}
+        </p>
+      )}
+    </section>
+  )
+}
+
 function LinkedEvent({ event }: { event: ScheduleEvent }) {
   const rehearsal = useLinkedRehearsal(event.kind === 'service' ? event.id : undefined).data
   const service = useEvent(event.service_event_id ?? undefined).data

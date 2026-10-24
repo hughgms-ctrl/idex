@@ -10,6 +10,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { Panel } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { JustifyDialog } from '@/features/attendance/MemberDialogs'
+import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
+import { useMyRehearsalAvailability } from '@/features/availability/queries'
 import { useChurch } from '@/features/church/church-context'
 import { useMinistrySettings } from '@/features/ministries/queries'
 import { eventTimeRows } from '@/features/schedule/datetime'
@@ -34,6 +36,8 @@ export function ConfirmPage() {
   const memberIds = memberships.map((m) => m.id)
   const data = useConfirmation(eventId, memberIds)
   const [now] = useState(() => Date.now())
+  const myMemberId = data.data?.assignments[0]?.ministry_member_id
+  const rehearsalAnswers = useMyRehearsalAvailability(myMemberId)
   const settings = useMinistrySettings(ministry?.id)
   const [justify, setJustify] = useState<{
     event: ConfirmEvent
@@ -143,6 +147,20 @@ export function ConfirmPage() {
                   {JUSTIFICATION_STATUS[j.status] ?? j.status}
                 </p>
               ))}
+              {a &&
+                !started &&
+                a.status !== 'benched' &&
+                (isRehearsal || !rehearsal) &&
+                serviceAssignment.status !== 'benched' &&
+                !absence && (
+                  <RehearsalAvailabilityField
+                    key={rehearsalAnswers.data?.get(service.id)?.note ?? ''}
+                    serviceId={service.id}
+                    answer={rehearsalAnswers.data?.get(service.id)}
+                    memberId={serviceAssignment.ministry_member_id}
+                    churchId={church.id}
+                  />
+                )}
               {a && !started && a.status !== 'benched' && (
                 <div className="grid grid-cols-2 gap-2">
                   <Button

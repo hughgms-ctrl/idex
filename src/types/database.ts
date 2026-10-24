@@ -1277,6 +1277,49 @@ export type Database = {
           },
         ]
       }
+      rehearsal_availability: {
+        Row: {
+          church_id: string
+          event_id: string
+          ministry_member_id: string
+          note: string | null
+          status: string
+          updated_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          event_id: string
+          ministry_member_id: string
+          note?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          church_id?: string
+          event_id?: string
+          ministry_member_id?: string
+          note?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'rehearsal_availability_event_id_church_id_fkey'
+            columns: ['event_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'rehearsal_availability_ministry_member_id_church_id_fkey'
+            columns: ['ministry_member_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministry_members'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
       reminder_rules: {
         Row: {
           at_time: string | null

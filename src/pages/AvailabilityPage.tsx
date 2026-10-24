@@ -10,10 +10,12 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import {
   useMyAvailability,
+  useMyRehearsalAvailability,
   useSetAvailability,
   useUpcomingEvents,
   type UpcomingEvent,
 } from '@/features/availability/queries'
+import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
 import { useChurch } from '@/features/church/church-context'
 import { useMinistrySettings } from '@/features/ministries/queries'
 import { EVENT_KIND_LABEL } from '@/features/schedule/datetime'
@@ -47,6 +49,7 @@ export function AvailabilityPage() {
   const events = useUpcomingEvents(ministry?.id, period)
   const answers = useMyAvailability(membership?.id)
   const setAnswer = useSetAvailability(membership?.id, church.id)
+  const rehearsalAnswers = useMyRehearsalAvailability(membership?.id)
 
   const answerBy = useMemo(
     () => new Map((answers.data ?? []).map((a) => [a.event_id, a.available])),
@@ -112,7 +115,7 @@ export function AvailabilityPage() {
             : `${formatDate(period.startsOn)} A ${formatDate(period.endsOn)}`
         }
         title="Quando você pode servir?"
-        description="Toque em “Posso” ou “Não posso” em cada culto (vale também para o ensaio dele). Se não responder, o líder pode escalar você normalmente."
+        description="Toque em “Posso” ou “Não posso” em cada culto (vale também para o ensaio dele) e diga em que dias consegue ensaiar. Se não responder, o líder pode escalar você normalmente."
       />
       {deadline && <p className="text-warning text-sm">Responda até {formatDate(deadline)}.</p>}
 
@@ -210,6 +213,15 @@ export function AvailabilityPage() {
                       <X className="size-4" aria-hidden="true" /> Não posso
                     </button>
                   </div>
+                  {e.kind === 'service' && answer !== false && membership && (
+                    <RehearsalAvailabilityField
+                      key={rehearsalAnswers.data?.get(e.id)?.note ?? ''}
+                      serviceId={e.id}
+                      answer={rehearsalAnswers.data?.get(e.id)}
+                      memberId={membership.id}
+                      churchId={church.id}
+                    />
+                  )}
                 </li>
               )
             })}

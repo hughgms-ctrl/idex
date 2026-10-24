@@ -139,3 +139,85 @@ export function useMyRoleIds(memberId: string | undefined) {
     },
   })
 }
+
+export type RehearsalStatus = 'any' | 'some' | 'none'
+
+export const REHEARSAL_STATUS_LABEL: Record<RehearsalStatus, string> = {
+  any: 'Qualquer dia',
+  some: 'Só alguns dias',
+  none: 'Nenhum dia',
+}
+export type RehearsalAnswer = {
+  event_id: string
+  ministry_member_id: string
+  status: RehearsalStatus
+  note: string | null
+}
+
+/** Disponibilidade para o ensaio (por culto) do membro logado. */
+export function useMyRehearsalAvailability(memberId: string | undefined) {
+  return useQuery({
+    queryKey: [...availabilityKeys.all, 'rehearsal-mine', memberId ?? ''],
+    enabled: Boolean(memberId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rehearsal_availability')
+        .select('event_id, ministry_member_id, status, note')
+        .eq('ministry_member_id', memberId ?? '')
+      if (error) throw error
+      return new Map((data as RehearsalAnswer[]).map((r) => [r.event_id, r]))
+    },
+  })
+}
+
+/** Respostas de um culto (o líder vê todas; o membro, só a dele). */
+export function useServiceRehearsalAvailability(serviceId: string | undefined) {
+  return useQuery({
+    queryKey: [...availabilityKeys.all, 'rehearsal-service', serviceId ?? ''],
+    enabled: Boolean(serviceId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rehearsal_availability')
+        .select('event_id, ministry_member_id, status, note')
+        .eq('event_id', serviceId ?? '')
+      if (error) throw error
+      return data as RehearsalAnswer[]
+    },
+  })
+}
+
+/** Grava (ou apaga, com status null) a disponibilidade para o ensaio do culto. */
+export function useSetRehearsalAvailability(memberId: string | undefined, churchId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      serviceId,
+      status,
+      note,
+    }: {
+      serviceId: string
+      status: RehearsalStatus | null
+      note: string | null
+    }) => {
+      if (!memberId) throw new Error('Você ainda não faz parte deste ministério')
+      if (status === null) {
+        const { error } = await supabase
+          .from('rehearsal_availability')
+          .delete()
+          .eq('event_id', serviceId)
+          .eq('ministry_member_id', memberId)
+        if (error) throw error
+        return
+      }
+      const { error } = await supabase.from('rehearsal_availability').upsert({
+        church_id: churchId,
+        event_id: serviceId,
+        ministry_member_id: memberId,
+        status,
+        note: note?.trim() || null,
+      })
+      if (error) throw error
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: availabilityKeys.all }),
+  })
+}
