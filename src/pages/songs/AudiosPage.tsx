@@ -466,6 +466,10 @@ function UploadAudio({
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-dashed p-4">
       <h2 className="text-[15px] font-semibold">Enviar áudio</h2>
+      <p className="text-muted-foreground text-[13px]">
+        MP3, M4A, AAC, WAV, OGG ou FLAC, até 50 MB. Prefira <strong>MP3</strong>: uma música inteira
+        cabe com folga (WAV ocupa cerca de 10 MB por minuto).
+      </p>
       <input
         ref={inputRef}
         type="file"

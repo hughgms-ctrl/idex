@@ -88,7 +88,13 @@ export async function uploadSongFile(params: {
   musicalKey?: string | null
 }): Promise<void> {
   const { churchId, songId, file } = params
-  if (file.size > MAX_BYTES) throw new Error(`"${file.name}" passa de 50 MB`)
+  if (file.size > MAX_BYTES) {
+    throw new Error(
+      fileInfo(file).kind === 'audio'
+        ? `"${file.name}" passa de 50 MB. Exporte em MP3 (fica bem menor) e envie de novo.`
+        : `"${file.name}" passa de 50 MB`,
+    )
+  }
   const { mime, kind } = fileInfo(file)
   if (kind === 'other') throw new Error(`"${file.name}": envie áudio, PDF ou imagem`)
   const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
