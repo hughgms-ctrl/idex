@@ -47,9 +47,22 @@ async function saveSubscription(sub: PushSubscription) {
 }
 
 // Aviso no celular (Web Push): ativa/desativa neste aparelho.
+export type PushDevice = { endpoint: string; user_agent: string | null; created_at: string }
+
 export function usePush() {
   const [state, setState] = useState<PushState>('loading')
   const [busy, setBusy] = useState(false)
+  // aparelhos da conta com avisos ativos (e o endpoint deste aparelho)
+  const [devices, setDevices] = useState<PushDevice[]>([])
+  const [thisEndpoint, setThisEndpoint] = useState<string | null>(null)
+
+  const loadDevices = useCallback(async () => {
+    const { data } = await supabase
+      .from('push_subscriptions')
+      .select('endpoint, user_agent, created_at')
+      .order('created_at')
+    setDevices(data ?? [])
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -65,15 +78,17 @@ export function usePush() {
         else if (sub && Notification.permission === 'granted') {
           // garante que o aparelho está ligado à conta que entrou agora
           await saveSubscription(sub).catch(() => undefined)
+          if (!cancelled) setThisEndpoint(sub.endpoint)
           next = 'on'
         } else next = 'off'
       }
+      await loadDevices().catch(() => undefined)
       if (!cancelled) setState(next)
     })()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadDevices])
 
   const enable = useCallback(async () => {
     setBusy(true)
@@ -92,11 +107,13 @@ export function usePush() {
           applicationServerKey: urlBase64ToBytes(env.VITE_VAPID_PUBLIC_KEY ?? ''),
         }))
       await saveSubscription(sub)
+      setThisEndpoint(sub.endpoint)
+      await loadDevices()
       setState('on')
     } finally {
       setBusy(false)
     }
-  }, [])
+  },[loadDevices])
 
   const disable = useCallback(async () => {
     setBusy(true)
@@ -107,11 +124,20 @@ export function usePush() {
         await supabase.rpc('delete_push_subscription', { p_endpoint: sub.endpoint })
         await sub.unsubscribe()
       }
+      setThisEndpoint(null)
+      await loadDevices()
       setState('off')
     } finally {
       setBusy(false)
     }
+  }, [loadDevices])
+
+  /** Manda um aviso de teste para todos os aparelhos da conta (chega em até 1 minuto). */
+  const test = useCallback(async () => {
+    const { data, error } = await supabase.rpc('send_test_push')
+    if (error) throw error
+    if (!data) throw new Error('Ative os avisos neste aparelho primeiro.')
   }, [])
 
-  return { state, busy, enable, disable }
+  return { state, busy, enable, disable, test, devices, thisEndpoint }
 }

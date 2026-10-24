@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
-import { Bell, BellOff, X } from 'lucide-react'
+import { Bell, BellOff, Send, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { deviceLabel } from '@/features/push/device'
 import { usePush } from '@/features/push/usePush'
 import { errorMessage } from '@/lib/errors'
 
@@ -22,7 +23,7 @@ function dismissedRecently(): boolean {
  * ativou); senão, bloco completo com ativar/desativar.
  */
 export function PushCard({ compact = false }: { compact?: boolean }) {
-  const { state, busy, enable, disable } = usePush()
+  const { state, busy, enable, disable, test, devices, thisEndpoint } = usePush()
   const [hidden, setHidden] = useState(() => compact && dismissedRecently())
 
   const turnOn = () =>
@@ -71,14 +72,49 @@ export function PushCard({ compact = false }: { compact?: boolean }) {
         </Button>
       )}
       {state === 'on' && !compact && (
-        <Button
-          variant="outline"
-          className="self-start"
-          disabled={busy}
-          onClick={() => void disable().then(() => toast.success('Avisos desativados'))}
-        >
-          <BellOff aria-hidden="true" /> Desativar neste celular
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={busy}
+            onClick={() =>
+              void test()
+                .then(() =>
+                  toast.success('Aviso de teste enviado. Deve aparecer em até 1 minuto.', {
+                    duration: 8000,
+                  }),
+                )
+                .catch((err) => toast.error(errorMessage(err)))
+            }
+          >
+            <Send aria-hidden="true" /> Enviar aviso de teste
+          </Button>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => void disable().then(() => toast.success('Avisos desativados'))}
+          >
+            <BellOff aria-hidden="true" /> Desativar neste aparelho
+          </Button>
+        </div>
+      )}
+      {!compact && devices.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs">Avisos ativos em:</span>
+          <ul className="flex flex-col gap-0.5 text-sm">
+            {devices.map((d) => (
+              <li key={d.endpoint}>
+                • {deviceLabel(d.user_agent)}
+                {d.endpoint === thisEndpoint && (
+                  <span className="text-primary"> (este aparelho)</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {state !== 'on' && (
+            <span className="text-muted-foreground text-xs">
+              Este aparelho ainda não: toque em “Ativar avisos” para receber aqui também.
+            </span>
+          )}
+        </div>
       )}
       {state === 'needs-install' && (
         <p className="text-muted-foreground text-sm">

@@ -185,7 +185,8 @@ export async function sendWebPush(
         'Content-Encoding': 'aes128gcm',
         'Content-Type': 'application/octet-stream',
         TTL: String(ttlSeconds),
-        Urgency: 'normal',
+        // alta: entrega na hora mesmo com o celular em economia de bateria
+        Urgency: 'high',
       },
       body: buf(body),
       signal: AbortSignal.timeout(15_000),
