@@ -16,6 +16,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useChurch } from '@/features/church/church-context'
+import { ReminderRules } from '@/features/push/ReminderRules'
 import { ministryKeys, useMinistrySettings } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatDate } from '@/lib/format'
@@ -60,6 +61,13 @@ export function SettingsPage() {
         <AvailabilityPeriod
           key={`periodo-${settings.data.updated_at}`}
           settings={settings.data}
+          canEdit={isLeader(ministry.id)}
+        />
+      )}
+      {ministry && (
+        <ReminderRules
+          ministryId={ministry.id}
+          churchId={church.id}
           canEdit={isLeader(ministry.id)}
         />
       )}
@@ -765,6 +773,9 @@ const KIND_LABEL: Record<string, string> = {
   rehearsal_today: 'Ensaio hoje',
   points_deducted: 'Ponto descontado',
   request_reviewed: 'Pedido analisado',
+  event_reminder: 'Lembrete de culto/ensaio',
+  event_rescheduled: 'Evento remarcado',
+  member_benched: 'Ficou de fora',
 }
 const STATUS_LABEL: Record<string, string> = {
   pending: 'na fila',
@@ -791,10 +802,10 @@ function NotificationLog({ churchId }: { churchId: string }) {
   })
   return (
     <section className="flex flex-col gap-2">
-      <SectionTitle title="Avisos por WhatsApp" />
+      <SectionTitle title="Avisos enviados" />
       <p className="text-muted-foreground text-[13px]">
-        Lembrete da escala 2 dias antes, ensaio no dia, ponto descontado e pedidos analisados. Cada
-        pessoa pode desligar em “Meu perfil”.
+        Lembretes de culto e ensaio, remarcações, ponto descontado e pedidos analisados. Cada pessoa
+        pode desligar o WhatsApp em “Meu perfil”.
       </p>
       {log.data && log.data.length > 0 ? (
         <ul className="bg-card flex flex-col overflow-hidden rounded-2xl border">

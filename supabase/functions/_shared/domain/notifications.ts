@@ -8,6 +8,7 @@ export type NotificationKind =
   | 'request_reviewed'
   | 'member_benched'
   | 'event_rescheduled'
+  | 'event_reminder'
 
 export type NotificationPayload = {
   name?: string | null
@@ -27,6 +28,12 @@ export type NotificationPayload = {
   status?: string | null
   kind?: string | null // pedido | justificativa
   appUrl?: string | null
+  path?: string | null // tela do app que o aviso abre (ex.: /confirmar/<culto>)
+  serviceTitle?: string | null // culto do ensaio
+  serviceStartsAt?: string | null
+  confirmed?: boolean | null // já confirmou presença?
+  soon?: boolean | null // aviso perto do horário
+  pushOnly?: boolean | null // só no celular
 }
 
 const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
@@ -57,7 +64,7 @@ export function renderMessage(
   tz = DEFAULT_TZ,
 ): string {
   const hi = p.name ? `Olá, ${p.name.split(' ')[0]}!` : 'Olá!'
-  const link = p.appUrl ? `\n\nAbra o ide.x: ${p.appUrl}` : ''
+  const link = p.appUrl ? `\n\nAbra o ide.x: ${p.appUrl.replace(/\/$/, '')}${p.path ?? ''}` : ''
   const arrival =
     (p.arriveAt ? ` Chegada da equipe: *${hourOf(p.arriveAt, tz)}*.` : '') +
     (p.soundcheckAt ? ` Passagem de som: *${hourOf(p.soundcheckAt, tz)}*.` : '')
@@ -68,6 +75,24 @@ export function renderMessage(
       return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.${arrival || ' Chegue no horário.'} Bata o ponto pelo app. 🎶${link}`
     case 'points_deducted':
       return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
+    case 'event_reminder': {
+      const rehearsal = p.kind === 'rehearsal'
+      const what = rehearsal
+        ? `o ensaio *${p.eventTitle ?? 'Ensaio'}*`
+        : `o *${p.eventTitle ?? 'culto'}*`
+      const role = !rehearsal && p.role ? ` Você está escalado(a) como *${p.role}*.` : ''
+      const of =
+        rehearsal && p.serviceStartsAt
+          ? ` É o ensaio do ${p.serviceTitle ?? 'culto'} de ${when(p.serviceStartsAt, tz).split(' às')[0]}.`
+          : ''
+      const ask = p.confirmed
+        ? ' Presença confirmada ✅. Se algo mudar, avise pelo app.'
+        : ' Confirme sua presença pelo app ou avise se for se atrasar ou faltar.'
+      const head = p.soon
+        ? `Daqui a pouco: ${what} ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.`
+        : `Lembrete: ${what} é ${when(p.eventStartsAt, tz)}.`
+      return `${hi} ${head}${role}${arrival}${of}${ask}${link}`
+    }
     case 'event_rescheduled': {
       const what = p.kind === 'rehearsal' ? 'O ensaio' : 'O evento'
       return `${hi} ${what} *${p.eventTitle ?? ''}* foi remarcado para *${when(p.eventStartsAt, tz)}*${p.oldStartsAt ? ` (era ${when(p.oldStartsAt, tz)})` : ''}.${arrival} Se não puder ir, avise o líder pelo app.${link}`
@@ -139,6 +164,15 @@ export function renderPush(
         url: '/escalas',
         tag,
       }
+    case 'event_reminder': {
+      const label = p.kind === 'rehearsal' ? 'Ensaio' : (p.eventTitle ?? 'Culto')
+      return {
+        title: p.soon ? `${label} daqui a pouco` : `Lembrete: ${label}`,
+        body: plain,
+        url: p.path ?? '/escalas',
+        tag,
+      }
+    }
     case 'member_benched':
       return {
         title: p.self ? 'Você ficou de fora' : `${p.memberName ?? 'Integrante'} ficou de fora`,

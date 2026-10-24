@@ -112,7 +112,9 @@ export function useMyUpcomingAssignments(memberId: string | undefined, limit = 3
     queryFn: async () => {
       const { data, error } = await supabase
         .from('schedule_assignments')
-        .select('id, ministry_role_id, events!inner(id, title, kind, starts_at)')
+        .select(
+          'id, ministry_role_id, status, events!inner(id, title, kind, starts_at, service_event_id)',
+        )
         .eq('ministry_member_id', memberId ?? '')
         .gte('events.starts_at', new Date().toISOString())
         .order('starts_at', { referencedTable: 'events' })
@@ -159,3 +161,60 @@ export function useRehearsalsFor(serviceIds: string[]) {
 }
 
 export type LinkedRehearsal = { id: string; starts_at: string; arrive_at: string | null }
+
+export type ConfirmEvent = {
+  id: string
+  title: string
+  kind: string
+  starts_at: string
+  arrive_at: string | null
+  soundcheck_at: string | null
+  service_event_id: string | null
+}
+
+/** Culto (e o ensaio dele) com as minhas escalas e avisos — tela "Confirmar presença". */
+export function useConfirmation(eventId: string | undefined, memberIds: string[]) {
+  return useQuery({
+    queryKey: [...scheduleKeys.all, 'confirm', eventId ?? '', memberIds.join(',')],
+    enabled: Boolean(eventId) && memberIds.length > 0,
+    queryFn: async () => {
+      const cols = 'id, title, kind, starts_at, arrive_at, soundcheck_at, service_event_id'
+      const first = await supabase
+        .from('events')
+        .select(cols)
+        .eq('id', eventId ?? '')
+        .maybeSingle()
+      if (first.error) throw first.error
+      if (!first.data) return null
+      const serviceId = first.data.service_event_id ?? first.data.id
+      const events = await supabase
+        .from('events')
+        .select(cols)
+        .or(`id.eq.${serviceId},service_event_id.eq.${serviceId}`)
+      if (events.error) throw events.error
+      const ids = events.data.map((e) => e.id)
+      const [assignments, justifications] = await Promise.all([
+        supabase
+          .from('schedule_assignments')
+          .select('id, event_id, ministry_member_id, status, benched_reason, ministry_roles(name)')
+          .in('event_id', ids)
+          .in('ministry_member_id', memberIds),
+        supabase
+          .from('justifications')
+          .select('id, event_id, kind, status')
+          .in('event_id', ids)
+          .in('ministry_member_id', memberIds),
+      ])
+      if (assignments.error) throw assignments.error
+      if (justifications.error) throw justifications.error
+      const service = events.data.find((e) => e.id === serviceId) as ConfirmEvent
+      const rehearsal = (events.data.find((e) => e.id !== serviceId) ?? null) as ConfirmEvent | null
+      return {
+        service,
+        rehearsal,
+        assignments: assignments.data,
+        justifications: justifications.data,
+      }
+    },
+  })
+}

@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarClock,
+  Check,
   Copy,
   ListMusic,
   Pencil,
@@ -404,6 +405,11 @@ function RoleSlot({
                 >
                   {member.name}
                 </span>
+                {a.status === 'confirmed' && (
+                  <span className="text-primary flex items-center gap-1 text-xs font-semibold">
+                    <Check className="size-3.5" aria-hidden="true" /> confirmou
+                  </span>
+                )}
                 {canEdit && (
                   <Button
                     variant="ghost"

@@ -18,6 +18,50 @@ describe('mensagens', () => {
     )
   })
 
+  it('aviso programado: ensaio da semana leva para confirmar', () => {
+    const text = renderMessage('event_reminder', {
+      name: 'Bruno Lima',
+      kind: 'rehearsal',
+      eventTitle: 'Ensaio',
+      eventStartsAt: '2026-10-29T22:30:00Z',
+      arriveAt: '2026-10-29T22:10:00Z',
+      serviceTitle: 'Culto de domingo',
+      serviceStartsAt: SUNDAY,
+      path: '/confirmar/abc',
+      appUrl: 'https://idex.app/',
+    })
+    expect(text).toBe(
+      'Olá, Bruno! Lembrete: o ensaio *Ensaio* é quinta, 29/10 às 19h30. Chegada da equipe: *19h10*. É o ensaio do Culto de domingo de domingo, 01/11. Confirme sua presença pelo app ou avise se for se atrasar ou faltar.\n\nAbra o ide.x: https://idex.app/confirmar/abc',
+    )
+  })
+
+  it('aviso programado: culto daqui a pouco, já confirmado', () => {
+    const text = renderMessage('event_reminder', {
+      kind: 'service',
+      eventTitle: 'Culto de domingo',
+      eventStartsAt: SUNDAY,
+      role: 'Baixo',
+      confirmed: true,
+      soon: true,
+    })
+    expect(text).toBe(
+      'Olá! Daqui a pouco: o *Culto de domingo* às 19h. Você está escalado(a) como *Baixo*. Presença confirmada ✅. Se algo mudar, avise pelo app.',
+    )
+    const push = renderPush(
+      'event_reminder',
+      {
+        kind: 'service',
+        eventTitle: 'Culto de domingo',
+        eventStartsAt: SUNDAY,
+        soon: true,
+        path: '/confirmar/x',
+      },
+      't',
+    )
+    expect(push.title).toBe('Culto de domingo daqui a pouco')
+    expect(push.url).toBe('/confirmar/x')
+  })
+
   it('ensaio hoje', () => {
     expect(
       renderMessage('rehearsal_today', {

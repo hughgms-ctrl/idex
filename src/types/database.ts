@@ -1277,6 +1277,60 @@ export type Database = {
           },
         ]
       }
+      reminder_rules: {
+        Row: {
+          at_time: string | null
+          church_id: string
+          created_at: string
+          days_before: number | null
+          enabled: boolean
+          event_kind: Database['public']['Enums']['event_kind']
+          id: string
+          ministry_id: string
+          minutes_before: number | null
+          push_only: boolean
+          timing: string
+          weekday: number | null
+        }
+        ComputedFields: never
+        Insert: {
+          at_time?: string | null
+          church_id: string
+          created_at?: string
+          days_before?: number | null
+          enabled?: boolean
+          event_kind: Database['public']['Enums']['event_kind']
+          id?: string
+          ministry_id: string
+          minutes_before?: number | null
+          push_only?: boolean
+          timing: string
+          weekday?: number | null
+        }
+        Update: {
+          at_time?: string | null
+          church_id?: string
+          created_at?: string
+          days_before?: number | null
+          enabled?: boolean
+          event_kind?: Database['public']['Enums']['event_kind']
+          id?: string
+          ministry_id?: string
+          minutes_before?: number | null
+          push_only?: boolean
+          timing?: string
+          weekday?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'reminder_rules_ministry_id_church_id_fkey'
+            columns: ['ministry_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministries'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
       schedule_assignments: {
         Row: {
           benched_reason: string | null
@@ -1646,6 +1700,7 @@ export type Database = {
         }[]
       }
       close_due_cycles: { Args: Record<PropertyKey, never>; Returns: number }
+      confirm_my_presence: { Args: { p_event_id: string }; Returns: number }
       create_checkin_request: {
         Args: {
           p_declared_arrived_at: string
@@ -1728,6 +1783,19 @@ export type Database = {
         Returns: string
       }
       regenerate_checkin_code: { Args: { p_ministry_id: string }; Returns: string }
+      reminder_fire_at: {
+        Args: {
+          p_arrive_at: string
+          p_at_time: string
+          p_days_before: number
+          p_minutes_before: number
+          p_starts_at: string
+          p_timing: string
+          p_tz: string
+          p_weekday: number
+        }
+        Returns: string
+      }
       requeue_stuck_notifications: { Args: Record<PropertyKey, never>; Returns: number }
       review_justification: {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
@@ -1735,6 +1803,10 @@ export type Database = {
       }
       save_push_subscription: {
         Args: { p_auth: string; p_endpoint: string; p_p256dh: string; p_user_agent?: string }
+        Returns: undefined
+      }
+      seed_reminder_rules: {
+        Args: { p_church_id: string; p_ministry_id: string }
         Returns: undefined
       }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
@@ -1759,6 +1831,7 @@ export type Database = {
         | 'request_reviewed'
         | 'member_benched'
         | 'event_rescheduled'
+        | 'event_reminder'
       notification_status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
       point_reason: 'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment'
       request_status: 'pending' | 'approved' | 'adjusted' | 'rejected'
@@ -1889,6 +1962,7 @@ export const Constants = {
         'request_reviewed',
         'member_benched',
         'event_rescheduled',
+        'event_reminder',
       ],
       notification_status: ['pending', 'sending', 'sent', 'failed', 'skipped'],
       point_reason: ['cycle_start', 'late', 'absence', 'request_rejected', 'adjustment'],

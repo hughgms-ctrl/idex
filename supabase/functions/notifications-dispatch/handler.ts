@@ -80,7 +80,8 @@ export async function handleDispatch(req: Request, deps: DispatchDeps): Promise<
     }
 
     // 2) WhatsApp
-    const phone = deps.whatsappConfigured ? normalizePhone(item.phone) : null
+    const phone =
+      deps.whatsappConfigured && !item.payload.pushOnly ? normalizePhone(item.phone) : null
     if (phone) {
       const text = renderMessage(item.kind, { ...item.payload, appUrl: deps.appUrl })
       const result = await deps.send(phone, text)

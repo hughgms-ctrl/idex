@@ -38,30 +38,32 @@ select (select v from ids where k = 'church'), (select v from ids where k = 'lou
 insert into ids select 'm_fone', id from ministry_members where user_id = 'a6000000-0000-4000-8000-000000000002';
 insert into ids select 'm_off', id from ministry_members where user_id = 'a6000000-0000-4000-8000-000000000003';
 
--- Culto daqui a 2 dias (19h em SP) com os dois escalados
+-- Culto daqui a 50 min com os dois escalados; aviso programado 1 h antes (Fase 14)
+update reminder_rules set enabled = false where ministry_id = (select v from ids where k = 'louvor');
+insert into reminder_rules (church_id, ministry_id, event_kind, timing, minutes_before)
+values ((select v from ids where k = 'church'), (select v from ids where k = 'louvor'), 'service', 'minutes_before', 60);
 insert into events (church_id, ministry_id, title, starts_at)
-values ((select v from ids where k = 'church'), (select v from ids where k = 'louvor'), 'Culto F6',
-        ((now() at time zone 'America/Sao_Paulo')::date + 2 + time '19:00') at time zone 'America/Sao_Paulo');
+values ((select v from ids where k = 'church'), (select v from ids where k = 'louvor'), 'Culto F6', now() + interval '50 minutes');
 insert into ids select 'evento', id from events where title = 'Culto F6';
 insert into schedule_assignments (church_id, event_id, ministry_member_id)
 select (select v from ids where k = 'church'), (select v from ids where k = 'evento'), v from ids where k in ('m_fone', 'm_off');
 
 -- -----------------------------------------------------------------------------
--- Lembrete D-2
+-- Lembrete programado
 -- -----------------------------------------------------------------------------
 set local role service_role;
 select lives_ok('select public.enqueue_reminders()', 'job de lembretes roda');
 reset role;
-select is((select count(*)::int from notification_queue where kind = 'schedule_reminder' and church_id = (select v from ids where k = 'church')), 2,
+select is((select count(*)::int from notification_queue where kind = 'event_reminder' and church_id = (select v from ids where k = 'church')), 2,
   'um lembrete por escalado');
-select is((select status::text from notification_queue where kind = 'schedule_reminder' and profile_id = 'a6000000-0000-4000-8000-000000000002'), 'pending',
+select is((select status::text from notification_queue where kind = 'event_reminder' and profile_id = 'a6000000-0000-4000-8000-000000000002'), 'pending',
   'quem tem telefone fica na fila');
-select is((select status::text from notification_queue where kind = 'schedule_reminder' and profile_id = 'a6000000-0000-4000-8000-000000000003'), 'skipped',
+select is((select status::text from notification_queue where kind = 'event_reminder' and profile_id = 'a6000000-0000-4000-8000-000000000003'), 'skipped',
   'quem optou por não receber é pulado');
 set local role service_role;
 select public.enqueue_reminders();
 reset role;
-select is((select count(*)::int from notification_queue where kind = 'schedule_reminder' and church_id = (select v from ids where k = 'church')), 2,
+select is((select count(*)::int from notification_queue where kind = 'event_reminder' and church_id = (select v from ids where k = 'church')), 2,
   'rodar de novo não duplica');
 
 -- -----------------------------------------------------------------------------
@@ -89,10 +91,10 @@ select is((select payload ->> 'status' from notification_queue where kind = 'req
 set local role service_role;
 create temporary table claimed on commit drop as select * from public.claim_notifications(100);
 select ok((select count(*) from claimed where phone = '(11) 91234-5678') >= 3, 'servidor pega os pendentes com o telefone');
-select public.finish_notification((select id from claimed where kind = 'schedule_reminder' and phone is not null limit 1), true);
+select public.finish_notification((select id from claimed where kind = 'event_reminder' and phone is not null limit 1), true);
 select public.finish_notification((select id from claimed where kind = 'points_deducted' limit 1), false, 'HTTP 500', now() + interval '5 minutes');
 reset role;
-select is((select status::text from notification_queue where kind = 'schedule_reminder' and profile_id = 'a6000000-0000-4000-8000-000000000002'), 'sent',
+select is((select status::text from notification_queue where kind = 'event_reminder' and profile_id = 'a6000000-0000-4000-8000-000000000002'), 'sent',
   'enviado com sucesso');
 select is((select status::text || '/' || attempts from notification_queue where kind = 'points_deducted' and profile_id = 'a6000000-0000-4000-8000-000000000002'), 'pending/1',
   'falha volta para a fila com nova tentativa');

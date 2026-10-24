@@ -96,15 +96,17 @@ export function JustifyDialog({
   event,
   churchId,
   memberId,
+  initialKind = 'late',
   onClose,
 }: {
   event: EventInfo | null
   churchId: string
   memberId: string
+  initialKind?: 'late' | 'absence'
   onClose: () => void
 }) {
   const queryClient = useQueryClient()
-  const [kind, setKind] = useState<'late' | 'absence'>('late')
+  const [kind, setKind] = useState<'late' | 'absence'>(initialKind)
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
 

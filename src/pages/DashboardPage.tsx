@@ -1,6 +1,14 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import { CalendarCheck, CalendarClock, ChevronRight, Guitar, QrCode, UserPlus } from 'lucide-react'
+import {
+  CalendarCheck,
+  CalendarClock,
+  Check,
+  ChevronRight,
+  Guitar,
+  QrCode,
+  UserPlus,
+} from 'lucide-react'
 
 import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
@@ -64,6 +72,8 @@ export function DashboardPage() {
     ? (periodEvents.data ?? []).filter((e) => !answered.has(e.id)).length
     : 0
 
+  const toConfirm = myAssignments.data?.find((a) => a.status === 'scheduled')
+
   const firstName = profile.data?.full_name.split(' ')[0]
   const event = nextEvent.data
 
@@ -93,6 +103,15 @@ export function DashboardPage() {
           icon={<CalendarCheck className="text-primary size-5" aria-hidden="true" />}
           title="Responda sua disponibilidade"
           text={`${pendingAnswers} ${pendingAnswers === 1 ? 'data sem resposta' : 'datas sem resposta'}${settings.data?.availability_deadline ? ` · até ${formatDate(settings.data.availability_deadline)}` : ''}.`}
+        />
+      )}
+
+      {toConfirm && (
+        <TodoCard
+          to={`/confirmar/${toConfirm.events.service_event_id ?? toConfirm.events.id}`}
+          icon={<CalendarCheck className="text-primary size-5" aria-hidden="true" />}
+          title="Confirme sua presença"
+          text={`${toConfirm.events.kind === 'rehearsal' ? 'Ensaio' : toConfirm.events.title} · ${formatEventDate(toConfirm.events.starts_at)}`}
         />
       )}
 
@@ -164,14 +183,25 @@ export function DashboardPage() {
         {myAssignments.data && myAssignments.data.length > 0 ? (
           <ul className="grid grid-cols-3 gap-2.5">
             {myAssignments.data.map((a) => (
-              <li key={a.id} className="bg-card flex flex-col gap-1 rounded-2xl border p-3">
-                <span className="text-muted-foreground font-mono text-[13px]">
-                  {formatDayMonth(a.events.starts_at)}
-                </span>
-                <span className="truncate text-[15px] font-semibold">
-                  {(a.ministry_role_id && roleName.get(a.ministry_role_id)) || 'Equipe'}
-                </span>
-                <span className="text-muted-foreground truncate text-xs">{a.events.title}</span>
+              <li key={a.id}>
+                <Link
+                  to={`/confirmar/${a.events.service_event_id ?? a.events.id}`}
+                  className="bg-card flex h-full flex-col gap-1 rounded-2xl border p-3"
+                >
+                  <span className="text-muted-foreground flex items-center justify-between font-mono text-[13px]">
+                    {formatDayMonth(a.events.starts_at)}
+                    {a.status === 'confirmed' && (
+                      <Check className="text-primary size-4" aria-label="Confirmado" />
+                    )}
+                  </span>
+                  <span className="truncate text-[15px] font-semibold">
+                    {(a.ministry_role_id && roleName.get(a.ministry_role_id)) || 'Equipe'}
+                  </span>
+                  <span className="text-muted-foreground truncate text-xs">{a.events.title}</span>
+                  {a.status === 'scheduled' && (
+                    <span className="text-primary text-xs font-semibold">Confirmar</span>
+                  )}
+                </Link>
               </li>
             ))}
           </ul>

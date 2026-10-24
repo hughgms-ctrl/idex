@@ -8,6 +8,7 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { SignUpChurchPage } from '@/pages/auth/SignUpChurchPage'
 import { WelcomePage } from '@/pages/auth/WelcomePage'
 import { AvailabilityPage } from '@/pages/AvailabilityPage'
+import { ConfirmPage } from '@/pages/ConfirmPage'
 import { CreateChurchPage } from '@/pages/CreateChurchPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { InstallPage } from '@/pages/InstallPage'
@@ -75,6 +76,7 @@ const router = createBrowserRouter([
           { index: true, element: <DashboardPage /> },
           { path: 'escalas', element: <SchedulePage /> },
           { path: 'escalas/:eventId', element: <EventSchedulePage /> },
+          { path: 'confirmar/:eventId', element: <ConfirmPage /> },
           { path: 'repertorio', element: <RepertoirePage /> },
           { path: 'repertorio/culto/:eventId', element: <SetlistPage /> },
           {

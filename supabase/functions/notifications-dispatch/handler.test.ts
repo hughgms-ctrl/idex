@@ -147,6 +147,32 @@ describe('envio de avisos', () => {
       expect(finished[0]).toMatchObject({ ok: true })
     })
 
+    it('aviso "só no celular" não vai para o WhatsApp', async () => {
+      const sent: string[] = []
+      const { deps, finished } = setup(
+        [
+          item({
+            kind: 'event_reminder',
+            payload: {
+              kind: 'service',
+              eventTitle: 'Culto',
+              eventStartsAt: '2026-11-01T22:00:00Z',
+              pushOnly: true,
+              path: '/confirmar/e1',
+            },
+          }),
+        ],
+        async (phone) => {
+          sent.push(phone)
+          return { ok: true }
+        },
+        { pushConfigured: true, pushSubscriptions: async () => [SUB] },
+      )
+      expect(await (await call(deps)).json()).toMatchObject({ sent: 1 })
+      expect(sent).toEqual([])
+      expect(finished[0]).toMatchObject({ ok: true })
+    })
+
     it('manda nos dois canais; na nova tentativa do WhatsApp não repete o celular', async () => {
       let pushes = 0
       const { deps, finished } = setup(
