@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { Link2, UserPlus } from 'lucide-react'
@@ -57,6 +57,14 @@ export function MembersPage() {
           )
         }
       />
+      {leader && (
+        <p className="text-muted-foreground -mt-2 text-[13px]">
+          Toque em alguém para mudar instrumentos e vozes ou nomear como líder.{' '}
+          <Link to="/ministerios" className="text-primary underline">
+            Editar a lista de instrumentos e vozes
+          </Link>
+        </p>
+      )}
 
       {members.error ? (
         <ErrorState error={members.error} onRetry={() => void members.refetch()} />

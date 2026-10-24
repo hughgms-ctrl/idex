@@ -150,7 +150,7 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
                 onClick={() => setOpen(false)}
               >
                 <Link to="/ministerios">
-                  <Layers aria-hidden="true" /> Ministérios e funções
+                  <Layers aria-hidden="true" /> Ministérios, instrumentos e vozes
                 </Link>
               </Button>
               <Button

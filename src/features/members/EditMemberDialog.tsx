@@ -17,7 +17,9 @@ import {
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
 import { memberKeys, type MinistryMemberRow } from '@/features/members/queries'
+import { NewRoleInput } from '@/features/ministries/NewRoleInput'
 import { errorMessage } from '@/lib/errors'
+import { cn } from '@/lib/utils'
 import { supabase } from '@/lib/supabase'
 import type { Enums, Tables } from '@/types/database'
 
@@ -111,11 +113,13 @@ function EditMemberForm({
     <>
       <DialogHeader>
         <DialogTitle>{member.name}</DialogTitle>
-        <DialogDescription>Funções, papel e situação no ministério.</DialogDescription>
+        <DialogDescription>
+          Instrumentos e vozes, liderança e situação no ministério.
+        </DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-4">
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-sm font-medium">Funções</legend>
+          <legend className="mb-2 text-sm font-medium">Instrumentos e vozes</legend>
           <div className="grid grid-cols-2 gap-1">
             {roles.map((r) => (
               <Label
@@ -132,18 +136,36 @@ function EditMemberForm({
               </Label>
             ))}
           </div>
+          <NewRoleInput
+            churchId={member.church_id}
+            ministryId={ministryId}
+            nextOrder={roles.length + 1}
+            placeholder="Outro instrumento ou voz"
+            onCreated={(id) => setRoleIds((ids) => [...ids, id])}
+          />
         </fieldset>
-        <FormField id="member-role" label="Papel">
-          <NativeSelect
-            id="member-role"
-            value={role}
+        <Label
+          className={cn(
+            'flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-3 font-normal',
+            role === 'leader' && 'border-primary',
+            isSelf && 'cursor-not-allowed opacity-60',
+          )}
+        >
+          <Checkbox
+            className="mt-0.5"
+            checked={role === 'leader'}
             disabled={isSelf}
-            onChange={(e) => setRole(e.target.value as Enums<'ministry_member_role'>)}
-          >
-            <option value="member">Integrante</option>
-            <option value="leader">Líder</option>
-          </NativeSelect>
-        </FormField>
+            onCheckedChange={(v) => setRole(v ? 'leader' : 'member')}
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[15px] font-semibold">Líder do ministério</span>
+            <span className="text-muted-foreground text-[13px] leading-snug">
+              Monta a escala, abre a disponibilidade, projeta o QR, aprova pedidos, cuida do
+              repertório e pode nomear outros líderes.
+              {isSelf && ' (Outro líder precisa mudar o seu papel.)'}
+            </span>
+          </span>
+        </Label>
         <FormField
           id="member-status"
           label="Situação"

@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 
 import { FormField } from '@/components/FormField'
 import { PageHeader } from '@/components/PageHeader'
@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useChurch } from '@/features/church/church-context'
 import { churchKeys } from '@/features/church/queries'
+import { NewRoleInput } from '@/features/ministries/NewRoleInput'
 import { ministryKeys, useMinistryRoles, useMinistrySettings } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
 import {
@@ -181,23 +182,22 @@ function MinistryDialog({
 function RolesSection({ ministry, canEdit }: { ministry: Tables<'ministries'>; canEdit: boolean }) {
   const queryClient = useQueryClient()
   const roles = useMinistryRoles(ministry.id)
-  const [newRole, setNewRole] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<{ id: string; name: string } | null>(null)
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ministryKeys.roles(ministry.id) })
 
-  const add = useMutation({
-    mutationFn: async (name: string) => {
-      const { error: err } = await supabase.from('ministry_roles').insert({
-        church_id: ministry.church_id,
-        ministry_id: ministry.id,
-        name,
-        sort_order: (roles.data?.length ?? 0) + 1,
-      })
-      if (err) throw err
+  const rename = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const parsed = roleNameSchema.safeParse(name)
+      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Nome inválido')
+      const { error: err } = await supabase
+        .from('ministry_roles')
+        .update({ name: parsed.data })
+        .eq('id', id)
+      if (err) throw err.code === '23505' ? new Error('Já existe uma função com esse nome') : err
     },
     onSuccess: async () => {
-      setNewRole('')
+      setEditing(null)
       await invalidate()
     },
     onError: (err) => toast.error(errorMessage(err)),
@@ -214,59 +214,85 @@ function RolesSection({ ministry, canEdit }: { ministry: Tables<'ministries'>; c
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionTitle title={`Funções em ${ministry.name}`} />
+      <SectionTitle title={`Instrumentos e vozes · ${ministry.name}`} />
       <Panel className="gap-2">
+        {canEdit && (
+          <p className="text-muted-foreground text-[13px]">
+            A lista é sua: cadastre, renomeie ou remova. Os integrantes escolhem entre estas opções.
+          </p>
+        )}
         <ul className="flex flex-wrap gap-2">
-          {(roles.data ?? []).map((r) => (
-            <li
-              key={r.id}
-              className="bg-secondary flex min-h-9 items-center gap-1 rounded-[10px] py-1 pr-1 pl-3 text-sm"
-            >
-              {r.name}
-              {canEdit && (
-                <button
-                  type="button"
-                  aria-label={`Remover função ${r.name}`}
-                  onClick={() => {
-                    if (window.confirm(`Remover a função "${r.name}"?`)) remove.mutate(r.id)
+          {(roles.data ?? []).map((r) =>
+            editing?.id === r.id ? (
+              <li key={r.id} className="flex w-full gap-2">
+                <form
+                  className="flex w-full gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    rename.mutate(editing)
                   }}
-                  className="text-muted-foreground hover:text-destructive flex size-9 items-center justify-center rounded-md"
                 >
-                  <Trash2 className="size-4" />
-                </button>
-              )}
-            </li>
-          ))}
+                  <Input
+                    aria-label={`Novo nome de ${r.name}`}
+                    autoFocus
+                    value={editing.name}
+                    onChange={(e) => setEditing({ id: r.id, name: e.target.value })}
+                  />
+                  <Button type="submit" size="sm" disabled={rename.isPending}>
+                    Salvar
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                    Cancelar
+                  </Button>
+                </form>
+              </li>
+            ) : (
+              <li
+                key={r.id}
+                className="bg-secondary flex min-h-9 items-center gap-1 rounded-[10px] py-1 pr-1 pl-3 text-sm"
+              >
+                {r.name}
+                {canEdit && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label={`Renomear ${r.name}`}
+                      onClick={() => setEditing({ id: r.id, name: r.name })}
+                      className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-md"
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Remover função ${r.name}`}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            `Remover "${r.name}"? Quem tinha essa função perde a marcação.`,
+                          )
+                        )
+                          remove.mutate(r.id)
+                      }}
+                      className="text-muted-foreground hover:text-destructive flex size-9 items-center justify-center rounded-md"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </>
+                )}
+              </li>
+            ),
+          )}
           {roles.data?.length === 0 && (
             <li className="text-muted-foreground text-sm">Nenhuma função cadastrada.</li>
           )}
         </ul>
         {canEdit && (
-          <form
-            className="mt-2 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const parsed = roleNameSchema.safeParse(newRole)
-              if (!parsed.success) {
-                setError(parsed.error.issues[0]?.message ?? 'Nome inválido')
-                return
-              }
-              setError(null)
-              add.mutate(parsed.data)
-            }}
-          >
-            <Input
-              aria-label="Nova função"
-              placeholder="Ex.: Saxofone"
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value)}
-            />
-            <Button type="submit" variant="secondary" disabled={add.isPending}>
-              <Plus aria-hidden="true" /> Adicionar
-            </Button>
-          </form>
+          <NewRoleInput
+            churchId={ministry.church_id}
+            ministryId={ministry.id}
+            nextOrder={(roles.data?.length ?? 0) + 1}
+          />
         )}
-        {error && <p className="text-destructive text-sm">{error}</p>}
       </Panel>
     </section>
   )

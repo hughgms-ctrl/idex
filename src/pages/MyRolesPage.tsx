@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { availabilityKeys, useMyRoleIds } from '@/features/availability/queries'
 import { useChurch } from '@/features/church/church-context'
 import { memberKeys } from '@/features/members/queries'
+import { NewRoleInput } from '@/features/ministries/NewRoleInput'
 import { useMinistryRoles } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
@@ -19,7 +20,7 @@ import { cn } from '@/lib/utils'
 // O integrante marca os instrumentos/vozes em que pode servir.
 // Na primeira vez (?inicio=1) segue para a disponibilidade.
 export function MyRolesPage() {
-  const { church, ministry, memberships } = useChurch()
+  const { church, ministry, memberships, isLeader } = useChurch()
   const [params] = useSearchParams()
   const onboarding = params.get('inicio') === '1'
   const membership = memberships.find((m) => m.ministry_id === ministry?.id)
@@ -41,7 +42,9 @@ export function MyRolesPage() {
       key={mine.data.join(',')}
       churchId={church.id}
       memberId={membership.id}
+      ministryId={ministry?.id ?? ''}
       ministryName={ministry?.name ?? ''}
+      canManage={ministry ? isLeader(ministry.id) : false}
       roles={roles.data}
       initial={mine.data}
       onboarding={onboarding}
@@ -52,14 +55,18 @@ export function MyRolesPage() {
 function RolesForm({
   churchId,
   memberId,
+  ministryId,
   ministryName,
+  canManage,
   roles,
   initial,
   onboarding,
 }: {
   churchId: string
   memberId: string
+  ministryId: string
   ministryName: string
+  canManage: boolean
   roles: { id: string; name: string }[]
   initial: string[]
   onboarding: boolean
@@ -121,7 +128,7 @@ function RolesForm({
       />
       {roles.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          O líder ainda não cadastrou as funções deste ministério.
+          Ainda não há instrumentos ou vozes cadastrados neste ministério.
         </p>
       ) : (
         <ul className="grid grid-cols-2 gap-2.5">
@@ -152,6 +159,18 @@ function RolesForm({
             )
           })}
         </ul>
+      )}
+      {canManage ? (
+        <NewRoleInput
+          churchId={churchId}
+          ministryId={ministryId}
+          nextOrder={roles.length + 1}
+          onCreated={(id) => setSelected((prev) => new Set(prev).add(id))}
+        />
+      ) : (
+        <p className="text-muted-foreground text-[13px]">
+          Não achou seu instrumento ou voz? Peça ao líder para cadastrar.
+        </p>
       )}
       <Button
         size="lg"
