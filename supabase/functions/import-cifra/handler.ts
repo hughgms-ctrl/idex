@@ -20,7 +20,7 @@ export const bodySchema = z
 export type Deps = {
   /** id do usuário dono do token (null = não logado) */
   getUserId: (authorization: string) => Promise<string | null>
-  /** o usuário (pelo token) é líder do ministério? */
+  /** o usuário (pelo token) é líder do ministério ou tem a permissão de cifras? */
   isLeader: (authorization: string, ministryId: string) => Promise<boolean>
   fetch: typeof fetch
 }
@@ -39,7 +39,7 @@ export async function handleImportCifra(req: Request, deps: Deps): Promise<Respo
   const body = parsed.data
 
   if (!(await deps.isLeader(authorization, body.ministryId))) {
-    return errorJson('Só o líder do ministério importa cifras', 403)
+    return errorJson('Só o líder ou quem tem a permissão de cifras importa', 403)
   }
 
   const target = body.url || cifraClubUrl(body.artist ?? '', body.title ?? '')

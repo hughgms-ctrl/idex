@@ -117,6 +117,13 @@ const router = createBrowserRouter([
           { path: 'planejamento', element: <PlanningPage /> },
           { path: 'membros', element: <MembersPage /> },
           { path: 'ministerios', element: <MinistriesPage /> },
+          {
+            path: 'avisos',
+            lazy: () =>
+              import('@/pages/AnnouncementsPage').then((m) => ({
+                Component: m.AnnouncementsPage,
+              })),
+          },
           { path: 'cadastro-igreja', element: <CreateChurchPage /> },
         ],
       },

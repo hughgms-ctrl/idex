@@ -9,6 +9,7 @@ export type NotificationKind =
   | 'member_benched'
   | 'event_rescheduled'
   | 'event_reminder'
+  | 'announcement'
 
 export type NotificationPayload = {
   name?: string | null
@@ -34,6 +35,8 @@ export type NotificationPayload = {
   confirmed?: boolean | null // já confirmou presença?
   soon?: boolean | null // aviso perto do horário
   pushOnly?: boolean | null // só no celular
+  title?: string | null // aviso escrito pelo líder
+  body?: string | null
 }
 
 const WEEKDAYS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
@@ -106,6 +109,8 @@ export function renderMessage(
         ? `${hi} Pela regra de horário do ministério, você ficou de fora ${where}${p.reason ? ` (${p.reason.toLowerCase()})` : ''}. Fale com o líder se precisar.${link}`
         : `${hi} *${p.memberName ?? 'Um integrante'}* ficou de fora ${where} pela regra de horário (${p.eventTitle ?? ''}). Veja a escala e chame um substituto.${link}`
     }
+    case 'announcement':
+      return `${hi} *${p.title ?? 'Aviso'}*\n\n${p.body ?? ''}${link}`
     case 'request_reviewed': {
       const what =
         p.kind === 'justificativa'
@@ -173,6 +178,8 @@ export function renderPush(
         tag,
       }
     }
+    case 'announcement':
+      return { title: p.title ?? 'Aviso', body: p.body ?? '', url: p.path ?? '/', tag }
     case 'member_benched':
       return {
         title: p.self ? 'Você ficou de fora' : `${p.memberName ?? 'Integrante'} ficou de fora`,

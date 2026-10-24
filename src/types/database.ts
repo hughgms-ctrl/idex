@@ -3,6 +3,76 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          audience: string
+          body: string
+          channel: string
+          church_id: string
+          created_at: string
+          created_by: string | null
+          event_id: string | null
+          id: string
+          member_ids: string[]
+          ministry_id: string
+          recipients_count: number | null
+          send_at: string
+          sent_at: string | null
+          status: string
+          title: string
+        }
+        ComputedFields: never
+        Insert: {
+          audience?: string
+          body: string
+          channel?: string
+          church_id: string
+          created_at?: string
+          created_by?: string | null
+          event_id?: string | null
+          id?: string
+          member_ids?: string[]
+          ministry_id: string
+          recipients_count?: number | null
+          send_at?: string
+          sent_at?: string | null
+          status?: string
+          title: string
+        }
+        Update: {
+          audience?: string
+          body?: string
+          channel?: string
+          church_id?: string
+          created_at?: string
+          created_by?: string | null
+          event_id?: string | null
+          id?: string
+          member_ids?: string[]
+          ministry_id?: string
+          recipients_count?: number | null
+          send_at?: string
+          sent_at?: string | null
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'announcements_event_id_church_id_fkey'
+            columns: ['event_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'announcements_ministry_id_church_id_fkey'
+            columns: ['ministry_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministries'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -804,6 +874,10 @@ export type Database = {
       }
       ministry_members: {
         Row: {
+          can_edit_setlists: boolean
+          can_edit_songs: boolean
+          can_manage_song_files: boolean
+          can_send_announcements: boolean
           church_id: string
           created_at: string
           id: string
@@ -816,6 +890,10 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          can_edit_setlists?: boolean
+          can_edit_songs?: boolean
+          can_manage_song_files?: boolean
+          can_send_announcements?: boolean
           church_id: string
           created_at?: string
           id?: string
@@ -827,6 +905,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          can_edit_setlists?: boolean
+          can_edit_songs?: boolean
+          can_manage_song_files?: boolean
+          can_send_announcements?: boolean
           church_id?: string
           created_at?: string
           id?: string
@@ -1764,7 +1846,17 @@ export type Database = {
         Returns: string
       }
       cycle_for_event: { Args: { p_event_id: string }; Returns: string }
+      count_announcement_audience: {
+        Args: {
+          p_audience: string
+          p_event_id?: string
+          p_member_ids?: string[]
+          p_ministry_id: string
+        }
+        Returns: number
+      }
       delete_push_subscription: { Args: { p_endpoint: string }; Returns: undefined }
+      dispatch_announcements: { Args: Record<PropertyKey, never>; Returns: number }
       dispatch_notifications_http: { Args: Record<PropertyKey, never>; Returns: undefined }
       enqueue_notification: {
         Args: {
@@ -1791,6 +1883,10 @@ export type Database = {
           role: Database['public']['Enums']['ministry_member_role']
           status: string
         }[]
+      }
+      has_ministry_permission: {
+        Args: { p_ministry_id: string; p_permission: string }
+        Returns: boolean
       }
       is_church_member: { Args: { p_church_id: string }; Returns: boolean }
       is_church_owner: { Args: { p_church_id: string }; Returns: boolean }
@@ -1881,6 +1977,7 @@ export type Database = {
         | 'member_benched'
         | 'event_rescheduled'
         | 'event_reminder'
+        | 'announcement'
       notification_status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
       point_reason: 'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment'
       request_status: 'pending' | 'approved' | 'adjusted' | 'rejected'
@@ -2012,6 +2109,7 @@ export const Constants = {
         'member_benched',
         'event_rescheduled',
         'event_reminder',
+        'announcement',
       ],
       notification_status: ['pending', 'sending', 'sent', 'failed', 'skipped'],
       point_reason: ['cycle_start', 'late', 'absence', 'request_rejected', 'adjustment'],

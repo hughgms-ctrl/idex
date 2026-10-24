@@ -15,7 +15,7 @@ export function useMinistryMembers(ministryId: string | undefined) {
       const { data, error } = await supabase
         .from('ministry_members')
         .select(
-          'id, church_id, user_id, role, status, joined_at, profiles(full_name, phone), ministry_member_roles(ministry_role_id)',
+          'id, church_id, user_id, role, status, joined_at, can_edit_songs, can_manage_song_files, can_edit_setlists, can_send_announcements, profiles(full_name, phone), ministry_member_roles(ministry_role_id)',
         )
         .eq('ministry_id', ministryId ?? '')
       if (error) throw error

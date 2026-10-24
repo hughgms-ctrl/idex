@@ -9,6 +9,7 @@ import {
   Settings2,
   Smartphone,
   UserRound,
+  BellRing,
 } from 'lucide-react'
 
 import { useUser } from '@/auth/auth-context'
@@ -33,7 +34,7 @@ import { supabase } from '@/lib/supabase'
 export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
   const user = useUser()
   const profile = useMyProfile()
-  const { churches, church, ministries, ministry, selectChurch, selectMinistry } = useChurch()
+  const { churches, church, ministries, ministry, selectChurch, selectMinistry, can } = useChurch()
   const [open, setOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const name = profile.data?.full_name || user.email || ''
@@ -143,6 +144,18 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
                   <Smartphone aria-hidden="true" /> Instalar app e avisos
                 </Link>
               </Button>
+              {ministry && can(ministry.id, 'announcements') && (
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={() => setOpen(false)}
+                >
+                  <Link to="/avisos">
+                    <BellRing aria-hidden="true" /> Central de avisos
+                  </Link>
+                </Button>
+              )}
               <Button
                 asChild
                 variant="ghost"

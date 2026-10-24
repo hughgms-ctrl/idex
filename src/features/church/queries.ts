@@ -45,7 +45,9 @@ export function useMyMemberships(userId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ministry_members')
-        .select('id, ministry_id, role, status')
+        .select(
+          'id, ministry_id, role, status, can_edit_songs, can_manage_song_files, can_edit_setlists, can_send_announcements',
+        )
         .eq('user_id', userId)
       if (error) throw error
       return data
