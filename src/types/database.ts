@@ -919,6 +919,8 @@ export type Database = {
           rehearsal_days_before: number
           rehearsal_duration_min: number
           rehearsal_enabled: boolean
+          rehearsal_excused_policy: string
+          rehearsal_forgot_policy: string
           rehearsal_late_consequence: string
           rehearsal_mode: string
           rehearsal_time: string
@@ -952,6 +954,8 @@ export type Database = {
           rehearsal_days_before?: number
           rehearsal_duration_min?: number
           rehearsal_enabled?: boolean
+          rehearsal_excused_policy?: string
+          rehearsal_forgot_policy?: string
           rehearsal_late_consequence?: string
           rehearsal_mode?: string
           rehearsal_time?: string
@@ -984,6 +988,8 @@ export type Database = {
           rehearsal_days_before?: number
           rehearsal_duration_min?: number
           rehearsal_enabled?: boolean
+          rehearsal_excused_policy?: string
+          rehearsal_forgot_policy?: string
           rehearsal_late_consequence?: string
           rehearsal_mode?: string
           rehearsal_time?: string

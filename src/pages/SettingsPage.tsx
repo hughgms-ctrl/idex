@@ -113,6 +113,57 @@ function useSaveSettings(ministryId: string, message: string) {
 // som, consequência do atraso) e quando acontece o ensaio.
 const WEEKDAYS_FULL = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
 
+function ChoiceCards<T extends string>({
+  label,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { value: T; title: string; text: string }[]
+  disabled: boolean
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-sm font-medium">{label}</span>
+      <div role="radiogroup" aria-label={label} className="flex flex-col gap-2">
+        {options.map((o) => {
+          const on = value === o.value
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={disabled}
+              onClick={() => onChange(o.value)}
+              className={cn(
+                'bg-card flex min-h-14 items-start gap-3 rounded-2xl border p-3 text-left',
+                on && 'border-info',
+              )}
+            >
+              <span
+                className={cn(
+                  'mt-0.5 size-5 shrink-0 rounded-full border-2',
+                  on ? 'border-info bg-info' : 'border-muted-foreground',
+                )}
+                aria-hidden="true"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold">{o.title}</span>
+                <span className="text-muted-foreground text-[13px]">{o.text}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function ServiceTimes({
   settings,
   canEdit,
@@ -138,6 +189,8 @@ function ServiceTimes({
     rehearsalArrival: String(settings.rehearsal_arrival_minutes),
     rehearsalTolerance: String(settings.rehearsal_tolerance_min),
     rehearsalConsequence: settings.rehearsal_late_consequence,
+    forgotPolicy: settings.rehearsal_forgot_policy,
+    excusedPolicy: settings.rehearsal_excused_policy,
   })
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setV({ ...v, [k]: e.target.value })
@@ -180,6 +233,8 @@ function ServiceTimes({
       rehearsal_arrival_minutes: num(v.rehearsalArrival),
       rehearsal_tolerance_min: num(v.rehearsalTolerance),
       rehearsal_late_consequence: v.rehearsalConsequence,
+      rehearsal_forgot_policy: v.forgotPolicy,
+      rehearsal_excused_policy: v.excusedPolicy,
     })
   }
 
@@ -329,6 +384,46 @@ function ServiceTimes({
                 '; depois disso não participa do ensaio'}
               .
             </p>
+            {v.rehearsalConsequence === 'out_rehearsal_and_service' && (
+              <>
+                <ChoiceCards
+                  label="Quem não bateu o ponto no ensaio e pediu “esqueci de registrar”"
+                  value={v.forgotPolicy}
+                  disabled={!canEdit}
+                  onChange={(x) => setV({ ...v, forgotPolicy: x })}
+                  options={[
+                    {
+                      value: 'out_until_approved',
+                      title: 'Fica fora até eu aprovar',
+                      text: 'Sai do culto quando o ensaio termina; volta se eu aprovar o pedido.',
+                    },
+                    {
+                      value: 'keep_until_reviewed',
+                      title: 'Continua escalado enquanto eu não respondo',
+                      text: 'Só sai do culto se eu recusar o pedido.',
+                    },
+                  ]}
+                />
+                <ChoiceCards
+                  label="Quem avisou antes que ia faltar ao ensaio e eu aprovei"
+                  value={v.excusedPolicy}
+                  disabled={!canEdit}
+                  onChange={(x) => setV({ ...v, excusedPolicy: x })}
+                  options={[
+                    {
+                      value: 'can_play',
+                      title: 'Pode tocar no culto',
+                      text: 'O aviso aprovado segura o lugar na escala.',
+                    },
+                    {
+                      value: 'out_of_service',
+                      title: 'Sem ensaio, sem culto',
+                      text: 'Mesmo com aviso aprovado, fica fora do culto (não perde pontos).',
+                    },
+                  ]}
+                />
+              </>
+            )}
           </>
         )}
       </Panel>
