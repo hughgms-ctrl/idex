@@ -165,7 +165,10 @@ export function useMyRehearsalAvailability(memberId: string | undefined) {
         .select('event_id, ministry_member_id, status, note')
         .eq('ministry_member_id', memberId ?? '')
       if (error) throw error
-      return new Map((data as RehearsalAnswer[]).map((r) => [r.event_id, r]))
+      return Object.fromEntries((data as RehearsalAnswer[]).map((r) => [r.event_id, r])) as Record<
+        string,
+        RehearsalAnswer
+      >
     },
   })
 }

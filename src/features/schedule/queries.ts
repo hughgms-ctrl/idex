@@ -155,7 +155,11 @@ export function useRehearsalsFor(serviceIds: string[]) {
         .select('id, service_event_id, starts_at, arrive_at')
         .in('service_event_id', ids)
       if (error) throw error
-      return new Map(data.map((r) => [r.service_event_id as string, r]))
+      // objeto simples (não Map): esta consulta é salva no aparelho (offline)
+      return Object.fromEntries(data.map((r) => [r.service_event_id as string, r])) as Record<
+        string,
+        LinkedRehearsal
+      >
     },
   })
 }

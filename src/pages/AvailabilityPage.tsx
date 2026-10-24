@@ -35,7 +35,8 @@ export function AvailabilityPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const onboarding = params.get('inicio') === '1'
-  const { church, ministry, memberships } = useChurch()
+  const { church, ministry, memberships, isLeader } = useChurch()
+  const leader = ministry ? isLeader(ministry.id) : false
   const membership = memberships.find((m) => m.ministry_id === ministry?.id)
   const settings = useMinistrySettings(ministry?.id)
   const period =
@@ -89,8 +90,17 @@ export function AvailabilityPage() {
         <PageHeader
           eyebrow={onboarding ? 'PASSO 2 DE 3' : undefined}
           title="Disponibilidade"
-          description="O líder ainda não abriu a programação para você responder. Quando abrir, as datas aparecem aqui."
+          description={
+            leader
+              ? 'Nenhum período aberto. Abra o período em Configurações para você e a equipe responderem. Você também pode marcar “Posso / Não posso” direto na tela de cada culto.'
+              : 'O líder ainda não abriu a programação para você responder. Quando abrir, as datas aparecem aqui.'
+          }
         />
+        {leader && !onboarding && (
+          <Button asChild size="lg" className="min-h-12 rounded-2xl">
+            <Link to="/configuracoes">Abrir período em Configurações</Link>
+          </Button>
+        )}
         {onboarding && (
           <Button
             size="lg"
@@ -215,9 +225,9 @@ export function AvailabilityPage() {
                   </div>
                   {e.kind === 'service' && answer !== false && membership && (
                     <RehearsalAvailabilityField
-                      key={rehearsalAnswers.data?.get(e.id)?.note ?? ''}
+                      key={rehearsalAnswers.data?.[e.id]?.note ?? ''}
                       serviceId={e.id}
-                      answer={rehearsalAnswers.data?.get(e.id)}
+                      answer={rehearsalAnswers.data?.[e.id]}
                       memberId={membership.id}
                       churchId={church.id}
                     />

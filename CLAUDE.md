@@ -130,5 +130,9 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - [x] Fase 15 — disponibilidade para o ensaio
   - `rehearsal_availability` por culto (o ensaio pode mudar de dia): `status` any|some|none + `note` ("só terça; quarta não"). RLS e gatilho iguais a `event_availability` (próprio membro e líder).
   - Campo `RehearsalAvailabilityField` em Disponibilidade (cultos com "posso" ou sem resposta) e em `/confirmar`; o líder vê "Dias para ensaiar" (quem não pode, só alguns dias, sem resposta) na tela do culto e do ensaio, para marcar/remarcar.
+- [x] Fase 16 — escolher integrantes em gaveta e disponibilidade do líder
+  - Editor do evento: a lista suspensa virou `MemberPicker` (`src/features/schedule/MemberPicker.tsx`, `Sheet` de baixo no celular e centralizada no computador): busca, cartões grandes, grupos "Disponíveis" (quem disse "posso" primeiro), "Com restrição" (motivo) e "Outros da equipe" (sem a função). Cada função mostra até 3 sugestões como botões rápidos.
+  - "Você neste culto" (Posso/Não posso + dias de ensaio) no editor do culto/ensaio para quem é integrante (inclusive o líder). "Minha disponibilidade" no topo da Escala e no menu lateral; sem período aberto, o líder vê o atalho para Configurações.
+  - Consultas salvas no aparelho (`OFFLINE_ROOTS`) não podem devolver `Map`/`Set` (viram `{}` ao recarregar e quebram a tela): usar objeto simples. `buster` do cache em `v2`.
 - Produção: Supabase `jptpzpvysgnfulyoquex` (São Paulo) e Vercel `https://idex-eight.vercel.app`. Confirmação de e-mail desligada (`mailer_autoconfirm`) porque o SMTP padrão do Supabase só envia para a equipe do projeto; configurar SMTP próprio (ex.: Resend) para religar e usar link mágico.
 - Pendências conhecidas: o Cifra Club bloqueia (403) acessos vindos dos servidores do Supabase, então a importação automática falha em produção — o app mostra o botão "Abrir no Cifra Club" para copiar e colar a cifra.

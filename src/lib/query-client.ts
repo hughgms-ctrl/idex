@@ -46,7 +46,7 @@ export const persister = createSyncStoragePersister({
 export const persistOptions = {
   persister,
   maxAge: 7 * 24 * 3_600_000,
-  buster: 'v1',
+  buster: 'v2', // muda quando o formato de algo salvo muda (descarta o cache antigo)
   dehydrateOptions: { shouldDehydrateQuery: shouldPersistQuery },
 }
 

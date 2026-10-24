@@ -9,8 +9,10 @@ import {
   Check,
   Copy,
   ListMusic,
+  Plus,
   Pencil,
   Trash2,
+  UserPlus,
   X,
 } from 'lucide-react'
 import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
@@ -26,6 +28,7 @@ import { useChurch } from '@/features/church/church-context'
 import { EVENT_KIND_LABEL, eventTimeRows } from '@/features/schedule/datetime'
 import { useMinistrySettings } from '@/features/ministries/queries'
 import { EventDialog } from '@/features/schedule/EventDialog'
+import { MemberPicker } from '@/features/schedule/MemberPicker'
 import {
   scheduleKeys,
   useEvent,
@@ -35,8 +38,11 @@ import {
 import { useScheduleData, type ScheduleData } from '@/features/schedule/useScheduleData'
 import {
   REHEARSAL_STATUS_LABEL,
+  useMyRehearsalAvailability,
   useServiceRehearsalAvailability,
+  useSetAvailability,
 } from '@/features/availability/queries'
+import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
 import { errorMessage } from '@/lib/errors'
 import { formatEventDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
@@ -226,6 +232,7 @@ function Editor({
         </Button>
       )}
       <LinkedEvent event={event} />
+      <MyAnswer event={event} data={data} />
       {canEdit && (event.kind === 'service' || event.service_event_id) && (
         <RehearsalAnswers
           serviceId={event.service_event_id ?? event.id}
@@ -374,6 +381,7 @@ function RoleSlot({
   const suggestions = suggestSubstitutes({ ...common, roleId, members: data.members, limit: 50 })
   const suggestedIds = new Set(suggestions.map((s) => s.member.id))
   const inEvent = new Set(event.schedule_assignments.map((a) => a.ministry_member_id))
+  const [picking, setPicking] = useState(false)
   // Outros com a função mas com algum problema (o líder ainda pode escalar)
   const others = data.members.filter(
     (m) =>
@@ -382,6 +390,13 @@ function RoleSlot({
       !inEvent.has(m.id) &&
       m.status === 'active',
   )
+  // Equipe sem esta função (o líder pode escalar mesmo assim)
+  const outsiders =
+    roleId === null
+      ? []
+      : data.members.filter(
+          (m) => m.status === 'active' && !m.roleIds.includes(roleId) && !inEvent.has(m.id),
+        )
 
   return (
     <section className="bg-card flex flex-col gap-2 rounded-2xl border p-3.5">
@@ -468,44 +483,166 @@ function RoleSlot({
           )
         })}
       </ul>
+      {canEdit && suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5" aria-label={`Sugestões para ${roleName}`}>
+          {suggestions.slice(0, 3).map((sg) => (
+            <button
+              key={sg.member.id}
+              type="button"
+              onClick={() => onAdd(sg.member.id)}
+              className={cn(
+                'flex min-h-11 items-center gap-1.5 rounded-full border px-3 text-sm font-medium',
+                sg.confirmed ? 'border-primary/60 text-primary' : 'text-foreground',
+              )}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+              {sg.member.name.split(' ')[0]}
+              <span className="text-muted-foreground text-xs">
+                {sg.confirmed ? 'pode' : 'sem resp.'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
       {canEdit && (
-        <NativeSelect
-          aria-label={`Escalar em ${roleName}`}
-          value=""
-          onChange={(e) => e.target.value && onAdd(e.target.value)}
+        <Button
+          variant="outline"
+          className="min-h-12 justify-between rounded-xl"
+          onClick={() => setPicking(true)}
         >
-          <option value="">+ Escalar em {roleName}</option>
-          {suggestions.length > 0 && (
-            <optgroup label="Disponíveis (quem disse “posso” primeiro)">
-              {suggestions.map((s) => (
-                <option key={s.member.id} value={s.member.id}>
-                  {s.confirmed ? '✓ ' : ''}
-                  {s.member.name} · {s.confirmed ? 'pode' : 'sem resposta'} · {s.assignmentsInMonth}{' '}
-                  no mês
-                </option>
-              ))}
-            </optgroup>
-          )}
-          {others.length > 0 && (
-            <optgroup label="Com restrição">
-              {others.map((m) => {
+          <span className="flex items-center gap-2">
+            <UserPlus aria-hidden="true" /> Escalar em {roleName}
+          </span>
+          <span className="text-muted-foreground text-xs">
+            {suggestions.length} disponíve{suggestions.length === 1 ? 'l' : 'is'} ›
+          </span>
+        </Button>
+      )}
+      {canEdit && (
+        <MemberPicker
+          open={picking}
+          onOpenChange={setPicking}
+          roleName={roleName}
+          eventLabel={`${event.title} · ${formatEventDate(event.starts_at)}`}
+          onPick={onAdd}
+          groups={[
+            {
+              title: 'Disponíveis',
+              hint: 'quem disse “posso” primeiro',
+              items: suggestions.map((sg) => ({
+                id: sg.member.id,
+                name: sg.member.name,
+                tone: sg.confirmed ? 'yes' : 'neutral',
+                badge: sg.confirmed ? 'pode' : 'sem resposta',
+                detail: `${sg.assignmentsInMonth} no mês`,
+              })),
+            },
+            {
+              title: 'Com restrição',
+              hint: 'dá para escalar mesmo assim',
+              items: others.map((m) => {
                 const [c] = assignmentConflicts({ ...common, member: m, roleId })
-                return (
-                  <option key={m.id} value={m.id}>
-                    {m.name} ·{' '}
-                    {c?.kind === 'unavailable'
+                return {
+                  id: m.id,
+                  name: m.name,
+                  tone: c?.kind === 'unavailable' ? 'no' : 'warn',
+                  badge:
+                    c?.kind === 'unavailable'
                       ? 'não pode'
                       : c?.kind === 'ineligible'
-                        ? 'inelegível'
-                        : 'outro evento'}
-                  </option>
-                )
-              })}
-            </optgroup>
-          )}
-        </NativeSelect>
+                        ? 'abaixo dos pontos'
+                        : c
+                          ? 'em outro evento'
+                          : 'restrição',
+                  detail: c?.message,
+                }
+              }),
+            },
+            {
+              title: 'Outros da equipe',
+              hint: 'sem esta função cadastrada',
+              items: outsiders.map((m) => ({
+                id: m.id,
+                name: m.name,
+                tone: 'neutral',
+                badge: 'outra função',
+              })),
+            },
+          ]}
+        />
       )}
     </section>
+  )
+}
+
+/** "Eu neste culto": o líder (ou qualquer integrante) marca se pode servir. */
+function MyAnswer({ event, data }: { event: ScheduleEvent; data: ScheduleData }) {
+  const { church, memberships } = useChurch()
+  const me = memberships.find((m) => m.ministry_id === event.ministry_id && m.status === 'active')
+  const serviceId = event.service_event_id ?? (event.kind === 'service' ? event.id : null)
+  const setAnswer = useSetAvailability(me?.id, church.id)
+  const rehearsalAnswers = useMyRehearsalAvailability(me?.id)
+  const [now] = useState(() => Date.now())
+  if (!me || !serviceId || new Date(event.starts_at).getTime() < now) return null
+  const answer = data.answers.find(
+    (a) => a.event_id === serviceId && a.ministry_member_id === me.id,
+  )?.available
+  const set = (value: boolean) =>
+    setAnswer.mutate(
+      { eventId: serviceId, available: answer === value ? null : value },
+      {
+        onSuccess: () => toast.success(answer === value ? 'Resposta apagada' : 'Resposta salva'),
+        onError: (err) => toast.error(errorMessage(err)),
+      },
+    )
+  return (
+    <Panel className="gap-3">
+      <div className="flex flex-col gap-0.5">
+        <h2 className="text-[15px] font-semibold">Você neste culto</h2>
+        <p className="text-muted-foreground text-[13px]">
+          Sua disponibilidade como integrante (vale também para o ensaio).
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          aria-pressed={answer === true}
+          disabled={setAnswer.isPending}
+          onClick={() => set(true)}
+          className={cn(
+            'flex min-h-12 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold',
+            answer === true
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'text-muted-foreground',
+          )}
+        >
+          <Check className="size-4" aria-hidden="true" /> Posso
+        </button>
+        <button
+          type="button"
+          aria-pressed={answer === false}
+          disabled={setAnswer.isPending}
+          onClick={() => set(false)}
+          className={cn(
+            'flex min-h-12 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold',
+            answer === false
+              ? 'border-destructive bg-destructive text-white'
+              : 'text-muted-foreground',
+          )}
+        >
+          <X className="size-4" aria-hidden="true" /> Não posso
+        </button>
+      </div>
+      {answer !== false && (
+        <RehearsalAvailabilityField
+          key={rehearsalAnswers.data?.[serviceId]?.note ?? ''}
+          serviceId={serviceId}
+          answer={rehearsalAnswers.data?.[serviceId]}
+          memberId={me.id}
+          churchId={church.id}
+        />
+      )}
+    </Panel>
   )
 }
 

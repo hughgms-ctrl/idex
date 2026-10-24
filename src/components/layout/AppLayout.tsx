@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useMatch } from 'react-router'
-import { CalendarRange } from 'lucide-react'
+import { CalendarCheck, CalendarRange } from 'lucide-react'
 
 import { AccountMenu } from '@/components/layout/AccountMenu'
 import { NAV_ITEMS } from '@/components/layout/nav-items'
@@ -9,7 +9,7 @@ import { useChurch } from '@/features/church/church-context'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
-  const { church, ministry, isLeader } = useChurch()
+  const { church, ministry, memberships, isLeader } = useChurch()
   const wide = useMatch('/planejamento')
 
   return (
@@ -41,6 +41,22 @@ export function AppLayout() {
               {label}
             </NavLink>
           ))}
+          {ministry && memberships.some((m) => m.ministry_id === ministry.id) && (
+            <NavLink
+              to="/disponibilidade"
+              className={({ isActive }) =>
+                cn(
+                  'flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-secondary text-primary'
+                    : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+                )
+              }
+            >
+              <CalendarCheck className="size-5" aria-hidden="true" />
+              Minha disponibilidade
+            </NavLink>
+          )}
           {ministry && isLeader(ministry.id) && (
             <NavLink
               to="/planejamento"

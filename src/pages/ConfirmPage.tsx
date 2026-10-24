@@ -154,9 +154,9 @@ export function ConfirmPage() {
                 serviceAssignment.status !== 'benched' &&
                 !absence && (
                   <RehearsalAvailabilityField
-                    key={rehearsalAnswers.data?.get(service.id)?.note ?? ''}
+                    key={rehearsalAnswers.data?.[service.id]?.note ?? ''}
                     serviceId={service.id}
-                    answer={rehearsalAnswers.data?.get(service.id)}
+                    answer={rehearsalAnswers.data?.[service.id]}
                     memberId={serviceAssignment.ministry_member_id}
                     churchId={church.id}
                   />

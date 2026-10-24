@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { CalendarCheck, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { parseWeeklyRule } from '@domain/schedule.ts'
 import { addDaysToKey, addMonths, localDateKey, localParts } from '@domain/time.ts'
@@ -57,12 +58,26 @@ export function SchedulePage() {
         action={
           <div className="flex gap-2">
             {myMember && (
+              <Button asChild>
+                <Link to="/disponibilidade">
+                  <CalendarCheck aria-hidden="true" />
+                  <span className="hidden sm:inline">Minha disponibilidade</span>
+                  <span className="sm:hidden">Disponibilidade</span>
+                </Link>
+              </Button>
+            )}
+            {myMember && (
               <Button variant="outline" onClick={() => setUnavOpen(true)}>
-                Marcar indisponível
+                <span className="hidden sm:inline">Marcar indisponível</span>
+                <span className="sm:hidden">Indisponível</span>
               </Button>
             )}
             {leader && (
-              <Button onClick={() => setEventDialog({})} aria-label="Novo culto ou ensaio">
+              <Button
+                variant="outline"
+                onClick={() => setEventDialog({})}
+                aria-label="Novo culto ou ensaio"
+              >
                 <Plus aria-hidden="true" />
                 <span className="hidden sm:inline">Novo evento</span>
               </Button>
@@ -177,7 +192,7 @@ export function SchedulePage() {
                 data={data}
                 myMemberId={myMember?.id}
                 leader={leader}
-                rehearsal={rehearsals?.get(event.id) ?? null}
+                rehearsal={rehearsals?.[event.id] ?? null}
               />
             </div>
           ))}
