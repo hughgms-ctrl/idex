@@ -186,6 +186,18 @@ function Player({
         </div>
       </div>
 
+      {engine.error && file.url && (
+        <div className="flex flex-col gap-2 rounded-xl border p-3">
+          <span className="text-muted-foreground text-xs">
+            Ouça sem mudar tom e andamento enquanto isso:
+          </span>
+          <audio controls preload="metadata" src={file.url} className="w-full" />
+          <Button variant="outline" size="sm" onClick={() => void engine.load(file.url ?? '')}>
+            Tentar abrir no player de novo
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col items-center gap-1 rounded-xl border p-2">
           <span className="text-muted-foreground text-[11px] font-semibold tracking-wider">
