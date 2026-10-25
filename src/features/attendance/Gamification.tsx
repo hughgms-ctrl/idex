@@ -313,12 +313,19 @@ export function LastCycleSummary({
 }
 
 /** As regras do ministério em frases, com as configurações de verdade. */
-export function RulesCard({ settings, leader }: { settings: RulesSettings; leader: boolean }) {
+export function RulesCard({
+  settings,
+  leader,
+}: {
+  settings: RulesSettings & { team_agreements?: string | null }
+  leader: boolean
+}) {
   const groups = describeRules(settings)
+  const agreements = settings.team_agreements?.trim()
   return (
     <section className="border-input flex flex-col gap-3 rounded-2xl border border-dashed p-4">
       <SectionTitle
-        title="Como funcionam os pontos aqui"
+        title="Regras do ministério"
         action={
           leader && (
             <Button asChild variant="ghost" size="sm">
@@ -329,9 +336,15 @@ export function RulesCard({ settings, leader }: { settings: RulesSettings; leade
           )
         }
       />
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-[15px] font-semibold">Como funcionam os pontos aqui</h3>
+        <p className="text-muted-foreground text-xs">
+          O app aplica estas regras sozinho, do jeito que o líder configurou.
+        </p>
+      </div>
       {groups.map((g) => (
         <div key={g.title} className="flex flex-col gap-1">
-          <h3 className="text-[13px] font-semibold">{g.title}</h3>
+          <h4 className="text-[13px] font-semibold">{g.title}</h4>
           <ul className="text-muted-foreground flex list-disc flex-col gap-1 pl-4 text-[13px] leading-relaxed">
             {g.lines.map((line) => (
               <li key={line}>{line}</li>
@@ -339,6 +352,12 @@ export function RulesCard({ settings, leader }: { settings: RulesSettings; leade
           </ul>
         </div>
       ))}
+      {agreements && (
+        <div className="flex flex-col gap-1 border-t pt-3">
+          <h3 className="text-[15px] font-semibold">Combinados do ministério</h3>
+          <p className="text-[13px] leading-relaxed whitespace-pre-line">{agreements}</p>
+        </div>
+      )}
     </section>
   )
 }

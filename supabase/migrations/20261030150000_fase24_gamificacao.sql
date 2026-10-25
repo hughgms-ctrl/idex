@@ -7,6 +7,7 @@
 -- - Meta da equipe: % no horário do mês e destaques (só quem foi 100% no
 --   horário), por `ministry_month_stats`.
 -- - Resumo do ciclo: ao fechar, cada um recebe um aviso com os números.
+-- - Combinados do ministério: texto livre do líder, lido pela equipe.
 --
 -- Resultado de cada compromisso (mesma regra de `_shared/domain/gamification.ts`):
 -- on_time | late | excused | absent | neutral.
@@ -18,9 +19,12 @@ alter table public.ministry_settings
   add column recovery_enabled boolean not null default false,
   add column recovery_every integer not null default 5 check (recovery_every between 2 and 20),
   add column recovery_points integer not null default 5 check (recovery_points between 1 and 50),
-  add column team_ontime_goal integer not null default 95 check (team_ontime_goal between 50 and 100);
+  add column team_ontime_goal integer not null default 95 check (team_ontime_goal between 50 and 100),
+  -- "Combinados do ministério": texto livre do líder (oração, jejum, roupa…),
+  -- mostrado na Presença junto das regras que o app aplica
+  add column team_agreements text not null default '' check (length(team_agreements) <= 4000);
 
-grant update (recovery_enabled, recovery_every, recovery_points, team_ontime_goal)
+grant update (recovery_enabled, recovery_every, recovery_points, team_ontime_goal, team_agreements)
   on public.ministry_settings to authenticated;
 
 -- Tolerância do tipo de evento (culto e ensaio têm a sua; outros, a geral)

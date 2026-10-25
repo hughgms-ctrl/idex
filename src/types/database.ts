@@ -1015,6 +1015,7 @@ export type Database = {
           service_late_consequence: string
           service_soundcheck_minutes: number | null
           service_tolerance_min: number
+          team_agreements: string
           team_ontime_goal: number
           updated_at: string
         }
@@ -1054,6 +1055,7 @@ export type Database = {
           service_late_consequence?: string
           service_soundcheck_minutes?: number | null
           service_tolerance_min?: number
+          team_agreements?: string
           team_ontime_goal?: number
           updated_at?: string
         }
@@ -1092,6 +1094,7 @@ export type Database = {
           service_late_consequence?: string
           service_soundcheck_minutes?: number | null
           service_tolerance_min?: number
+          team_agreements?: string
           team_ontime_goal?: number
           updated_at?: string
         }

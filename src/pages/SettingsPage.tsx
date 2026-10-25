@@ -59,6 +59,13 @@ export function SettingsPage() {
         />
       )}
       {ministry && settings.data && (
+        <TeamAgreements
+          key={`combinados-${settings.data.updated_at}`}
+          settings={settings.data}
+          canEdit={isLeader(ministry.id)}
+        />
+      )}
+      {ministry && settings.data && (
         <GameSettings
           key={`jogo-${settings.data.updated_at}`}
           settings={settings.data}
@@ -865,6 +872,53 @@ function MinistryRules({
           <p className="text-muted-foreground text-xs">
             Só o líder do ministério altera as regras.
           </p>
+        )}
+      </Panel>
+    </section>
+  )
+}
+
+// "Combinados do ministério": texto livre que a equipe lê na Presença
+function TeamAgreements({
+  settings,
+  canEdit,
+}: {
+  settings: Tables<'ministry_settings'>
+  canEdit: boolean
+}) {
+  const [text, setText] = useState(settings.team_agreements)
+  const save = useSaveSettings(settings.ministry_id, 'Combinados salvos')
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionTitle title="Combinados do ministério" />
+      <Panel className="gap-3">
+        <p className="text-muted-foreground text-[13px]">
+          A equipe lê na Presença, logo abaixo das regras de pontos (essas o app monta sozinho com
+          as configurações). Use para o que o app não controla: oração, jejum, roupa, preparo da
+          música, confraternização.
+        </p>
+        <FormField id="team-agreements" label="Texto" hint={`${text.length}/4000`}>
+          <textarea
+            id="team-agreements"
+            rows={8}
+            maxLength={4000}
+            value={text}
+            disabled={!canEdit}
+            placeholder={
+              'Ex.: Oração em todo ensaio e culto.\nJejum no primeiro ensaio de cada mês.\nChegue com a música estudada: ensaio é pra juntar, não pra aprender.'
+            }
+            className="border-input rounded-md border bg-transparent px-3 py-2 text-base md:text-sm"
+            onChange={(e) => setText(e.target.value)}
+          />
+        </FormField>
+        {canEdit && (
+          <Button
+            className="self-start"
+            onClick={() => save.mutate({ team_agreements: text.trim() })}
+            disabled={save.isPending || text.trim() === settings.team_agreements}
+          >
+            {save.isPending ? 'Salvando…' : 'Salvar combinados'}
+          </Button>
         )}
       </Panel>
     </section>
