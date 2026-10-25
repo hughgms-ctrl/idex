@@ -13,6 +13,7 @@ import {
 import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MarginText, StreakLine } from '@/features/attendance/Gamification'
 import { useMyAvailability, useMyRoleIds, useUpcomingEvents } from '@/features/availability/queries'
 import { JustifyDialog } from '@/features/attendance/MemberDialogs'
 import { useChurch } from '@/features/church/church-context'
@@ -290,11 +291,15 @@ export function DashboardPage() {
             />
           </div>
         )}
+        {balance.data && settings.data && (
+          <MarginText balance={balance.data.balance} settings={settings.data} />
+        )}
         <p className="text-muted-foreground text-[13px]">
           {cycle.data && settings.data
             ? `Ciclo de ${formatDate(cycle.data.starts_on)} a ${formatDate(cycle.data.ends_on)}. Com ${settings.data.cycle_min_points} pontos ou mais no fechamento, você continua na escala do próximo ciclo.`
             : 'Nenhum ciclo aberto.'}
         </p>
+        {myMembership && <StreakLine memberId={myMembership.id} settings={settings.data ?? null} />}
       </Panel>
 
       <PushCard compact />

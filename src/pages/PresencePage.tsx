@@ -1,8 +1,4 @@
-import { Link } from 'react-router'
-import { Settings2 } from 'lucide-react'
-
 import { PageHeader } from '@/components/PageHeader'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useChurch } from '@/features/church/church-context'
 import {
@@ -10,11 +6,11 @@ import {
   PendingReviews,
   TeamBalances,
 } from '@/features/attendance/LeaderAttendance'
+import { RulesCard, TeamGoal } from '@/features/attendance/Gamification'
 import { MemberAttendance } from '@/features/attendance/MemberAttendance'
 import { usePendingReviews } from '@/features/attendance/queries'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMinistryRoles, useMinistrySettings, useOpenCycle } from '@/features/ministries/queries'
-import { normalizeTiers } from '@domain/points.ts'
 
 export function PresencePage() {
   const { church, ministry, memberships, isLeader } = useChurch()
@@ -40,33 +36,7 @@ export function PresencePage() {
   const pendingCount =
     (pending.data?.requests.length ?? 0) + (pending.data?.justifications.length ?? 0)
   const s = settings.data
-  const rules = s && (
-    <section className="border-input flex flex-col gap-1.5 rounded-2xl border border-dashed p-4">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">Regras do ministério</span>
-        {leader && (
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/configuracoes">
-              <Settings2 aria-hidden="true" /> Ajustar
-            </Link>
-          </Button>
-        )}
-      </div>
-      <p className="text-muted-foreground text-[13px] leading-relaxed">
-        Cada um começa o ciclo com {s.cycle_starting_points} pontos. Até {s.late_tolerance_min} min:
-        sem desconto ·{' '}
-        {normalizeTiers(s.late_penalty_tiers)
-          .map((t, i, arr) =>
-            t.upToMin === null
-              ? `acima de ${arr[i - 1]?.upToMin ?? s.late_tolerance_min} min: −${t.points}`
-              : `${(arr[i - 1]?.upToMin ?? s.late_tolerance_min) + 1} a ${t.upToMin} min: −${t.points}`,
-          )
-          .join(' · ')}{' '}
-        · falta sem aviso: −{s.absence_penalty} · com {s.cycle_min_points} pontos ou mais no fim do
-        ciclo, continua na escala do próximo.
-      </p>
-    </section>
-  )
+  const rules = s && <RulesCard settings={s} leader={leader} />
 
   if (!leader) {
     return (
@@ -113,7 +83,8 @@ export function PresencePage() {
             limit={s?.checkin_request_limit_per_cycle ?? 3}
           />
         </TabsContent>
-        <TabsContent value="equipe">
+        <TabsContent value="equipe" className="flex flex-col gap-4">
+          <TeamGoal ministryId={ministry.id} />
           <TeamBalances
             ministryId={ministry.id}
             cycleId={cycle.data?.id}

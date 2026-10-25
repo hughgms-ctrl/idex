@@ -2,9 +2,18 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import QrScanner from 'qr-scanner'
-import { CheckCircle2, ChevronLeft, Clock, MapPin, QrCode, TriangleAlert } from 'lucide-react'
+import {
+  CheckCircle2,
+  ChevronLeft,
+  Clock,
+  Flame,
+  MapPin,
+  QrCode,
+  TriangleAlert,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { BADGE_ICON, useGamification } from '@/features/attendance/use-gamification'
 import { attendanceKeys, useMyOpenCheckinEvents } from '@/features/attendance/queries'
 import { useChurch } from '@/features/church/church-context'
 import { useMinistrySettings } from '@/features/ministries/queries'
@@ -345,6 +354,7 @@ function CheckinResult({ result }: { result: Result }) {
           </p>
         )}
       </div>
+      <Celebration result={result} />
       {result.consequence && (
         <div className="border-destructive flex gap-3 rounded-2xl border p-4">
           <TriangleAlert className="text-destructive mt-0.5 size-5 shrink-0" aria-hidden="true" />
@@ -360,6 +370,62 @@ function CheckinResult({ result }: { result: Result }) {
       <Button asChild size="lg" variant="outline">
         <Link to="/">Voltar ao início</Link>
       </Button>
+    </div>
+  )
+}
+
+/** Sequência e próximo selo logo depois de registrar. */
+function Celebration({ result }: { result: Result }) {
+  const { ministry, memberships } = useChurch()
+  const member = memberships.find((m) => m.ministry_id === ministry?.id)
+  const settings = useMinistrySettings(ministry?.id)
+  const g = useGamification(member?.id, settings.data ?? null)
+  // espera o histórico com este registro (o cache pode ter o de antes)
+  if (!g || g.fetching) return null
+  const { current, best } = g.streak
+  const justEarned = g.badges.find(
+    (b) => b.id.startsWith('streak') && b.earned && b.target === current,
+  )
+  const Icon = justEarned ? BADGE_ICON[justEarned.id] : Flame
+  return (
+    <div className="bg-card flex flex-col gap-3 rounded-[20px] border p-5">
+      {result.kind === 'on_time' ? (
+        <div className="flex items-center gap-3">
+          <span className="bg-primary/15 text-primary flex size-12 shrink-0 items-center justify-center rounded-2xl">
+            <Icon className="size-6" aria-hidden="true" />
+          </span>
+          <div className="flex flex-col">
+            <span className="font-display text-xl font-bold">
+              {justEarned ? `Selo novo: ${justEarned.title}!` : `${current} seguidos no horário!`}
+            </span>
+            <span className="text-muted-foreground text-[13px]">
+              {current >= best && current > 1 ? 'É o seu recorde.' : `Seu recorde: ${best}.`}
+            </span>
+          </div>
+        </div>
+      ) : result.kind === 'late' ? (
+        <p className="text-sm">
+          Sua sequência no horário recomeça no próximo compromisso. Recorde: {best}.
+        </p>
+      ) : null}
+      {g.next && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between text-[13px]">
+            <span>
+              Faltam {g.next.target - g.next.current} para <strong>{g.next.title}</strong>
+            </span>
+            <span className="text-muted-foreground font-mono">
+              {g.next.current}/{g.next.target}
+            </span>
+          </div>
+          <div className="bg-border h-1.5 overflow-hidden rounded">
+            <div
+              className="bg-primary h-1.5"
+              style={{ width: `${(g.next.current / g.next.target) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

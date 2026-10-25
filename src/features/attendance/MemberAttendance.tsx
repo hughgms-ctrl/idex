@@ -4,6 +4,13 @@ import { QrCode } from 'lucide-react'
 
 import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
+import {
+  LastCycleSummary,
+  MarginText,
+  RecoveryMeter,
+  StreakAndBadges,
+  TeamGoal,
+} from '@/features/attendance/Gamification'
 import { ForgotDialog, JustifyDialog } from '@/features/attendance/MemberDialogs'
 import { LEDGER_REASON, useMyAttendanceEvents, useMyLedger } from '@/features/attendance/queries'
 import { formatDate, formatDayMonth, formatEventDate } from '@/lib/format'
@@ -17,6 +24,23 @@ const REQUEST_LABEL: Record<string, string> = {
   adjusted: 'aprovado com ajuste',
   rejected: 'recusado',
 }
+const hhmm = new Intl.DateTimeFormat('pt-BR', {
+  timeZone: 'America/Sao_Paulo',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+/** "Chegou 19:24 · chegada 19:10 · 14 min" para os descontos de atraso. */
+function lateDetail(entry: {
+  reason: string
+  checkins: { arrived_at: string; late_minutes: number } | null
+  events: { starts_at: string; arrive_at: string | null } | null
+}): string | null {
+  if (entry.reason !== 'late' || !entry.checkins || !entry.events) return null
+  const call = entry.events.arrive_at ?? entry.events.starts_at
+  return `Chegou ${hhmm.format(new Date(entry.checkins.arrived_at))} · chegada ${hhmm.format(new Date(call))} · ${entry.checkins.late_minutes} min`
+}
+
 const JUST_LABEL: Record<string, string> = {
   pending: 'em análise',
   approved: 'aprovada',
@@ -100,6 +124,15 @@ export function MemberAttendance({
             style={{ width: `${Math.max(0, Math.min(100, (total / start) * 100))}%` }}
           />
         </div>
+        {ledger.data && settings && <MarginText balance={total} settings={settings} />}
+        {ledger.data && settings && (
+          <RecoveryMeter
+            memberId={memberId}
+            settings={settings}
+            balance={total}
+            ledger={ledger.data}
+          />
+        )}
         <p className="text-muted-foreground text-[13px]">
           {cycle ? `Ciclo de ${formatDate(cycle.starts_on)} a ${formatDate(cycle.ends_on)}. ` : ''}
           Mínimo de {min} pontos para continuar na escala do próximo ciclo.
@@ -116,6 +149,9 @@ export function MemberAttendance({
                       : formatDate(entry.created_at)}
                     {entry.note && entry.reason !== 'cycle_start' ? ` · ${entry.note}` : ''}
                   </span>
+                  {lateDetail(entry) && (
+                    <span className="text-muted-foreground text-xs">{lateDetail(entry)}</span>
+                  )}
                 </span>
                 <span
                   className={cn(
@@ -130,6 +166,10 @@ export function MemberAttendance({
           </ul>
         )}
       </Panel>
+
+      <StreakAndBadges memberId={memberId} settings={settings} />
+      {settings && <TeamGoal ministryId={settings.ministry_id} />}
+      <LastCycleSummary memberId={memberId} settings={settings} />
 
       {forgotten.length > 0 && (
         <section className="flex flex-col gap-2">
