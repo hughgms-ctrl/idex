@@ -59,6 +59,13 @@ export function SettingsPage() {
         />
       )}
       {ministry && settings.data && (
+        <GameSettings
+          key={`jogo-${settings.data.updated_at}`}
+          settings={settings.data}
+          canEdit={isLeader(ministry.id)}
+        />
+      )}
+      {ministry && settings.data && (
         <AvailabilityPeriod
           key={`periodo-${settings.data.updated_at}`}
           settings={settings.data}
@@ -858,6 +865,110 @@ function MinistryRules({
           <p className="text-muted-foreground text-xs">
             Só o líder do ministério altera as regras.
           </p>
+        )}
+      </Panel>
+    </section>
+  )
+}
+
+// Recuperar pontos e meta da equipe (gamificação)
+function GameSettings({
+  settings,
+  canEdit,
+}: {
+  settings: Tables<'ministry_settings'>
+  canEdit: boolean
+}) {
+  const [enabled, setEnabled] = useState(settings.recovery_enabled)
+  const [every, setEvery] = useState(String(settings.recovery_every))
+  const [points, setPoints] = useState(String(settings.recovery_points))
+  const [goal, setGoal] = useState(String(settings.team_ontime_goal))
+  const save = useSaveSettings(settings.ministry_id, 'Salvo')
+
+  const submit = () => {
+    const n = { every: Number(every), points: Number(points), goal: Number(goal) }
+    if (!Number.isInteger(n.every) || n.every < 2 || n.every > 20)
+      return toast.error('Presenças seguidas: de 2 a 20')
+    if (!Number.isInteger(n.points) || n.points < 1 || n.points > 50)
+      return toast.error('Pontos recuperados: de 1 a 50')
+    if (!Number.isInteger(n.goal) || n.goal < 50 || n.goal > 100)
+      return toast.error('Meta da equipe: de 50% a 100%')
+    save.mutate({
+      recovery_enabled: enabled,
+      recovery_every: n.every,
+      recovery_points: n.points,
+      team_ontime_goal: n.goal,
+    })
+  }
+
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionTitle title="Sequência, selos e meta" />
+      <Panel className="gap-4">
+        <p className="text-muted-foreground text-[13px]">
+          Todos veem a própria sequência no horário e os selos. A meta da equipe aparece na
+          Presença, com os destaques do mês (só quem foi 100% no horário, sem ranking).
+        </p>
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="recovery-enabled"
+            checked={enabled}
+            disabled={!canEdit}
+            onCheckedChange={(v) => setEnabled(v === true)}
+            className="mt-0.5"
+          />
+          <Label htmlFor="recovery-enabled" className="flex flex-col items-start gap-0.5">
+            <span>Recuperar pontos</span>
+            <span className="text-muted-foreground text-xs font-normal">
+              Depois de um desconto, presenças seguidas no horário devolvem pontos (sem passar dos
+              pontos iniciais).
+            </span>
+          </Label>
+        </div>
+        {enabled && (
+          <div className="grid grid-cols-2 gap-3">
+            <FormField id="recovery-every" label="A cada (presenças)">
+              <Input
+                id="recovery-every"
+                type="number"
+                inputMode="numeric"
+                min={2}
+                max={20}
+                value={every}
+                disabled={!canEdit}
+                onChange={(e) => setEvery(e.target.value)}
+              />
+            </FormField>
+            <FormField id="recovery-points" label="Recupera (+)">
+              <Input
+                id="recovery-points"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={50}
+                value={points}
+                disabled={!canEdit}
+                onChange={(e) => setPoints(e.target.value)}
+              />
+            </FormField>
+          </div>
+        )}
+        <FormField id="team-goal" label="Meta da equipe (% no horário no mês)">
+          <Input
+            id="team-goal"
+            type="number"
+            inputMode="numeric"
+            min={50}
+            max={100}
+            value={goal}
+            disabled={!canEdit}
+            onChange={(e) => setGoal(e.target.value)}
+          />
+        </FormField>
+        {canEdit && (
+          <Button className="self-start" onClick={submit} disabled={save.isPending}>
+            {save.isPending ? 'Salvando…' : 'Salvar'}
+          </Button>
         )}
       </Panel>
     </section>

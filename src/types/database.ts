@@ -1007,11 +1007,15 @@ export type Database = {
           rehearsal_mode: string
           rehearsal_time: string
           rehearsal_tolerance_min: number
+          recovery_enabled: boolean
+          recovery_every: number
+          recovery_points: number
           rehearsal_weekday: number | null
           service_arrival_minutes: number
           service_late_consequence: string
           service_soundcheck_minutes: number | null
           service_tolerance_min: number
+          team_ontime_goal: number
           updated_at: string
         }
         ComputedFields: never
@@ -1042,11 +1046,15 @@ export type Database = {
           rehearsal_mode?: string
           rehearsal_time?: string
           rehearsal_tolerance_min?: number
+          recovery_enabled?: boolean
+          recovery_every?: number
+          recovery_points?: number
           rehearsal_weekday?: number | null
           service_arrival_minutes?: number
           service_late_consequence?: string
           service_soundcheck_minutes?: number | null
           service_tolerance_min?: number
+          team_ontime_goal?: number
           updated_at?: string
         }
         Update: {
@@ -1076,11 +1084,15 @@ export type Database = {
           rehearsal_mode?: string
           rehearsal_time?: string
           rehearsal_tolerance_min?: number
+          recovery_enabled?: boolean
+          recovery_every?: number
+          recovery_points?: number
           rehearsal_weekday?: number | null
           service_arrival_minutes?: number
           service_late_consequence?: string
           service_soundcheck_minutes?: number | null
           service_tolerance_min?: number
+          team_ontime_goal?: number
           updated_at?: string
         }
         Relationships: [
@@ -1985,6 +1997,7 @@ export type Database = {
         Returns: Database['public']['Tables']['cycles']['Row']
       }
       mark_app_installed: { Args: Record<PropertyKey, never>; Returns: undefined }
+      ministry_month_stats: { Args: { p_ministry_id: string }; Returns: Json }
       ministry_member_devices: {
         Args: { p_ministry_id: string }
         Returns: { app_installed: boolean; ministry_member_id: string; push_enabled: boolean }[]
@@ -2023,7 +2036,8 @@ export type Database = {
         | 'event_reminder'
         | 'announcement'
       notification_status: 'pending' | 'sending' | 'sent' | 'failed' | 'skipped'
-      point_reason: 'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment'
+      point_reason:
+        'cycle_start' | 'late' | 'absence' | 'request_rejected' | 'adjustment' | 'recovery'
       request_status: 'pending' | 'approved' | 'adjusted' | 'rejected'
     }
     CompositeTypes: {
@@ -2156,7 +2170,14 @@ export const Constants = {
         'announcement',
       ],
       notification_status: ['pending', 'sending', 'sent', 'failed', 'skipped'],
-      point_reason: ['cycle_start', 'late', 'absence', 'request_rejected', 'adjustment'],
+      point_reason: [
+        'cycle_start',
+        'late',
+        'absence',
+        'request_rejected',
+        'adjustment',
+        'recovery',
+      ],
       request_status: ['pending', 'approved', 'adjusted', 'rejected'],
     },
   },

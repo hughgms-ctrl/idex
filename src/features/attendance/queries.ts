@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
+import type { Commitment } from '@domain/gamification.ts'
 
 export const attendanceKeys = {
   all: ['attendance'] as const,
@@ -12,6 +13,8 @@ export const attendanceKeys = {
   pending: (ministryId: string) => ['attendance', 'pending', ministryId] as const,
   balances: (ministryId: string, cycleId: string) =>
     ['attendance', 'balances', ministryId, cycleId] as const,
+  history: (memberId: string) => ['attendance', 'history', memberId] as const,
+  monthStats: (ministryId: string) => ['attendance', 'month-stats', ministryId] as const,
 }
 
 export const LEDGER_REASON: Record<string, string> = {
@@ -20,6 +23,7 @@ export const LEDGER_REASON: Record<string, string> = {
   absence: 'Falta sem aviso',
   request_rejected: 'Pedido recusado (falta)',
   adjustment: 'Ajuste do líder',
+  recovery: 'Recuperação de pontos',
 }
 
 /** Lançamentos do membro no ciclo (o saldo é a soma). */
@@ -30,7 +34,9 @@ export function useMyLedger(memberId: string | undefined, cycleId: string | unde
     queryFn: async () => {
       const { data, error } = await supabase
         .from('point_ledger')
-        .select('id, delta, reason, note, created_at, events(title, starts_at)')
+        .select(
+          'id, delta, reason, note, created_at, events(title, starts_at, arrive_at), checkins(arrived_at, late_minutes)',
+        )
         .eq('ministry_member_id', memberId ?? '')
         .eq('cycle_id', cycleId ?? '')
         .order('created_at', { ascending: false })
@@ -242,6 +248,106 @@ export function useMyOpenCheckinEvents(memberId: string | undefined, enabled = t
           return true
         })
         .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    },
+  })
+}
+
+/**
+ * Histórico do integrante (último ano) para sequência, selos e resumo do
+ * ciclo: cada escala com o registro, aviso aprovado e pedido pendente.
+ */
+export function useMyHistory(memberId: string | undefined) {
+  return useQuery({
+    queryKey: attendanceKeys.history(memberId ?? ''),
+    enabled: Boolean(memberId),
+    queryFn: async () => {
+      const id = memberId ?? ''
+      const since = new Date(Date.now() - 365 * 86_400_000).toISOString()
+      const { data, error } = await supabase
+        .from('schedule_assignments')
+        .select('status, events!inner(id, kind, starts_at, ends_at, arrive_at, soundcheck_at)')
+        .eq('ministry_member_id', id)
+        .neq('status', 'declined')
+        .gte('events.starts_at', since)
+        .lte('events.starts_at', new Date().toISOString())
+      if (error) throw error
+      const [checkins, justifications, requests, closed] = await Promise.all([
+        supabase
+          .from('checkins')
+          .select('event_id, arrived_at, late_minutes')
+          .eq('ministry_member_id', id)
+          .gte('arrived_at', new Date(Date.parse(since) - 6 * 3_600_000).toISOString()),
+        supabase
+          .from('justifications')
+          .select('event_id')
+          .eq('ministry_member_id', id)
+          .eq('status', 'approved'),
+        supabase
+          .from('checkin_requests')
+          .select('event_id')
+          .eq('ministry_member_id', id)
+          .eq('status', 'pending'),
+        supabase
+          .from('cycle_eligibility')
+          .select('balance, cycles!inner(status, starts_on, ends_on)')
+          .eq('ministry_member_id', id)
+          .eq('cycles.status', 'closed'),
+      ])
+      for (const r of [checkins, justifications, requests, closed]) if (r.error) throw r.error
+      const checkinBy = Object.fromEntries((checkins.data ?? []).map((c) => [c.event_id, c]))
+      const approved = new Set((justifications.data ?? []).map((j) => j.event_id))
+      const pending = new Set((requests.data ?? []).map((r) => r.event_id))
+      // a mesma pessoa pode estar em duas funções no mesmo evento: um compromisso
+      const byEvent: Record<string, Commitment> = {}
+      for (const a of data) {
+        const e = a.events
+        const c = checkinBy[e.id]
+        const prev = byEvent[e.id]
+        byEvent[e.id] = {
+          eventId: e.id,
+          kind: e.kind,
+          startsAt: e.starts_at,
+          endsAt: e.ends_at,
+          callAt: e.arrive_at ?? e.starts_at,
+          soundcheckAt: e.soundcheck_at,
+          arrivedAt: c?.arrived_at ?? null,
+          lateMinutes: c?.late_minutes ?? null,
+          benched: (prev?.benched ?? true) && a.status === 'benched',
+          justificationApproved: approved.has(e.id),
+          requestPending: pending.has(e.id),
+        }
+      }
+      return {
+        commitments: Object.values(byEvent),
+        closedCycles: (closed.data ?? []).map((c) => ({
+          balance: c.balance,
+          startsOn: c.cycles.starts_on,
+          endsOn: c.cycles.ends_on,
+        })),
+      }
+    },
+  })
+}
+
+export type TeamMonthStats = {
+  on_time: number
+  late: number
+  absent: number
+  goal: number
+  highlights: string[]
+}
+
+/** % no horário da equipe no mês e destaques (todos do ministério veem). */
+export function useMonthStats(ministryId: string | undefined) {
+  return useQuery({
+    queryKey: attendanceKeys.monthStats(ministryId ?? ''),
+    enabled: Boolean(ministryId),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ministry_month_stats', {
+        p_ministry_id: ministryId ?? '',
+      })
+      if (error) throw error
+      return (data as TeamMonthStats | null) ?? null
     },
   })
 }
