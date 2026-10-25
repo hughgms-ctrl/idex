@@ -27,12 +27,25 @@ function supported(): boolean {
   )
 }
 
-/** Service worker pronto (no `pnpm dev` não há service worker: desiste em 4s). */
-async function registration(): Promise<ServiceWorkerRegistration | null> {
+/**
+ * Service worker pronto. No primeiro acesso ele ainda está instalando, então
+ * espera um pouco mais; no `pnpm dev` não há service worker e desiste.
+ */
+async function registration(timeoutMs = 4_000): Promise<ServiceWorkerRegistration | null> {
   return Promise.race([
     navigator.serviceWorker.ready,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), 4_000)),
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ])
+}
+
+async function subscribe(reg: ServiceWorkerRegistration): Promise<PushSubscription> {
+  return (
+    (await reg.pushManager.getSubscription()) ??
+    (await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToBytes(env.VITE_VAPID_PUBLIC_KEY ?? ''),
+    }))
+  )
 }
 
 async function saveSubscription(sub: PushSubscription) {
@@ -73,8 +86,13 @@ export function usePush() {
       else if (Notification.permission === 'denied') next = 'denied'
       else {
         const reg = await registration()
-        const sub = reg ? await reg.pushManager.getSubscription() : null
-        if (!reg) next = 'unsupported'
+        let sub = reg ? await reg.pushManager.getSubscription() : null
+        // permissão já dada mas sem inscrição (ex.: limpou dados): inscreve sem perguntar
+        if (reg && !sub && Notification.permission === 'granted') {
+          sub = await subscribe(reg).catch(() => null)
+        }
+        // sem service worker ainda (primeiro acesso): o botão tenta de novo
+        if (!reg) next = import.meta.env.PROD ? 'off' : 'unsupported'
         else if (sub && Notification.permission === 'granted') {
           // garante que o aparelho está ligado à conta que entrou agora
           await saveSubscription(sub).catch(() => undefined)
@@ -98,14 +116,10 @@ export function usePush() {
         setState(permission === 'denied' ? 'denied' : 'off')
         throw new Error('Permita as notificações para receber os avisos.')
       }
-      const reg = await registration()
-      if (!reg) throw new Error('Abra o app instalado para ativar os avisos.')
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToBytes(env.VITE_VAPID_PUBLIC_KEY ?? ''),
-        }))
+      const reg = await registration(15_000)
+      if (!reg)
+        throw new Error('O app ainda está carregando. Feche, abra de novo e tente outra vez.')
+      const sub = await subscribe(reg)
       await saveSubscription(sub)
       setThisEndpoint(sub.endpoint)
       await loadDevices()
@@ -113,7 +127,7 @@ export function usePush() {
     } finally {
       setBusy(false)
     }
-  },[loadDevices])
+  }, [loadDevices])
 
   const disable = useCallback(async () => {
     setBusy(true)
