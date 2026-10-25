@@ -2,6 +2,12 @@ import { useState } from 'react'
 import { Plus, Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
+import { AvailabilityFilter } from '@/features/availability/AvailabilityFilter'
+import {
+  matchesAvailabilityFilter,
+  type AvailabilityAnswerKind,
+  type AvailabilityFilterValue,
+} from '@/features/availability/availability-filter'
 import {
   Sheet,
   SheetContent,
@@ -20,6 +26,7 @@ export type PickItem = {
   tone: PickTone
   badge: string // "pode", "sem resposta", "não pode"…
   detail?: string // "2 no mês", "ensaio: só terça"
+  answer?: AvailabilityAnswerKind // o que respondeu para este culto (filtro)
 }
 
 export type PickGroup = { title: string; hint?: string; items: PickItem[] }
@@ -52,17 +59,30 @@ export function MemberPicker({
   onPick: (memberId: string) => void
 }) {
   const [query, setQuery] = useState('')
+  const [filter, setFilter] = useState<AvailabilityFilterValue>('all')
   const q = query.trim().toLowerCase()
   const visible = groups
-    .map((g) => ({ ...g, items: g.items.filter((i) => !q || i.name.toLowerCase().includes(q)) }))
+    .map((g) => ({
+      ...g,
+      items: g.items.filter(
+        (i) =>
+          (!q || i.name.toLowerCase().includes(q)) &&
+          matchesAvailabilityFilter(filter, i.answer ?? 'none'),
+      ),
+    }))
     .filter((g) => g.items.length > 0)
-  const total = groups.reduce((n, g) => n + g.items.length, 0)
+  const all = groups.flatMap((g) => g.items)
+  const total = all.length
+  const reset = () => {
+    setQuery('')
+    setFilter('all')
+  }
 
   return (
     <Sheet
       open={open}
       onOpenChange={(o) => {
-        if (!o) setQuery('')
+        if (!o) reset()
         onOpenChange(o)
       }}
     >
@@ -92,12 +112,22 @@ export function MemberPicker({
             />
           </div>
         )}
+        {all.some((i) => i.answer) && (
+          <AvailabilityFilter
+            className="mx-3 pb-2"
+            value={filter}
+            onChange={setFilter}
+            kinds={all.map((i) => i.answer ?? 'none')}
+          />
+        )}
         <div className="flex flex-col gap-4 overflow-y-auto px-4 pt-1 pb-6">
           {visible.length === 0 && (
             <p className="text-muted-foreground py-6 text-center text-sm">
               {total === 0
                 ? 'Ninguém da equipe disponível para esta função.'
-                : 'Ninguém com esse nome.'}
+                : q
+                  ? 'Ninguém com esse nome.'
+                  : 'Ninguém com essa disponibilidade.'}
             </p>
           )}
           {visible.map((g) => (
@@ -113,7 +143,7 @@ export function MemberPicker({
                       type="button"
                       onClick={() => {
                         onPick(item.id)
-                        setQuery('')
+                        reset()
                         onOpenChange(false)
                       }}
                       className={cn(

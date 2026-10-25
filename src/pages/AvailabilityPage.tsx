@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -15,6 +15,12 @@ import {
   useUpcomingEvents,
   type UpcomingEvent,
 } from '@/features/availability/queries'
+import { AvailabilityFilter } from '@/features/availability/AvailabilityFilter'
+import {
+  answerKind,
+  matchesAvailabilityFilter,
+  type AvailabilityFilterValue,
+} from '@/features/availability/availability-filter'
 import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
 import { useChurch } from '@/features/church/church-context'
 import { useMinistrySettings } from '@/features/ministries/queries'
@@ -51,6 +57,7 @@ export function AvailabilityPage() {
   const answers = useMyAvailability(membership?.id)
   const setAnswer = useSetAvailability(membership?.id, church.id)
   const rehearsalAnswers = useMyRehearsalAvailability(membership?.id)
+  const [filter, setFilter] = useState<AvailabilityFilterValue>('all')
 
   const answerBy = useMemo(
     () => new Map((answers.data ?? []).map((a) => [a.event_id, a.available])),
@@ -59,11 +66,12 @@ export function AvailabilityPage() {
   const months = useMemo(() => {
     const groups = new Map<string, UpcomingEvent[]>()
     for (const e of events.data ?? []) {
+      if (!matchesAvailabilityFilter(filter, answerKind(answerBy.get(e.id)))) continue
       const label = monthFmt.format(new Date(e.starts_at))
       groups.set(label, [...(groups.get(label) ?? []), e])
     }
     return [...groups.entries()]
-  }, [events.data])
+  }, [events.data, answerBy, filter])
 
   const unanswered = (events.data ?? []).filter((e) => !answerBy.has(e.id))
   const allYes = useMutation({
@@ -150,6 +158,23 @@ export function AvailabilityPage() {
             </Button>
           )}
         </div>
+      )}
+
+      {total > 0 && (
+        <AvailabilityFilter
+          value={filter}
+          onChange={setFilter}
+          kinds={events.data.map((e) => answerKind(answerBy.get(e.id)))}
+        />
+      )}
+      {total > 0 && months.length === 0 && (
+        <p className="text-muted-foreground py-4 text-center text-sm">
+          {filter === 'none'
+            ? 'Você já respondeu todas as datas.'
+            : filter === 'yes'
+              ? 'Nenhuma data marcada como “Posso”.'
+              : 'Nenhuma data marcada como “Não posso”.'}
+        </p>
       )}
 
       {months.map(([label, list]) => (

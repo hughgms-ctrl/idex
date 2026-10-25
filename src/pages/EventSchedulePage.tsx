@@ -15,7 +15,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react'
-import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
+import { answerFor, assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
 import { localParts } from '@domain/time.ts'
 
 import { ErrorState } from '@/components/ErrorState'
@@ -43,6 +43,7 @@ import {
   useSetAvailability,
 } from '@/features/availability/queries'
 import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
+import { answerKind } from '@/features/availability/availability-filter'
 import { errorMessage } from '@/lib/errors'
 import { formatEventDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
@@ -382,6 +383,10 @@ function RoleSlot({
   const suggestedIds = new Set(suggestions.map((s) => s.member.id))
   const inEvent = new Set(event.schedule_assignments.map((a) => a.ministry_member_id))
   const [picking, setPicking] = useState(false)
+  // A disponibilidade é perguntada pelo culto (vale para o ensaio dele)
+  const answerEventId = event.service_event_id ?? event.id
+  const answerOf = (memberId: string) =>
+    answerKind(answerFor(memberId, answerEventId, data.answers))
   // Outros com a função mas com algum problema (o líder ainda pode escalar)
   const others = data.members.filter(
     (m) =>
@@ -546,6 +551,7 @@ function RoleSlot({
                 tone: sg.confirmed ? 'yes' : 'neutral',
                 badge: sg.confirmed ? 'pode' : 'sem resposta',
                 detail: `${sg.assignmentsInMonth} no mês`,
+                answer: answerOf(sg.member.id),
               })),
             },
             {
@@ -566,6 +572,7 @@ function RoleSlot({
                           ? 'em outro evento'
                           : 'restrição',
                   detail: c?.message,
+                  answer: answerOf(m.id),
                 }
               }),
             },
@@ -577,6 +584,7 @@ function RoleSlot({
                 name: m.name,
                 tone: 'neutral',
                 badge: 'outra função',
+                answer: answerOf(m.id),
               })),
             },
           ]}
