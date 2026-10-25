@@ -210,30 +210,25 @@ export function nextBadge(list: Badge[]): Badge | null {
 }
 
 // ---------------------------------------------------------------------------
-// Margem até o mínimo
+// Alerta perto do mínimo (sem contar "quantos atrasos ainda cabem")
 // ---------------------------------------------------------------------------
 
-export type SafetyMargin =
-  | { above: true; points: number; lates: number; absences: number; latePoints: number }
-  | { above: false; missing: number }
+export type MarginAlert = { kind: 'below'; missing: number } | { kind: 'edge' } | null
 
-export function safetyMargin(params: {
+/**
+ * Abaixo do mínimo: quanto falta. No limite: o próximo desconto (o menor
+ * atraso) já deixa abaixo. Fora disso, nada a avisar.
+ */
+export function marginAlert(params: {
   balance: number
   minPoints: number
   lateTiers: PenaltyTier[]
-  absencePenalty: number
-}): SafetyMargin {
-  const { balance, minPoints, lateTiers, absencePenalty } = params
-  if (balance < minPoints) return { above: false, missing: minPoints - balance }
-  const points = balance - minPoints
-  const latePoints = lateTiers[0]?.points ?? 0
-  return {
-    above: true,
-    points,
-    latePoints,
-    lates: latePoints > 0 ? Math.floor(points / latePoints) : Infinity,
-    absences: absencePenalty > 0 ? Math.floor(points / absencePenalty) : Infinity,
-  }
+}): MarginAlert {
+  const { balance, minPoints, lateTiers } = params
+  if (balance < minPoints) return { kind: 'below', missing: minPoints - balance }
+  const smallest = Math.min(...lateTiers.map((t) => t.points).filter((p) => p > 0))
+  if (Number.isFinite(smallest) && balance - smallest < minPoints) return { kind: 'edge' }
+  return null
 }
 
 // ---------------------------------------------------------------------------

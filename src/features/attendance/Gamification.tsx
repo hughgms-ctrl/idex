@@ -9,7 +9,7 @@ import { describeRules, type RulesSettings } from '@/features/attendance/rules-t
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/types/database'
-import { onTimeRate, recoveryProgress, safetyMargin, streaks, tally } from '@domain/gamification.ts'
+import { onTimeRate, recoveryProgress, marginAlert, streaks, tally } from '@domain/gamification.ts'
 import { normalizeTiers } from '@domain/points.ts'
 
 type Settings = Tables<'ministry_settings'>
@@ -135,36 +135,20 @@ export function StreakLine({
   )
 }
 
-/** "Você está 15 acima do mínimo: ainda cabem 3 atrasos ou nenhuma falta." */
+/** Alerta só quando está abaixo do mínimo ou a um desconto disso. */
 export function MarginText({ balance, settings }: { balance: number; settings: Settings }) {
-  const m = safetyMargin({
+  const alert = marginAlert({
     balance,
     minPoints: settings.cycle_min_points,
     lateTiers: normalizeTiers(settings.late_penalty_tiers),
-    absencePenalty: settings.absence_penalty,
   })
-  if (!m.above) {
-    return (
-      <p className="text-warning text-[13px] font-medium">
-        Faltam {m.missing} pontos para o mínimo ({settings.cycle_min_points}).
-        {settings.recovery_enabled && ' Presenças seguidas no horário recuperam pontos.'}
-      </p>
-    )
-  }
-  if (m.points === 0) {
-    return (
-      <p className="text-warning text-[13px] font-medium">
-        Você está no limite: qualquer desconto deixa você abaixo do mínimo.
-      </p>
-    )
-  }
-  const lates = m.lates === 1 ? '1 atraso' : `${m.lates} atrasos`
-  const absences =
-    m.absences === 0 ? 'nenhuma falta' : m.absences === 1 ? '1 falta' : `${m.absences} faltas`
+  if (!alert) return null
   return (
-    <p className="text-[13px]">
-      Você está <strong className="text-primary">{m.points} pontos acima do mínimo</strong>: ainda
-      cabem {lates} (−{m.latePoints}) ou {absences} sem aviso.
+    <p className="text-warning text-[13px] font-medium">
+      {alert.kind === 'below'
+        ? `Faltam ${alert.missing} pontos para o mínimo (${settings.cycle_min_points}).`
+        : `Atenção: mais um desconto deixa você abaixo do mínimo (${settings.cycle_min_points}).`}
+      {settings.recovery_enabled && ' Presenças seguidas no horário recuperam pontos.'}
     </p>
   )
 }

@@ -6,7 +6,7 @@ import {
   nextBadge,
   onTimeRate,
   recoveryProgress,
-  safetyMargin,
+  marginAlert,
   scoreCommitments,
   streaks,
   tally,
@@ -141,20 +141,24 @@ describe('badges', () => {
   })
 })
 
-describe('safetyMargin', () => {
+describe('marginAlert', () => {
   const tiers = [
     { upToMin: 20, points: 5 },
     { upToMin: null, points: 10 },
   ]
-  it('acima do mínimo: quantos atrasos e faltas ainda cabem', () => {
-    expect(
-      safetyMargin({ balance: 85, minPoints: 70, lateTiers: tiers, absencePenalty: 20 }),
-    ).toEqual({ above: true, points: 15, latePoints: 5, lates: 3, absences: 0 })
+  it('acima com folga: nada', () => {
+    expect(marginAlert({ balance: 85, minPoints: 70, lateTiers: tiers })).toBeNull()
+    expect(marginAlert({ balance: 75, minPoints: 70, lateTiers: tiers })).toBeNull()
+  })
+  it('no limite: o próximo atraso deixa abaixo', () => {
+    expect(marginAlert({ balance: 74, minPoints: 70, lateTiers: tiers })).toEqual({ kind: 'edge' })
+    expect(marginAlert({ balance: 70, minPoints: 70, lateTiers: tiers })).toEqual({ kind: 'edge' })
   })
   it('abaixo: quanto falta', () => {
-    expect(
-      safetyMargin({ balance: 60, minPoints: 70, lateTiers: tiers, absencePenalty: 20 }),
-    ).toEqual({ above: false, missing: 10 })
+    expect(marginAlert({ balance: 60, minPoints: 70, lateTiers: tiers })).toEqual({
+      kind: 'below',
+      missing: 10,
+    })
   })
 })
 
