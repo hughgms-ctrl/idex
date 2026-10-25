@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { isMobile, setupStep } from '@/features/push/setup'
+import { isAndroidEdge, isMobile, setupStep } from '@/features/push/setup'
 import { usePush } from '@/features/push/usePush'
 import { errorMessage } from '@/lib/errors'
 
@@ -131,10 +131,11 @@ export function SetupPrompt() {
 
         {step === 'unsupported' && (
           <p className="text-sm">
-            Este navegador não recebe avisos.{' '}
-            {android
-              ? 'Abra o ide.x pelo Google Chrome e ative por lá.'
-              : 'Instale o app pelo Safari e abra pelo ícone.'}
+            {isAndroidEdge()
+              ? 'O Microsoft Edge do Android não recebe avisos de sites. Abra o ide.x no Google Chrome, instale por lá (⋮ → Instalar app) e ative os avisos.'
+              : android
+                ? 'Este navegador não recebe avisos. Abra o ide.x pelo Google Chrome e ative por lá.'
+                : 'Este navegador não recebe avisos. Instale o app pelo Safari e abra pelo ícone.'}
           </p>
         )}
 

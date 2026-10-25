@@ -24,6 +24,11 @@ export function setupStep(p: { mobile: boolean; push: PushState }): SetupStep {
   }
 }
 
+/** Edge no Android não entrega avisos de sites: precisa ser o Chrome. */
+export function isAndroidEdge(userAgent = navigator.userAgent) {
+  return /Android/i.test(userAgent) && /EdgA\//.test(userAgent)
+}
+
 export function isMobile(
   userAgent = navigator.userAgent,
   maxTouchPoints = navigator.maxTouchPoints,
