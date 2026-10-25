@@ -73,6 +73,52 @@ export function eventEnd(event: Pick<EventLike, 'starts_at' | 'ends_at'>): Date 
     : new Date(new Date(event.starts_at).getTime() + DEFAULT_EVENT_DURATION_MIN * 60_000)
 }
 
+// ---------------------------------------------------------------------------
+// Janela do registro de presença (mesma regra da Edge Function `checkin`):
+// abre 2 h antes da chegada e fecha no fim do evento.
+// ---------------------------------------------------------------------------
+
+export const CHECKIN_OPENS_BEFORE_MIN = 120
+
+export type CommitmentEvent = EventLike & { starts_at: string; arrive_at?: string | null }
+
+export function checkinWindow(event: CommitmentEvent): { opensAt: Date; closesAt: Date } {
+  return {
+    opensAt: new Date(new Date(callTime(event)).getTime() - CHECKIN_OPENS_BEFORE_MIN * 60_000),
+    closesAt: eventEnd(event),
+  }
+}
+
+export type PresenceState<E extends CommitmentEvent> =
+  | { kind: 'open'; event: E }
+  | { kind: 'later_today'; event: E; opensAt: Date }
+  | { kind: 'upcoming'; event: E }
+  | { kind: 'none' }
+
+/**
+ * O que mostrar no lugar do botão "Registrar presença", a partir dos
+ * compromissos da pessoa: ponto aberto agora, algo ainda hoje (abre às …),
+ * o próximo compromisso, ou nada.
+ */
+export function presenceState<E extends CommitmentEvent>(
+  events: E[],
+  now: Date | string | number,
+  tz = DEFAULT_TZ,
+): PresenceState<E> {
+  const at = new Date(now).getTime()
+  const sorted = [...events]
+    .filter((e) => eventEnd(e).getTime() >= at)
+    .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at))
+  const open = sorted.find((e) => checkinWindow(e).opensAt.getTime() <= at)
+  if (open) return { kind: 'open', event: open }
+  const next = sorted[0]
+  if (!next) return { kind: 'none' }
+  const today = localDateKey(at, tz)
+  if (localDateKey(callTime(next), tz) === today)
+    return { kind: 'later_today', event: next, opensAt: checkinWindow(next).opensAt }
+  return { kind: 'upcoming', event: next }
+}
+
 export function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
   return aStart < bEnd && bStart < aEnd
 }

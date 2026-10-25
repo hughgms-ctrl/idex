@@ -1,23 +1,13 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router'
-import {
-  CalendarCheck,
-  CalendarClock,
-  Check,
-  ChevronRight,
-  Guitar,
-  QrCode,
-  UserPlus,
-} from 'lucide-react'
+import { CalendarCheck, Check, ChevronRight, Guitar, UserPlus } from 'lucide-react'
 
 import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { MarginText, StreakLine } from '@/features/attendance/Gamification'
 import { useMyAvailability, useMyRoleIds, useUpcomingEvents } from '@/features/availability/queries'
-import { JustifyDialog } from '@/features/attendance/MemberDialogs'
+import { PresenceCard } from '@/features/attendance/PresenceCard'
 import { useChurch } from '@/features/church/church-context'
-import { eventTimeRows } from '@/features/schedule/datetime'
 import { PushCard } from '@/features/push/PushCard'
 import { useMinistryMembers } from '@/features/members/queries'
 import { useMyProfile } from '@/features/profile/queries'
@@ -31,18 +21,10 @@ import {
   useNextEvent,
   useOpenCycle,
 } from '@/features/ministries/queries'
-import { cn } from '@/lib/utils'
 import { formatDate, formatDayMonth, formatEventDate, relativeDays } from '@/lib/format'
-
-const EVENT_KIND: Record<string, string> = {
-  service: 'PRÓXIMO CULTO',
-  rehearsal: 'PRÓXIMO ENSAIO',
-  other: 'PRÓXIMO EVENTO',
-}
 
 export function DashboardPage() {
   const { church, ministry, memberships, isLeader } = useChurch()
-  const [justifying, setJustifying] = useState(false)
   const profile = useMyProfile()
   const nextEvent = useNextEvent(ministry?.id)
   const settings = useMinistrySettings(ministry?.id)
@@ -118,70 +100,13 @@ export function DashboardPage() {
         />
       )}
 
-      <Panel className="gap-4 rounded-[20px] p-[18px]">
-        {nextEvent.isPending ? (
-          <Skeleton className="h-16" />
-        ) : event ? (
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-1">
-              <span
-                className={cn(
-                  'text-xs font-semibold tracking-wider',
-                  event.kind === 'rehearsal' ? 'text-info' : 'text-primary',
-                )}
-              >
-                {EVENT_KIND[event.kind] ?? 'PRÓXIMO EVENTO'}
-              </span>
-              <span className="font-display text-[22px] font-bold">
-                {formatEventDate(event.starts_at)}
-              </span>
-              {event.arrive_at && (
-                <span className="text-sm">
-                  {eventTimeRows(event, settings.data)
-                    .filter((r) => r.label !== 'Início' && r.label !== 'Início do ensaio')
-                    .map((r) => `${r.label.replace(' (tolerância)', '')} ${r.time}`)
-                    .join(' · ')}
-                </span>
-              )}
-              <span className="text-muted-foreground text-sm">
-                {[event.location_name, event.title].filter(Boolean).join(' · ')}
-                {settings.data && ` · tolerância de ${settings.data.late_tolerance_min} min`}
-              </span>
-            </div>
-            <span className="bg-secondary shrink-0 rounded-[10px] px-2.5 py-1.5 font-mono text-[13px]">
-              {relativeDays(event.starts_at)}
-            </span>
-          </div>
-        ) : (
-          <div className="text-muted-foreground flex items-center gap-3 text-sm">
-            <CalendarClock className="size-5" aria-hidden="true" />
-            Nenhum culto ou ensaio marcado ainda.
-          </div>
-        )}
-        <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
-          <Link to="/presenca/checkin">
-            <QrCode className="size-[22px]" aria-hidden="true" />
-            Registrar presença
-          </Link>
-        </Button>
-        {event && myMembership && (
-          <button
-            type="button"
-            onClick={() => setJustifying(true)}
-            className="text-muted-foreground min-h-11 text-center text-sm underline"
-          >
-            Vou me atrasar ou faltar — avisar o líder
-          </button>
-        )}
-      </Panel>
-      {event && myMembership && (
-        <JustifyDialog
-          event={justifying ? event : null}
-          churchId={church.id}
-          memberId={myMembership.id}
-          onClose={() => setJustifying(false)}
-        />
-      )}
+      <PresenceCard
+        churchId={church.id}
+        memberId={myMembership?.id}
+        ministryEvent={event}
+        ministryEventLoading={nextEvent.isPending}
+        settings={settings.data ?? null}
+      />
 
       <section className="flex flex-col gap-2.5">
         <SectionTitle

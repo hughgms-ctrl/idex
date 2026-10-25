@@ -20,6 +20,7 @@ import { errorMessage } from '@/lib/errors'
 import { formatEventDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { presenceState } from '@domain/schedule.ts'
 
 const JUSTIFICATION_STATUS: Record<string, string> = {
   pending: 'aguardando o líder',
@@ -67,6 +68,12 @@ export function ConfirmPage() {
   const mine = (id: string) => assignments.filter((a) => a.event_id === id)
   const serviceAssignment = mine(service.id)[0]
   const past = new Date(service.starts_at).getTime() < now
+  // "Registrar presença" só com o ponto aberto (2 h antes da chegada até o fim)
+  const checkinOpen =
+    presenceState(
+      [service, ...(rehearsal ? [rehearsal] : [])].filter((e) => mine(e.id).length > 0),
+      now,
+    ).kind === 'open'
 
   if (!serviceAssignment) {
     return (
@@ -198,11 +205,13 @@ export function ConfirmPage() {
               : 'Confirmo minha presença'}
         </Button>
       )}
-      <Button asChild variant="outline" className="min-h-12 rounded-2xl">
-        <Link to="/presenca/checkin">
-          <QrCode aria-hidden="true" /> Registrar presença
-        </Link>
-      </Button>
+      {checkinOpen && (
+        <Button asChild variant="outline" className="min-h-12 rounded-2xl">
+          <Link to="/presenca/checkin">
+            <QrCode aria-hidden="true" /> Registrar presença
+          </Link>
+        </Button>
+      )}
 
       <JustifyDialog
         key={justify ? `${justify.event.id}-${justify.kind}` : 'none'}

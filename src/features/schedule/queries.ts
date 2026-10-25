@@ -171,6 +171,7 @@ export type ConfirmEvent = {
   title: string
   kind: string
   starts_at: string
+  ends_at: string | null
   arrive_at: string | null
   soundcheck_at: string | null
   service_event_id: string | null
@@ -182,7 +183,7 @@ export function useConfirmation(eventId: string | undefined, memberIds: string[]
     queryKey: [...scheduleKeys.all, 'confirm', eventId ?? '', memberIds.join(',')],
     enabled: Boolean(eventId) && memberIds.length > 0,
     queryFn: async () => {
-      const cols = 'id, title, kind, starts_at, arrive_at, soundcheck_at, service_event_id'
+      const cols = 'id, title, kind, starts_at, ends_at, arrive_at, soundcheck_at, service_event_id'
       const first = await supabase
         .from('events')
         .select(cols)
