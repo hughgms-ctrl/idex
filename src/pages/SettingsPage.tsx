@@ -16,6 +16,7 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useChurch } from '@/features/church/church-context'
+import { CycleSettings } from '@/features/ministries/CycleSettings'
 import { ReminderRules } from '@/features/push/ReminderRules'
 import { ministryKeys, useMinistrySettings } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
@@ -77,6 +78,9 @@ export function SettingsPage() {
           settings={settings.data}
           canEdit={isLeader(ministry.id)}
         />
+      )}
+      {ministry && settings.data && (
+        <CycleSettings settings={settings.data} canEdit={isLeader(ministry.id)} />
       )}
       {ministry && settings.data && (
         <MinistryRules
@@ -763,7 +767,6 @@ function MinistryRules({
   const queryClient = useQueryClient()
   const tiers = normalizeTiers(settings.late_penalty_tiers)
   const [v, setV] = useState({
-    cycleMonths: String(settings.cycle_months),
     starting: String(settings.cycle_starting_points),
     min: String(settings.cycle_min_points),
     tolerance: String(settings.late_tolerance_min),
@@ -790,7 +793,6 @@ function MinistryRules({
       const { error } = await supabase
         .from('ministry_settings')
         .update({
-          cycle_months: n.cycleMonths,
           cycle_starting_points: n.starting,
           cycle_min_points: n.min,
           late_tolerance_min: n.tolerance,
@@ -830,8 +832,7 @@ function MinistryRules({
     <section className="flex flex-col gap-2">
       <SectionTitle title={`Pontos e presença · ${ministryName}`} />
       <Panel className="gap-4">
-        <div className="grid grid-cols-3 gap-3">
-          {field('cycleMonths', 'Ciclo (meses)')}
+        <div className="grid grid-cols-2 gap-3">
           {field('starting', 'Pontos iniciais')}
           {field('min', 'Mínimo')}
         </div>
