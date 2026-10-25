@@ -124,6 +124,18 @@ const router = createBrowserRouter([
                 Component: m.AnnouncementsPage,
               })),
           },
+          {
+            path: 'conversas',
+            lazy: () =>
+              import('@/pages/ConversationsPage').then((m) => ({
+                Component: m.ConversationsPage,
+              })),
+          },
+          {
+            path: 'conversas/:conversationId',
+            lazy: () =>
+              import('@/pages/ConversationPage').then((m) => ({ Component: m.ConversationPage })),
+          },
           { path: 'cadastro-igreja', element: <CreateChurchPage /> },
         ],
       },

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { CalendarCheck, CheckCircle2, Clock, QrCode, XCircle } from 'lucide-react'
+import { CalendarCheck, CheckCircle2, Clock, MessageCircle, QrCode, XCircle } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
@@ -13,6 +13,7 @@ import { JustifyDialog } from '@/features/attendance/MemberDialogs'
 import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
 import { useMyRehearsalAvailability } from '@/features/availability/queries'
 import { useChurch } from '@/features/church/church-context'
+import { useEventConversation } from '@/features/chat/queries'
 import { useMinistrySettings } from '@/features/ministries/queries'
 import { eventTimeRows } from '@/features/schedule/datetime'
 import { scheduleKeys, useConfirmation, type ConfirmEvent } from '@/features/schedule/queries'
@@ -40,6 +41,7 @@ export function ConfirmPage() {
   const myMemberId = data.data?.assignments[0]?.ministry_member_id
   const rehearsalAnswers = useMyRehearsalAvailability(myMemberId)
   const settings = useMinistrySettings(ministry?.id)
+  const teamChat = useEventConversation(data.data?.service.id)
   const [justify, setJustify] = useState<{
     event: ConfirmEvent
     kind: 'late' | 'absence'
@@ -209,6 +211,14 @@ export function ConfirmPage() {
         <Button asChild variant="outline" className="min-h-12 rounded-2xl">
           <Link to="/presenca/checkin">
             <QrCode aria-hidden="true" /> Registrar presença
+          </Link>
+        </Button>
+      )}
+
+      {teamChat.data && (
+        <Button asChild variant="outline" className="min-h-12 rounded-2xl">
+          <Link to={`/conversas/${teamChat.data}`}>
+            <MessageCircle aria-hidden="true" /> Conversa da equipe
           </Link>
         </Button>
       )}

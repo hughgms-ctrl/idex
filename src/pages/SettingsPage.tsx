@@ -1055,6 +1055,8 @@ function NotificationLog({ churchId }: { churchId: string }) {
         .from('notification_queue')
         .select('id, kind, status, last_error, created_at, sent_at, profiles(full_name)')
         .eq('church_id', churchId)
+        // avisos de mensagem das conversas não entram no histórico
+        .not('dedupe_key', 'like', 'chat:%')
         .order('created_at', { ascending: false })
         .limit(30)
       if (error) throw error

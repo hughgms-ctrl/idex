@@ -7,13 +7,29 @@ import { Logo } from '@/components/Logo'
 import { InstallBanner } from '@/components/pwa/InstallBanner'
 import { useMarkAppInstalled } from '@/components/pwa/mark-installed'
 import { useChurch } from '@/features/church/church-context'
+import { totalUnread, unreadLabel } from '@/features/chat/chat'
+import { useChatRealtime, useConversations } from '@/features/chat/queries'
 import { SetupPrompt } from '@/features/push/SetupPrompt'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
   const { church, ministry, memberships, isLeader, can } = useChurch()
   const wide = useMatch('/planejamento')
+  // conversa aberta: tela cheia no celular (sem cabeçalho nem barra de baixo)
+  const thread = useMatch('/conversas/:conversationId')
   useMarkAppInstalled()
+  useChatRealtime(church.id)
+  const conversations = useConversations(church.id)
+  const unread = totalUnread(conversations.data ?? [])
+  const badge = (to: string) =>
+    to === '/conversas' && unread > 0 ? (
+      <span
+        className="bg-primary text-primary-foreground flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] leading-none font-bold"
+        aria-label={`${unread} mensagens sem ler`}
+      >
+        {unreadLabel(unread)}
+      </span>
+    ) : null
 
   return (
     <div className="flex min-h-dvh">
@@ -42,6 +58,7 @@ export function AppLayout() {
             >
               <Icon className="size-5" aria-hidden="true" />
               {label}
+              <span className="ml-auto">{badge(to)}</span>
             </NavLink>
           ))}
           {ministry && memberships.some((m) => m.ministry_id === ministry.id) && (
@@ -100,7 +117,12 @@ export function AppLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Cabeçalho (celular) */}
-        <header className="flex items-center justify-between px-5 pt-[max(1.5rem,env(safe-area-inset-top))] md:hidden">
+        <header
+          className={cn(
+            'flex items-center justify-between px-5 pt-[max(1.5rem,env(safe-area-inset-top))] md:hidden',
+            thread && 'hidden',
+          )}
+        >
           <div className="flex min-w-0 flex-col gap-0.5">
             <Logo />
             <span className="text-muted-foreground truncate text-[13px]">
@@ -112,19 +134,25 @@ export function AppLayout() {
 
         <main
           className={cn(
-            'mx-auto flex w-full flex-1 flex-col gap-5 px-5 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10',
-            wide ? 'max-w-6xl' : 'max-w-3xl',
+            'mx-auto flex w-full flex-1 flex-col',
+            thread
+              ? 'h-dvh max-w-3xl overflow-hidden md:px-8 md:pt-6'
+              : 'gap-5 px-5 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10',
+            !thread && (wide ? 'max-w-6xl' : 'max-w-3xl'),
           )}
         >
-          <InstallBanner />
-          <SetupPrompt />
+          {!thread && <InstallBanner />}
+          {!thread && <SetupPrompt />}
           <Outlet />
         </main>
 
         {/* Barra inferior (celular) */}
         <nav
           aria-label="Navegação principal"
-          className="bg-nav fixed inset-x-0 bottom-0 z-40 flex justify-around border-t px-2 pt-2 pb-[max(1.375rem,env(safe-area-inset-bottom))] md:hidden"
+          className={cn(
+            'bg-nav fixed inset-x-0 bottom-0 z-40 flex justify-around border-t px-1 pt-2 pb-[max(1.375rem,env(safe-area-inset-bottom))] md:hidden',
+            thread && 'hidden',
+          )}
         >
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
             <NavLink
@@ -133,12 +161,13 @@ export function AppLayout() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 text-[11px] font-semibold',
+                  'relative flex min-h-12 min-w-12 flex-1 flex-col items-center justify-center gap-1 text-[11px] font-semibold',
                   isActive ? 'text-primary' : 'text-muted-foreground',
                 )
               }
             >
               <Icon className="size-[22px]" aria-hidden="true" />
+              <span className="absolute -top-1 left-1/2 ml-1.5">{badge(to)}</span>
               {label}
             </NavLink>
           ))}
