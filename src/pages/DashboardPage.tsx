@@ -158,7 +158,7 @@ export function DashboardPage() {
         <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
           <Link to="/presenca/checkin">
             <QrCode className="size-[22px]" aria-hidden="true" />
-            Bater ponto
+            Registrar presença
           </Link>
         </Button>
         {event && (

@@ -16,7 +16,7 @@ describe('modelos de aviso', () => {
 
   it('lembrete de ensaio traz dia, hora e chegada', () => {
     expect(fillTemplate('rehearsal', ensaio)?.body).toBe(
-      'Ensaio sexta, 30/10 às 20h. Chegada da equipe: 19h40. Venham com as músicas estudadas e cheguem no horário. Bata o ponto pelo app.',
+      'Ensaio sexta, 30/10 às 20h. Chegada da equipe: 19h40. Venham com as músicas estudadas e cheguem no horário. Registre sua presença pelo app.',
     )
   })
 

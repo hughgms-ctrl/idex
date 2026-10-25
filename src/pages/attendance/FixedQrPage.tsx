@@ -83,7 +83,7 @@ export function FixedQrPage() {
         {code ? (
           <canvas
             ref={canvasRef}
-            aria-label="QR fixo do ponto"
+            aria-label="QR fixo da presença"
             className="size-[min(80vw,55vh)] max-h-[720px] max-w-[720px]"
           />
         ) : (
@@ -92,17 +92,18 @@ export function FixedQrPage() {
       </div>
 
       <div className="flex max-w-md flex-col items-center gap-1 text-center">
-        <p className="text-lg">Aponte a câmera do celular para bater o ponto</p>
+        <p className="text-lg">Aponte a câmera do celular para registrar sua presença</p>
         <p className="text-muted-foreground text-sm print:text-black">
-          Vale para todos os cultos e ensaios: o app abre o ponto do evento de cada pessoa.
+          Vale para todos os cultos e ensaios: o app abre o registro de presença do evento de cada
+          pessoa.
         </p>
       </div>
 
       {leader && (
         <div className="flex max-w-md flex-col items-center gap-2 text-center print:hidden">
           <p className="text-muted-foreground text-[13px]">
-            O QR é sempre o mesmo. Para evitar ponto de longe (alguém fotografar o QR), deixe “QR
-            Code + localização” em Configurações. Se o QR vazar, gere outro.
+            O QR é sempre o mesmo. Para evitar presença registrada de longe (alguém fotografar o
+            QR), deixe “QR Code + localização” em Configurações. Se o QR vazar, gere outro.
           </p>
           <Button
             variant="ghost"

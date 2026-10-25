@@ -387,7 +387,7 @@ function ServiceTimes({
             {v.rehearsalConsequence === 'out_rehearsal_and_service' && (
               <>
                 <ChoiceCards
-                  label="Quem não bateu o ponto no ensaio e pediu “esqueci de registrar”"
+                  label="Quem não registrou presença no ensaio e pediu “esqueci de registrar”"
                   value={v.forgotPolicy}
                   disabled={!canEdit}
                   onChange={(x) => setV({ ...v, forgotPolicy: x })}
@@ -574,7 +574,7 @@ const CHECKIN_MODES = [
   {
     value: 'geo',
     title: 'Só localização',
-    text: 'A pessoa abre o app e bate o ponto perto da igreja, sem QR.',
+    text: 'A pessoa abre o app e registra a presença perto da igreja, sem QR.',
   },
 ] as const
 
@@ -585,18 +585,18 @@ function CheckinMode({
   settings: Tables<'ministry_settings'>
   canEdit: boolean
 }) {
-  const save = useSaveSettings(settings.ministry_id, 'Forma do ponto salva')
+  const save = useSaveSettings(settings.ministry_id, 'Forma de registrar presença salva')
   return (
     <section className="flex flex-col gap-2">
       <SectionTitle
-        title="Como bater o ponto"
+        title="Como registrar presença"
         action={
           <Link to="/presenca/qr-fixo" className="text-primary text-sm">
-            QR do ponto
+            QR da presença
           </Link>
         }
       />
-      <div role="radiogroup" aria-label="Como bater o ponto" className="flex flex-col gap-2">
+      <div role="radiogroup" aria-label="Como registrar presença" className="flex flex-col gap-2">
         {CHECKIN_MODES.map((m) => {
           const on = settings.checkin_mode === m.value
           return (
