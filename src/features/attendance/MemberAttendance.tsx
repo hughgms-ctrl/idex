@@ -12,11 +12,17 @@ import {
   TeamGoal,
 } from '@/features/attendance/Gamification'
 import { ForgotDialog, JustifyDialog } from '@/features/attendance/MemberDialogs'
-import { LEDGER_REASON, useMyAttendanceEvents, useMyLedger } from '@/features/attendance/queries'
+import {
+  LEDGER_REASON,
+  useMyAttendanceEvents,
+  useMyCommitments,
+  useMyLedger,
+} from '@/features/attendance/queries'
 import { formatDate, formatDayMonth, formatEventDate } from '@/lib/format'
 import { useNow } from '@/lib/use-now'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/types/database'
+import { presenceState } from '@domain/schedule.ts'
 
 const REQUEST_LABEL: Record<string, string> = {
   pending: 'em análise',
@@ -29,6 +35,7 @@ const hhmm = new Intl.DateTimeFormat('pt-BR', {
   hour: '2-digit',
   minute: '2-digit',
 })
+const formatTime = (d: Date) => hhmm.format(d)
 
 /** "Chegou 19:24 · chegada 19:10 · 14 min" para os descontos de atraso. */
 function lateDetail(entry: {
@@ -69,6 +76,8 @@ export function MemberAttendance({
   )
 
   const now = useNow()
+  const commitments = useMyCommitments(memberId)
+  const presence = presenceState(commitments.data ?? [], now)
   const deadlineMs = (settings?.checkin_request_deadline_hours ?? 48) * 3_600_000
   const list = events.data ?? []
   const forgotten = list.filter((e) => {
@@ -102,11 +111,21 @@ export function MemberAttendance({
 
   return (
     <>
-      <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
-        <Link to="/presenca/checkin">
-          <QrCode className="size-[22px]" aria-hidden="true" /> Registrar presença
-        </Link>
-      </Button>
+      {presence.kind === 'open' && (
+        <Button asChild size="lg" className="min-h-14 rounded-2xl text-[17px]">
+          <Link to="/presenca/checkin">
+            <QrCode className="size-[22px]" aria-hidden="true" /> Registrar presença ·{' '}
+            {presence.event.kind === 'rehearsal' ? 'Ensaio' : presence.event.title}
+          </Link>
+        </Button>
+      )}
+      {presence.kind === 'later_today' && (
+        <p className="bg-card rounded-2xl border px-4 py-3 text-sm">
+          Hoje tem {presence.event.kind === 'rehearsal' ? 'ensaio' : presence.event.title}. O
+          registro de presença abre às{' '}
+          <strong className="font-mono">{formatTime(presence.opensAt)}</strong>.
+        </p>
+      )}
 
       <Panel>
         <div className="flex items-baseline justify-between gap-2">

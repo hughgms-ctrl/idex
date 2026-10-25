@@ -9,6 +9,7 @@ import {
   buildWeeklyRule,
   isEligible,
   isUnavailable,
+  presenceState,
   parseWeeklyRule,
   suggestSubstitutes,
   weeklyOccurrences,
@@ -325,5 +326,50 @@ describe('extendWeeklySeries', () => {
     ])
     expect(next[0]?.rehearsal).toBeNull()
     expect(extendWeeklySeries({ last, untilKey: '2027-01-23' })).toEqual([])
+  })
+})
+
+describe('presenceState', () => {
+  // Quinta 29/10/2026: ensaio 19h35, chegada 19h10 (São Paulo = UTC−3)
+  const rehearsal = {
+    id: 'r',
+    starts_at: '2026-10-29T22:35:00Z',
+    arrive_at: '2026-10-29T22:10:00Z',
+    ends_at: '2026-10-30T00:30:00Z',
+  }
+  // Domingo 01/11: culto 18h, chegada 16h40, sem fim definido (2 h)
+  const service = {
+    id: 's',
+    starts_at: '2026-11-01T21:00:00Z',
+    arrive_at: '2026-11-01T19:40:00Z',
+    ends_at: null,
+  }
+
+  it('dias antes: só o próximo compromisso', () => {
+    expect(presenceState([service, rehearsal], '2026-10-25T15:00:00Z')).toMatchObject({
+      kind: 'upcoming',
+      event: { id: 'r' },
+    })
+  })
+  it('no dia, antes de abrir: abre 2 h antes da chegada', () => {
+    const s = presenceState([rehearsal, service], '2026-10-29T12:00:00Z')
+    expect(s.kind).toBe('later_today')
+    if (s.kind === 'later_today') expect(s.opensAt.toISOString()).toBe('2026-10-29T20:10:00.000Z')
+  })
+  it('janela aberta até o fim do evento', () => {
+    expect(presenceState([rehearsal], '2026-10-29T20:10:00Z').kind).toBe('open')
+    expect(presenceState([rehearsal], '2026-10-30T00:30:00Z').kind).toBe('open')
+    expect(presenceState([rehearsal], '2026-10-30T00:31:00Z').kind).toBe('none')
+  })
+  it('sem fim definido, fecha 2 h depois do início', () => {
+    expect(presenceState([service], '2026-11-01T22:59:00Z').kind).toBe('open')
+    expect(presenceState([service], '2026-11-01T23:01:00Z').kind).toBe('none')
+  })
+  it('evento das 23h30 no dia seguinte não conta como "hoje"', () => {
+    const late = { id: 'x', starts_at: '2026-10-30T02:30:00Z', arrive_at: null, ends_at: null }
+    // 29/10 12h em SP; o evento é 29/10 23h30 em SP → hoje
+    expect(presenceState([late], '2026-10-29T15:00:00Z').kind).toBe('later_today')
+    // 28/10 em SP → amanhã
+    expect(presenceState([late], '2026-10-28T15:00:00Z').kind).toBe('upcoming')
   })
 })

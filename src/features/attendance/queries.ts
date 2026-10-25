@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import type { Commitment } from '@domain/gamification.ts'
+import { checkinWindow } from '@domain/schedule.ts'
 
 export const attendanceKeys = {
   all: ['attendance'] as const,
@@ -221,7 +222,7 @@ export function useMinistryBalances(
   })
 }
 
-/** Eventos em que estou escalado e cujo check-in está aberto agora (2h antes até o fim). */
+/** Eventos em que estou escalado e cujo check-in está aberto agora (2h antes da chegada até o fim). */
 export function useMyOpenCheckinEvents(memberId: string | undefined, enabled = true) {
   return useQuery({
     queryKey: [...attendanceKeys.all, 'open-now', memberId ?? ''],
@@ -231,19 +232,20 @@ export function useMyOpenCheckinEvents(memberId: string | undefined, enabled = t
       const now = Date.now()
       const { data, error } = await supabase
         .from('schedule_assignments')
-        .select('id, status, events!inner(id, title, kind, starts_at, ends_at, location_name)')
+        .select(
+          'id, status, events!inner(id, title, kind, starts_at, ends_at, arrive_at, location_name)',
+        )
         .eq('ministry_member_id', memberId ?? '')
         .neq('status', 'declined')
         .gte('events.starts_at', new Date(now - 12 * 3_600_000).toISOString())
-        .lte('events.starts_at', new Date(now + 2 * 3_600_000).toISOString())
+        .lte('events.starts_at', new Date(now + 8 * 3_600_000).toISOString())
       if (error) throw error
       const seen = new Set<string>()
       return data
         .map((a) => a.events)
         .filter((e) => {
-          const start = new Date(e.starts_at).getTime()
-          const end = e.ends_at ? new Date(e.ends_at).getTime() : start + 2 * 3_600_000
-          if (seen.has(e.id) || now < start - 2 * 3_600_000 || now > end) return false
+          const { opensAt, closesAt } = checkinWindow(e)
+          if (seen.has(e.id) || now < opensAt.getTime() || now > closesAt.getTime()) return false
           seen.add(e.id)
           return true
         })
@@ -251,6 +253,51 @@ export function useMyOpenCheckinEvents(memberId: string | undefined, enabled = t
     },
   })
 }
+
+/**
+ * Meus próximos compromissos (culto e ensaio, inclusive os de hoje que ainda
+ * não terminaram), com o aviso de atraso/falta já enviado, se houver. Base do
+ * botão "Registrar presença" do Início, que só aparece no dia.
+ */
+export function useMyCommitments(memberId: string | undefined) {
+  return useQuery({
+    queryKey: [...attendanceKeys.all, 'commitments', memberId ?? ''],
+    enabled: Boolean(memberId),
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const id = memberId ?? ''
+      const now = Date.now()
+      const { data, error } = await supabase
+        .from('schedule_assignments')
+        .select(
+          'status, events!inner(id, title, kind, starts_at, ends_at, arrive_at, soundcheck_at, location_name, service_event_id)',
+        )
+        .eq('ministry_member_id', id)
+        .not('status', 'in', '(declined,benched)')
+        .gte('events.starts_at', new Date(now - 12 * 3_600_000).toISOString())
+        .lte('events.starts_at', new Date(now + 60 * 86_400_000).toISOString())
+      if (error) throw error
+      const eventIds = data.map((a) => a.events.id)
+      const justifications = await supabase
+        .from('justifications')
+        .select('event_id, kind, status')
+        .eq('ministry_member_id', id)
+        .in('event_id', eventIds)
+      if (justifications.error) throw justifications.error
+      const byEvent: Record<string, (typeof data)[number]['events']> = {}
+      for (const a of data) byEvent[a.events.id] = a.events
+      return Object.values(byEvent)
+        .filter((e) => checkinWindow(e).closesAt.getTime() >= now)
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+        .map((e) => ({
+          ...e,
+          justification: justifications.data.find((j) => j.event_id === e.id) ?? null,
+        }))
+    },
+  })
+}
+
+export type MyCommitment = NonNullable<ReturnType<typeof useMyCommitments>['data']>[number]
 
 /**
  * Histórico do integrante (último ano) para sequência, selos e resumo do
