@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  beatSeconds,
   beatsPerBar,
   clampRate,
   effectiveBpm,
@@ -23,5 +24,7 @@ describe('player de áudio', () => {
   it('batidas por compasso', () => {
     expect(beatsPerBar('6/8')).toBe(6)
     expect(beatsPerBar(null)).toBe(4)
+    expect(beatSeconds(120, 1)).toBe(0.5)
+    expect(beatSeconds(100, 0.5)).toBe(1.2)
   })
 })
