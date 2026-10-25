@@ -115,6 +115,188 @@ export type Database = {
           },
         ]
       }
+      chat_conversations: {
+        Row: {
+          church_id: string
+          created_at: string
+          direct_key: string | null
+          event_id: string | null
+          id: string
+          kind: string
+          last_message_at: string | null
+          ministry_id: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          created_at?: string
+          direct_key?: string | null
+          event_id?: string | null
+          id?: string
+          kind: string
+          last_message_at?: string | null
+          ministry_id?: string | null
+        }
+        Update: {
+          church_id?: string
+          created_at?: string
+          direct_key?: string | null
+          event_id?: string | null
+          id?: string
+          kind?: string
+          last_message_at?: string | null
+          ministry_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'chat_conversations_church_id_fkey'
+            columns: ['church_id']
+            isOneToOne: false
+            referencedRelation: 'churches'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'chat_conversations_event_id_church_id_fkey'
+            columns: ['event_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'chat_conversations_ministry_id_church_id_fkey'
+            columns: ['ministry_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministries'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          body: string
+          church_id: string
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          sender_id: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          body: string
+          church_id: string
+          conversation_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          sender_id?: string | null
+        }
+        Update: {
+          body?: string
+          church_id?: string
+          conversation_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          sender_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'chat_messages_conversation_id_church_id_fkey'
+            columns: ['conversation_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'chat_conversations'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'chat_messages_sender_id_fkey'
+            columns: ['sender_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      chat_participants: {
+        Row: {
+          church_id: string
+          conversation_id: string
+          created_at: string
+          profile_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          conversation_id: string
+          created_at?: string
+          profile_id: string
+        }
+        Update: {
+          church_id?: string
+          conversation_id?: string
+          created_at?: string
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'chat_participants_conversation_id_church_id_fkey'
+            columns: ['conversation_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'chat_conversations'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'chat_participants_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      chat_reads: {
+        Row: {
+          church_id: string
+          conversation_id: string
+          last_notified_at: string | null
+          last_read_at: string | null
+          muted: boolean
+          profile_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          conversation_id: string
+          last_notified_at?: string | null
+          last_read_at?: string | null
+          muted?: boolean
+          profile_id: string
+        }
+        Update: {
+          church_id?: string
+          conversation_id?: string
+          last_notified_at?: string | null
+          last_read_at?: string | null
+          muted?: boolean
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'chat_reads_conversation_id_church_id_fkey'
+            columns: ['conversation_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'chat_conversations'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'chat_reads_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       checkin_attempts: {
         Row: {
           accuracy_m: number | null
@@ -1998,6 +2180,39 @@ export type Database = {
           p_starts_on: string
         }
         Returns: Database['public']['Tables']['cycles']['Row']
+      }
+      can_access_chat_topic: { Args: { p_topic: string }; Returns: boolean }
+      can_access_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
+      can_send_to_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
+      delete_chat_message: { Args: { p_message_id: string }; Returns: undefined }
+      mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined }
+      my_conversations: {
+        Args: { p_church_id: string }
+        Returns: {
+          archived: boolean
+          event_id: string | null
+          event_starts_at: string | null
+          id: string
+          kind: string
+          last_body: string | null
+          last_deleted: boolean
+          last_message_at: string | null
+          last_sender_id: string | null
+          last_sender_name: string
+          ministry_id: string | null
+          muted: boolean
+          other_profile_id: string | null
+          title: string
+          unread: number
+        }[]
+      }
+      open_direct_conversation: {
+        Args: { p_church_id: string; p_profile_id: string }
+        Returns: string
+      }
+      set_conversation_muted: {
+        Args: { p_conversation_id: string; p_muted: boolean }
+        Returns: undefined
       }
       mark_app_installed: { Args: Record<PropertyKey, never>; Returns: undefined }
       ministry_month_stats: { Args: { p_ministry_id: string }; Returns: Json }
