@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import {
   CalendarCheck,
@@ -14,6 +14,7 @@ import { Panel, SectionTitle } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useMyAvailability, useMyRoleIds, useUpcomingEvents } from '@/features/availability/queries'
+import { JustifyDialog } from '@/features/attendance/MemberDialogs'
 import { useChurch } from '@/features/church/church-context'
 import { eventTimeRows } from '@/features/schedule/datetime'
 import { PushCard } from '@/features/push/PushCard'
@@ -39,7 +40,8 @@ const EVENT_KIND: Record<string, string> = {
 }
 
 export function DashboardPage() {
-  const { ministry, memberships, isLeader } = useChurch()
+  const { church, ministry, memberships, isLeader } = useChurch()
+  const [justifying, setJustifying] = useState(false)
   const profile = useMyProfile()
   const nextEvent = useNextEvent(ministry?.id)
   const settings = useMinistrySettings(ministry?.id)
@@ -161,15 +163,24 @@ export function DashboardPage() {
             Registrar presença
           </Link>
         </Button>
-        {event && (
-          <Link
-            to={`/presenca?justificar=${event.id}`}
-            className="text-muted-foreground text-center text-sm underline"
+        {event && myMembership && (
+          <button
+            type="button"
+            onClick={() => setJustifying(true)}
+            className="text-muted-foreground min-h-11 text-center text-sm underline"
           >
-            Vou me atrasar — avisar o líder
-          </Link>
+            Vou me atrasar ou faltar — avisar o líder
+          </button>
         )}
       </Panel>
+      {event && myMembership && (
+        <JustifyDialog
+          event={justifying ? event : null}
+          churchId={church.id}
+          memberId={myMembership.id}
+          onClose={() => setJustifying(false)}
+        />
+      )}
 
       <section className="flex flex-col gap-2.5">
         <SectionTitle

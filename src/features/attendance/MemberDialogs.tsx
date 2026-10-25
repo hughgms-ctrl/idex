@@ -136,8 +136,9 @@ export function JustifyDialog({
         <DialogHeader>
           <DialogTitle>Avisar o líder</DialogTitle>
           <DialogDescription>
-            {event && `${event.title} · ${formatEventDate(event.starts_at)}`}. Se o líder aprovar,
-            você não perde pontos.
+            {event && `${event.title} · ${formatEventDate(event.starts_at)}`}. Você continua na
+            escala. Se o líder aprovar, não perde pontos (se o desconto já tiver caído, os pontos
+            voltam).
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
