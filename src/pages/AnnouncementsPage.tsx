@@ -152,8 +152,8 @@ function NewAnnouncement({ ministryId, churchId }: { ministryId: string; churchI
 
   const save = useMutation({
     mutationFn: async () => {
-      const sendAt = scheduled ? fromLocalInputs(date, time) : new Date()
-      if (scheduled && sendAt.getTime() < Date.now() - 60_000) {
+      const sendAt = scheduled ? fromLocalInputs(date, time) : null
+      if (sendAt && sendAt.getTime() < Date.now() - 60_000) {
         throw new Error('Escolha um dia e hora no futuro.')
       }
       const { error } = await supabase.from('announcements').insert({
@@ -165,15 +165,17 @@ function NewAnnouncement({ ministryId, churchId }: { ministryId: string; churchI
         event_id: eventId || null,
         member_ids: audience === 'members' ? memberIds : [],
         channel,
-        send_at: sendAt.toISOString(),
+        // "Agora" usa o relógio do servidor: um aparelho adiantado deixaria o
+        // aviso para o próximo minuto
+        ...(sendAt ? { send_at: sendAt.toISOString() } : {}),
       })
       if (error) throw error
-      // "Agora": já coloca na fila (o envio sai no próximo minuto)
+      // "Agora": já coloca na fila e dispara o envio
       if (!scheduled) await supabase.rpc('dispatch_announcements')
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: announcementKeys.list(ministryId) })
-      toast.success(scheduled ? 'Aviso agendado' : 'Aviso enviado — chega em até 1 minuto')
+      toast.success(scheduled ? 'Aviso agendado' : 'Aviso enviado')
       setTitle('')
       setBody('')
       setTemplate('custom')
