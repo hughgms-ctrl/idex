@@ -40,7 +40,7 @@ export function RepertoirePage() {
   return (
     <>
       <PageHeader
-        title="Cifras"
+        title="Músicas"
         action={
           canAddSongs && (
             <div className="flex gap-2">

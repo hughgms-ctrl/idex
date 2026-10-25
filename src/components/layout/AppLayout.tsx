@@ -5,6 +5,7 @@ import { AccountMenu } from '@/components/layout/AccountMenu'
 import { NAV_ITEMS } from '@/components/layout/nav-items'
 import { Logo } from '@/components/Logo'
 import { InstallBanner } from '@/components/pwa/InstallBanner'
+import { useMarkAppInstalled } from '@/components/pwa/mark-installed'
 import { useChurch } from '@/features/church/church-context'
 import { SetupPrompt } from '@/features/push/SetupPrompt'
 import { cn } from '@/lib/utils'
@@ -12,6 +13,7 @@ import { cn } from '@/lib/utils'
 export function AppLayout() {
   const { church, ministry, memberships, isLeader, can } = useChurch()
   const wide = useMatch('/planejamento')
+  useMarkAppInstalled()
 
   return (
     <div className="flex min-h-dvh">

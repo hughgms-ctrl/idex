@@ -53,3 +53,21 @@ export function useActiveInvites(ministryId: string | undefined, enabled: boolea
     },
   })
 }
+
+/** Só para o líder: quem instalou o app e quem tem avisos ativos (por integrante). */
+export function useMemberDevices(ministryId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['member-devices', ministryId ?? ''] as const,
+    enabled: Boolean(ministryId) && enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('ministry_member_devices', {
+        p_ministry_id: ministryId ?? '',
+      })
+      if (error) throw error
+      return Object.fromEntries(data.map((d) => [d.ministry_member_id, d])) as Record<
+        string,
+        { app_installed: boolean; push_enabled: boolean }
+      >
+    },
+  })
+}

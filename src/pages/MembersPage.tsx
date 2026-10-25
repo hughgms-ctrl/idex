@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Link2, UserPlus } from 'lucide-react'
+import { Bell, Link2, Smartphone, UserPlus } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { PageHeader } from '@/components/PageHeader'
@@ -16,12 +16,14 @@ import { InviteDialog, InviteLinkResult } from '@/features/members/InviteDialog'
 import {
   memberKeys,
   useActiveInvites,
+  useMemberDevices,
   useMinistryMembers,
   type MinistryMemberRow,
 } from '@/features/members/queries'
 import { useMinistryRoles } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatDateTime, initials } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { inviteUrl } from '@/lib/invites'
 import { supabase } from '@/lib/supabase'
 
@@ -31,6 +33,7 @@ export function MembersPage() {
   const leader = ministry ? isLeader(ministry.id) : false
   const members = useMinistryMembers(ministry?.id)
   const roles = useMinistryRoles(ministry?.id)
+  const devices = useMemberDevices(ministry?.id, leader)
   const [editing, setEditing] = useState<MinistryMemberRow | null>(null)
   const inviteOpen = leader && params.get('convidar') === '1'
   const setInviteOpen = (open: boolean) =>
@@ -63,6 +66,14 @@ export function MembersPage() {
           <Link to="/ministerios" className="text-primary underline">
             Editar a lista de instrumentos e vozes
           </Link>
+          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-1">
+              <Smartphone className="text-primary size-3.5" aria-hidden="true" /> instalou o app
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Bell className="text-primary size-3.5" aria-hidden="true" /> ativou os avisos
+            </span>
+          </span>
         </p>
       )}
 
@@ -75,13 +86,25 @@ export function MembersPage() {
           ))}
         </div>
       ) : (
-        <MemberList members={active} roleName={roleName} canEdit={leader} onEdit={setEditing} />
+        <MemberList
+          members={active}
+          roleName={roleName}
+          canEdit={leader}
+          devices={devices.data}
+          onEdit={setEditing}
+        />
       )}
 
       {inactive.length > 0 && (
         <section className="flex flex-col gap-2">
           <SectionTitle title="Inativos" />
-          <MemberList members={inactive} roleName={roleName} canEdit={leader} onEdit={setEditing} />
+          <MemberList
+            members={inactive}
+            roleName={roleName}
+            canEdit={leader}
+            devices={devices.data}
+            onEdit={setEditing}
+          />
         </section>
       )}
 
@@ -118,11 +141,14 @@ function MemberList({
   members,
   roleName,
   canEdit,
+  devices,
   onEdit,
 }: {
   members: MinistryMemberRow[]
   roleName: Map<string, string>
   canEdit: boolean
+  /** só o líder recebe: quem instalou o app e quem ativou os avisos */
+  devices?: Record<string, { app_installed: boolean; push_enabled: boolean }>
   onEdit: (member: MinistryMemberRow) => void
 }) {
   if (members.length === 0) {
@@ -150,9 +176,11 @@ function MemberList({
                 {functions || 'Sem função definida'}
               </span>
             </span>
+            {devices && <DeviceIcons device={devices[m.id]} />}
             {m.role === 'leader' ? (
               <Badge>LÍDER</Badge>
             ) : (
+              canEdit &&
               (m.can_edit_songs ||
                 m.can_manage_song_files ||
                 m.can_edit_setlists ||
@@ -178,6 +206,29 @@ function MemberList({
         )
       })}
     </ul>
+  )
+}
+
+function DeviceIcons({ device }: { device?: { app_installed: boolean; push_enabled: boolean } }) {
+  const installed = device?.app_installed ?? false
+  const push = device?.push_enabled ?? false
+  const label = `${installed ? 'Instalou o app' : 'Não instalou o app'} · ${push ? 'avisos ativos' : 'sem avisos'}`
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1.5"
+      title={label}
+      aria-label={label}
+      role="img"
+    >
+      <Smartphone
+        className={cn('size-4', installed ? 'text-primary' : 'text-muted-foreground/30')}
+        aria-hidden="true"
+      />
+      <Bell
+        className={cn('size-4', push ? 'text-primary' : 'text-muted-foreground/30')}
+        aria-hidden="true"
+      />
+    </span>
   )
 }
 

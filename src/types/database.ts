@@ -1258,6 +1258,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          app_installed_at: string | null
           avatar_url: string | null
           created_at: string
           full_name: string
@@ -1268,6 +1269,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          app_installed_at?: string | null
           avatar_url?: string | null
           created_at?: string
           full_name?: string
@@ -1277,6 +1279,7 @@ export type Database = {
           whatsapp_opt_out?: boolean
         }
         Update: {
+          app_installed_at?: string | null
           avatar_url?: string | null
           created_at?: string
           full_name?: string
@@ -1980,6 +1983,11 @@ export type Database = {
           p_starts_on: string
         }
         Returns: Database['public']['Tables']['cycles']['Row']
+      }
+      mark_app_installed: { Args: Record<PropertyKey, never>; Returns: undefined }
+      ministry_member_devices: {
+        Args: { p_ministry_id: string }
+        Returns: { app_installed: boolean; ministry_member_id: string; push_enabled: boolean }[]
       }
       send_test_push: { Args: Record<PropertyKey, never>; Returns: boolean }
       save_push_subscription: {
