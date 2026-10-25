@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { clampRate, pitchShiftFor, positionAt } from '@/features/songs/audio-math'
+import { clampRate } from '@/features/songs/audio-math'
 
 type ToneModule = typeof import('tone')
 
@@ -10,12 +10,13 @@ const loadTone = () => (tonePromise ??= import('tone'))
 
 type Engine = {
   Tone: ToneModule
-  player: InstanceType<ToneModule['Player']>
   shift: InstanceType<ToneModule['PitchShift']>
   click: InstanceType<ToneModule['Synth']>
   clickId: number | null
-  // Quando o Web Audio não decodifica o arquivo (alguns m4a), o próprio
-  // <audio> do aparelho decodifica e o som passa pelo mesmo PitchShift.
+  // O <audio> do aparelho toca o arquivo: ele muda o andamento sem mudar o tom
+  // (preservesPitch, esticador de tempo nativo do navegador, bem mais limpo que
+  // mudar a velocidade e corrigir o tom depois). O som passa pelo PitchShift
+  // só para mudar o tom.
   media: { audio: HTMLAudioElement; source: MediaElementAudioSourceNode } | null
 }
 
@@ -28,12 +29,13 @@ function releaseMedia(e: Engine) {
   e.media = null
 }
 
-/** Abre o arquivo pelo <audio> (precisa de CORS no armazenamento, que o R2 já libera). */
+/** Abre o arquivo pelo <audio> (precisa de CORS no armazenamento). */
 async function openMedia(e: Engine, url: string): Promise<number> {
   const audio = new Audio()
   audio.crossOrigin = 'anonymous'
   audio.preload = 'auto'
-  audio.preservesPitch = false // o tom é corrigido pelo PitchShift, igual ao outro modo
+  audio.preservesPitch = true
+  ;(audio as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true
   const ready = new Promise<void>((resolve, reject) => {
     audio.addEventListener('loadedmetadata', () => resolve(), { once: true })
     audio.addEventListener('error', () => reject(new Error('media')), { once: true })
@@ -46,13 +48,25 @@ async function openMedia(e: Engine, url: string): Promise<number> {
   return Number.isFinite(audio.duration) ? audio.duration : 0
 }
 
+/** Diz por que o <audio> não abriu o arquivo. */
+async function mediaError(url: string): Promise<string> {
+  let res: Response
+  try {
+    res = await fetch(url, { cache: 'no-store', headers: { Range: 'bytes=0-0' } })
+  } catch {
+    return 'Não foi possível baixar o áudio (internet ou armazenamento).'
+  }
+  if (!res.ok) return `O link do áudio venceu ou o arquivo não foi achado (erro ${res.status}).`
+  return 'Este aparelho não abre este formato no player. Prefira MP3.'
+}
+
 /**
  * Player de áudio de referência: muda o tom (meio em meio tom) sem mudar o
  * andamento, muda o andamento sem mudar o tom, e toca um metrônomo junto.
  */
 export function useAudioEngine() {
   const engine = useRef<Engine | null>(null)
-  const clock = useRef({ offset: 0, startedAt: 0 })
+  const offset = useRef(0)
   const [url, setUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -69,38 +83,29 @@ export function useAudioEngine() {
     if (engine.current) return engine.current
     const Tone = await loadTone()
     await Tone.start()
-    const shift = new Tone.PitchShift({ pitch: 0, windowSize: 0.08 }).toDestination()
-    const player = new Tone.Player().connect(shift)
+    const shift = new Tone.PitchShift({ pitch: 0, windowSize: 0.1, wet: 0 }).toDestination()
     const click = new Tone.Synth({
       oscillator: { type: 'square' },
       envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02 },
       volume: -8,
     }).toDestination()
-    engine.current = { Tone, player, shift, click, clickId: null, media: null }
+    engine.current = { Tone, shift, click, clickId: null, media: null }
     return engine.current
   }, [])
 
   const applyPitch = useCallback(() => {
     const e = engine.current
     if (!e) return
-    e.player.playbackRate = settings.current.rate
     if (e.media) e.media.audio.playbackRate = settings.current.rate
-    e.shift.pitch = pitchShiftFor(settings.current.semitones, settings.current.rate)
+    e.shift.pitch = settings.current.semitones
+    // no tom original o som passa direto, sem o efeito
+    e.shift.wet.value = settings.current.semitones === 0 ? 0 : 1
   }, [])
 
   const currentPosition = useCallback(() => {
     const e = engine.current
-    if (!e) return 0
-    if (e.media) return e.media.audio.currentTime
-    return playingRef.current
-      ? positionAt({
-          offset: clock.current.offset,
-          startedAt: clock.current.startedAt,
-          now: e.Tone.now(),
-          rate: settings.current.rate,
-          duration: e.player.buffer.duration,
-        })
-      : clock.current.offset
+    if (e?.media && playingRef.current) return e.media.audio.currentTime
+    return offset.current
   }, [])
   // metrônomo pelo Transport do Tone (acento no 1º tempo do compasso)
   const startMetronome = useCallback(() => {
@@ -128,52 +133,37 @@ export function useAudioEngine() {
   const pause = useCallback(() => {
     const e = engine.current
     if (!e || !playingRef.current) return
-    clock.current.offset = currentPosition()
+    offset.current = currentPosition()
     playingRef.current = false
     if (e.media) {
       e.media.audio.onended = null
       e.media.audio.pause()
-    } else {
-      e.player.onstop = () => undefined
-      e.player.stop()
     }
     setPlaying(false)
-    setPosition(clock.current.offset)
+    setPosition(offset.current)
     if (settings.current.metronome) stopMetronome()
   }, [currentPosition, stopMetronome])
 
   const play = useCallback(async () => {
     const e = await ensure()
-    const ended = () => {
-      if (!playingRef.current) return
-      playingRef.current = false
-      clock.current.offset = 0
-      setPlaying(false)
-      setPosition(0)
-      if (settings.current.metronome) stopMetronome()
-    }
-    if (e.media) {
-      const { audio } = e.media
-      if (clock.current.offset >= audio.duration - 0.05) clock.current.offset = 0
-      applyPitch()
-      audio.currentTime = clock.current.offset
-      audio.onended = ended
-      await audio.play()
-      playingRef.current = true
-      setPlaying(true)
-      if (settings.current.metronome) startMetronome()
-      return
-    }
-    if (!e.player.loaded) {
+    if (!e.media) {
       // só o metrônomo
       if (settings.current.metronome) startMetronome()
       return
     }
-    if (clock.current.offset >= e.player.buffer.duration - 0.05) clock.current.offset = 0
+    const { audio } = e.media
+    if (offset.current >= audio.duration - 0.05) offset.current = 0
     applyPitch()
-    clock.current.startedAt = e.Tone.now()
-    e.player.onstop = ended
-    e.player.start(undefined, clock.current.offset)
+    audio.currentTime = offset.current
+    audio.onended = () => {
+      if (!playingRef.current) return
+      playingRef.current = false
+      offset.current = 0
+      setPlaying(false)
+      setPosition(0)
+      if (settings.current.metronome) stopMetronome()
+    }
+    await audio.play()
     playingRef.current = true
     setPlaying(true)
     if (settings.current.metronome) startMetronome()
@@ -187,38 +177,13 @@ export function useAudioEngine() {
       try {
         const e = await ensure()
         releaseMedia(e)
-        // Baixa e decodifica aqui (e não pelo player.load) para dizer o motivo
-        // da falha. `no-store`: uma resposta guardada sem CORS quebraria o fetch.
-        let res: Response
-        try {
-          res = await fetch(nextUrl, { cache: 'no-store' })
-        } catch {
-          throw new Error('Não foi possível baixar o áudio (internet ou armazenamento).')
-        }
-        if (!res.ok) {
-          throw new Error(
-            `O link do áudio venceu ou o arquivo não foi achado (erro ${res.status}).`,
-          )
-        }
-        const data = await res.arrayBuffer()
-        let decoded: AudioBuffer | null = null
-        try {
-          decoded = await e.Tone.getContext().decodeAudioData(data)
-        } catch {
-          // segue pelo <audio> do aparelho
-        }
         let length: number
-        if (decoded) {
-          e.player.buffer = new e.Tone.ToneAudioBuffer(decoded)
-          length = e.player.buffer.duration
-        } else {
-          try {
-            length = await openMedia(e, nextUrl)
-          } catch {
-            throw new Error('Este aparelho não abre este formato no player. Prefira MP3.')
-          }
+        try {
+          length = await openMedia(e, nextUrl)
+        } catch {
+          throw new Error(await mediaError(nextUrl))
         }
-        clock.current = { offset: 0, startedAt: 0 }
+        offset.current = 0
         setDuration(length)
         setPosition(0)
         setUrl(nextUrl)
@@ -236,8 +201,8 @@ export function useAudioEngine() {
     (seconds: number) => {
       const wasPlaying = playingRef.current
       if (wasPlaying) pause()
-      clock.current.offset = Math.max(0, Math.min(seconds, duration))
-      setPosition(clock.current.offset)
+      offset.current = Math.max(0, Math.min(seconds, duration))
+      setPosition(offset.current)
       if (wasPlaying) void play()
     },
     [duration, pause, play],
@@ -256,11 +221,6 @@ export function useAudioEngine() {
   const setRate = useCallback(
     (value: number) => {
       const v = clampRate(value)
-      // mantém a posição certa ao trocar a velocidade no meio
-      if (playingRef.current && engine.current) {
-        clock.current.offset = currentPosition()
-        clock.current.startedAt = engine.current.Tone.now()
-      }
       settings.current.rate = v
       setRateState(v)
       applyPitch()
@@ -268,7 +228,7 @@ export function useAudioEngine() {
         engine.current.Tone.getTransport().bpm.value = settings.current.bpm * v
       }
     },
-    [currentPosition, applyPitch],
+    [applyPitch],
   )
 
   /** BPM e compasso da música (o metrônomo acompanha a velocidade). */
@@ -307,7 +267,6 @@ export function useAudioEngine() {
       e.Tone.getTransport().stop()
       e.Tone.getTransport().cancel()
       releaseMedia(e)
-      e.player.dispose()
       e.shift.dispose()
       e.click.dispose()
       engine.current = null

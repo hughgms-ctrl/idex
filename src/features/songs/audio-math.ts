@@ -1,10 +1,5 @@
 // Contas do player de áudio (puras, testáveis).
 
-/** Correção de tom quando o andamento muda (playbackRate também muda o tom). */
-export function pitchShiftFor(semitones: number, rate: number): number {
-  return semitones - 12 * Math.log2(rate)
-}
-
 /** BPM tocando com a velocidade escolhida. */
 export function effectiveBpm(bpm: number, rate: number): number {
   return Math.round(bpm * rate)
@@ -17,18 +12,6 @@ export function rateForBpm(originalBpm: number, targetBpm: number): number {
 
 export function clampRate(rate: number): number {
   return Math.min(1.5, Math.max(0.5, Math.round(rate * 100) / 100))
-}
-
-/** Posição atual (segundos do arquivo) dado onde começou e a velocidade. */
-export function positionAt(params: {
-  offset: number
-  startedAt: number
-  now: number
-  rate: number
-  duration: number
-}): number {
-  const { offset, startedAt, now, rate, duration } = params
-  return Math.min(duration, Math.max(0, offset + (now - startedAt) * rate))
 }
 
 export function formatClock(seconds: number): string {
