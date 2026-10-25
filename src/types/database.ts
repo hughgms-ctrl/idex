@@ -1972,6 +1972,15 @@ export type Database = {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
         Returns: undefined
       }
+      set_current_cycle: {
+        Args: {
+          p_ends_on: string
+          p_ministry_id: string
+          p_next_months: number
+          p_starts_on: string
+        }
+        Returns: Database['public']['Tables']['cycles']['Row']
+      }
       send_test_push: { Args: Record<PropertyKey, never>; Returns: boolean }
       save_push_subscription: {
         Args: { p_auth: string; p_endpoint: string; p_p256dh: string; p_user_agent?: string }
