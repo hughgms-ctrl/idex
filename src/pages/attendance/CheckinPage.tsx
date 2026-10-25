@@ -179,14 +179,14 @@ export function CheckinPage() {
         <>
           <IntroCard
             icon={<MapPin className="text-primary size-10" aria-hidden="true" />}
-            title="Bata o ponto quando chegar na igreja."
+            title="Registre sua presença quando chegar na igreja."
             location
           />
           {openEvents.isPending ? (
             <p className="text-muted-foreground text-center text-sm">Procurando seus eventos…</p>
           ) : list.length === 0 ? (
             <p className="text-muted-foreground text-center text-sm">
-              Nenhum evento seu com ponto aberto agora. O ponto abre 2 horas antes do início.
+              Nenhum evento seu com registro de presença aberto agora. Abre 2 horas antes do início.
             </p>
           ) : (
             list.map((e) => (
@@ -196,7 +196,7 @@ export function CheckinPage() {
                 className="min-h-14 flex-col gap-0 rounded-2xl"
                 onClick={() => void send({ eventId: e.id })}
               >
-                <span className="text-[17px]">Bater ponto · {e.title}</span>
+                <span className="text-[17px]">Registrar presença · {e.title}</span>
                 <span className="text-xs font-normal opacity-80">
                   {formatEventDate(e.starts_at)}
                 </span>
@@ -231,7 +231,7 @@ export function CheckinPage() {
         <Button variant="ghost" size="icon" aria-label="Voltar" onClick={() => navigate(-1)}>
           <ChevronLeft className="size-[22px]" />
         </Button>
-        <h1 className="text-[17px] font-semibold">Bater ponto</h1>
+        <h1 className="text-[17px] font-semibold">Registrar presença</h1>
       </header>
 
       <div className="flex flex-1 flex-col gap-5 px-5 pb-6">

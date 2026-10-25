@@ -55,6 +55,7 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 
 ## Convenções
 - Commits pequenos por fase. Não instalar libs pesadas sem necessidade.
+- Na interface o check-in se chama "Registrar presença" (não "bater ponto"). A rota `/ponto` continua, porque os QR impressos apontam para ela; "pontos" (saldo do ciclo) não muda.
 - Antes de encerrar uma fase: rodar testes e typecheck, e atualizar a seção "Status" abaixo.
 
 ## Status

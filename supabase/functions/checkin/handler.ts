@@ -50,7 +50,7 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   if (!deps.qrSecret) return errorJson('Check-in não configurado (QR_SECRET ausente)', 500)
 
   const userId = await deps.getUserId(req.headers.get('Authorization') ?? '')
-  if (!userId) return errorJson('Entre na sua conta para bater o ponto', 401)
+  if (!userId) return errorJson('Entre na sua conta para registrar presença', 401)
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) return errorJson('Dados do check-in inválidos. Tente de novo.', 400)
@@ -75,7 +75,7 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
         return errorJson('Você não faz parte deste ministério', 403)
       }
       return errorJson(
-        'Nenhum culto ou ensaio seu com ponto aberto agora (abre 2h antes da chegada).',
+        'Nenhum culto ou ensaio seu com registro de presença aberto agora (abre 2h antes da chegada).',
         409,
       )
     }
@@ -104,10 +104,13 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   const needsGeo = mode !== 'qr'
   const hasQr = Boolean(payload || fixedCode)
   if (needsQr && !hasQr) {
-    return errorJson('Neste ministério o ponto é pelo QR Code. Leia o QR que o líder mostra.', 400)
+    return errorJson(
+      'Neste ministério a presença é registrada pelo QR Code. Leia o QR que o líder mostra.',
+      400,
+    )
   }
   if (needsGeo && !hasLocation) {
-    return errorJson('Ative a localização do celular para bater o ponto', 400)
+    return errorJson('Ative a localização do celular para registrar presença', 400)
   }
 
   if (ctx.alreadyCheckedIn) return errorJson('Sua presença neste evento já está registrada', 409)

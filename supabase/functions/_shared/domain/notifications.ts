@@ -75,7 +75,7 @@ export function renderMessage(
     case 'schedule_reminder':
       return `${hi} Lembrete: você está escalado(a)${p.role ? ` como *${p.role}*` : ''} no *${p.eventTitle}* de ${when(p.eventStartsAt, tz)}.${arrival} Se não puder ir, avise o líder pelo app o quanto antes.${link}`
     case 'rehearsal_today':
-      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.${arrival || ' Chegue no horário.'} Bata o ponto pelo app. 🎶${link}`
+      return `${hi} Hoje tem *${p.eventTitle ?? 'ensaio'}* ${when(p.eventStartsAt, tz).replace(/^.*?, \d\d\/\d\d /, '')}.${arrival || ' Chegue no horário.'} Registre sua presença pelo app. 🎶${link}`
     case 'points_deducted':
       return `${hi} Foram descontados *${Math.abs(p.delta ?? 0)} pontos* por ${REASON[p.reason ?? ''] ?? 'presença'}${p.eventTitle ? ` (${p.eventTitle}${p.eventStartsAt ? `, ${when(p.eventStartsAt, tz).split(' às')[0]}` : ''})` : ''}.${p.balance !== null && p.balance !== undefined ? ` Seu saldo no ciclo: *${p.balance}*.` : ''}${link}`
     case 'event_reminder': {

@@ -48,7 +48,7 @@ export function fillTemplate(
     case 'rehearsal':
       return {
         title: 'Lembrete de ensaio',
-        body: `Ensaio ${when}.${arrival} Venham com as músicas estudadas e cheguem no horário. Bata o ponto pelo app.`,
+        body: `Ensaio ${when}.${arrival} Venham com as músicas estudadas e cheguem no horário. Registre sua presença pelo app.`,
       }
     case 'service':
       return {

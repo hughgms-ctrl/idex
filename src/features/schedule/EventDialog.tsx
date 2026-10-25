@@ -426,7 +426,7 @@ export function EventDialog({
             <FormField
               id="event-arrival"
               label={isService ? 'Chegada da equipe' : 'Chegada para o ensaio'}
-              hint="Atraso e abertura do ponto contam a partir deste horário."
+              hint="Atraso e abertura do registro de presença contam a partir deste horário."
               error={errors.arrival?.message}
             >
               <Input id="event-arrival" type="time" {...form.register('arrival')} />

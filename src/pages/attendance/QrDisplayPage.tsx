@@ -121,7 +121,7 @@ export function QrDisplayPage() {
 
       <div className="flex flex-col items-center gap-1 text-center">
         <p className="text-lg">
-          Aponte a câmera do celular ou toque em <strong>Bater ponto</strong> no ide.x
+          Aponte a câmera do celular ou toque em <strong>Registrar presença</strong> no ide.x
         </p>
         <p className="text-muted-foreground text-sm">
           O código muda a cada 30 segundos ·{' '}

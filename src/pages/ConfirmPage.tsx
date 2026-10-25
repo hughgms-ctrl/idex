@@ -200,7 +200,7 @@ export function ConfirmPage() {
       )}
       <Button asChild variant="outline" className="min-h-12 rounded-2xl">
         <Link to="/presenca/checkin">
-          <QrCode aria-hidden="true" /> Bater ponto
+          <QrCode aria-hidden="true" /> Registrar presença
         </Link>
       </Button>
 
