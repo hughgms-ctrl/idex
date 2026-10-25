@@ -6,6 +6,7 @@ import { NAV_ITEMS } from '@/components/layout/nav-items'
 import { Logo } from '@/components/Logo'
 import { InstallBanner } from '@/components/pwa/InstallBanner'
 import { useChurch } from '@/features/church/church-context'
+import { SetupPrompt } from '@/features/push/SetupPrompt'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
@@ -114,6 +115,7 @@ export function AppLayout() {
           )}
         >
           <InstallBanner />
+          <SetupPrompt />
           <Outlet />
         </main>
 
