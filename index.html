@@ -13,6 +13,25 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="ide.x" />
+    <script>
+      // Arquivo do app que não carregou (ex.: versão nova publicada enquanto o app estava
+      // aberto): recarrega uma vez, em vez de mostrar a tela sem estilo.
+      window.addEventListener(
+        'error',
+        function (e) {
+          var t = e.target
+          if (!t || (t.tagName !== 'LINK' && t.tagName !== 'SCRIPT')) return
+          try {
+            if (sessionStorage.getItem('idex.assetReload')) return
+            sessionStorage.setItem('idex.assetReload', '1')
+          } catch (_) {
+            return
+          }
+          location.reload()
+        },
+        true,
+      )
+    </script>
   </head>
   <body>
     <div id="root"></div>

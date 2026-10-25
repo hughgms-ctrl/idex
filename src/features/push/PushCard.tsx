@@ -5,6 +5,7 @@ import { Bell, BellOff, Send, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { deviceLabel } from '@/features/push/device'
+import { isAndroidEdge } from '@/features/push/setup'
 import { usePush } from '@/features/push/usePush'
 import { errorMessage } from '@/lib/errors'
 
@@ -132,7 +133,9 @@ export function PushCard({ compact = false }: { compact?: boolean }) {
       )}
       {state === 'unsupported' && (
         <p className="text-muted-foreground text-sm">
-          Este navegador não recebe avisos. Use o Chrome no Android ou o app instalado no iPhone.
+          {isAndroidEdge()
+            ? 'O Microsoft Edge do Android não recebe avisos de sites. Abra o ide.x no Google Chrome, instale por lá e ative os avisos.'
+            : 'Este navegador não recebe avisos. Use o Chrome no Android ou o app instalado no iPhone.'}
         </p>
       )}
     </section>

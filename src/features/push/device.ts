@@ -15,7 +15,7 @@ export function deviceLabel(userAgent: string | null | undefined): string {
               ? 'Computador Linux'
               : 'Aparelho'
   if (os === 'iPhone' || os === 'iPad') return os
-  const browser = /Edg\//.test(ua)
+  const browser = /EdgA?\//.test(ua)
     ? 'Edge'
     : /SamsungBrowser/.test(ua)
       ? 'Samsung Internet'

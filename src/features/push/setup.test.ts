@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isMobile, setupStep } from './setup'
+import { isAndroidEdge, isMobile, setupStep } from './setup'
 
 describe('aviso para instalar e ativar', () => {
   it('no celular pede o que falta', () => {
@@ -18,5 +18,12 @@ describe('aviso para instalar e ativar', () => {
   it('reconhece celular', () => {
     expect(isMobile('Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile', 5)).toBe(true)
     expect(isMobile('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/156', 0)).toBe(false)
+  })
+
+  it('Edge do Android não recebe avisos', () => {
+    const edge =
+      'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36 EdgA/155.0.0.0'
+    expect(isAndroidEdge(edge)).toBe(true)
+    expect(isAndroidEdge(edge.replace(' EdgA/155.0.0.0', ''))).toBe(false)
   })
 })

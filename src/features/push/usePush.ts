@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { isIos, isStandalone } from '@/components/pwa/install'
+import { isAndroidEdge } from '@/features/push/setup'
 import { env } from '@/lib/env'
 import { supabase } from '@/lib/supabase'
 
@@ -19,6 +20,7 @@ function urlBase64ToBytes(text: string): Uint8Array<ArrayBuffer> {
 }
 
 function supported(): boolean {
+  if (isAndroidEdge()) return false
   return (
     Boolean(env.VITE_VAPID_PUBLIC_KEY) &&
     'serviceWorker' in navigator &&
