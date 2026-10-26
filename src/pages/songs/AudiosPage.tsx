@@ -15,6 +15,7 @@ import { useChurch } from '@/features/church/church-context'
 import { beatsPerBar, effectiveBpm, formatClock, rateForBpm } from '@/features/songs/audio-math'
 import {
   deleteSongFile,
+  fileInfo,
   isR2Enabled,
   songFileKeys,
   uploadSongFile,
@@ -463,7 +464,7 @@ function UploadAudio({
   const upload = useMutation({
     mutationFn: async () => {
       if (!file) throw new Error('Escolha o arquivo de áudio')
-      if (!file.type.startsWith('audio/') && !/\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(file.name)) {
+      if (fileInfo(file).kind !== 'audio') {
         throw new Error('Escolha um arquivo de áudio (MP3, M4A, WAV…)')
       }
       const b = bpm ? Number(bpm) : null
