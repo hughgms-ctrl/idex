@@ -12,6 +12,11 @@ describe('arquivos da música', () => {
       mime: 'audio/mp4',
       kind: 'audio',
     })
+    // MP3 renomeado para .mpeg: o navegador informa vídeo
+    expect(fileInfo({ name: 'TREMENDA GRAÇA TOM-G MP3.mp3.mpeg', type: 'video/mpeg' })).toEqual({
+      mime: 'audio/mpeg',
+      kind: 'audio',
+    })
     expect(fileInfo({ name: 'partitura.pdf', type: '' }).kind).toBe('pdf')
     expect(fileInfo({ name: 'mapa.jpg', type: 'image/jpeg' }).kind).toBe('image')
     expect(fileInfo({ name: 'projeto.zip', type: 'application/zip' }).kind).toBe('other')

@@ -25,10 +25,15 @@ export type StoredFile = { id: string; storage_path: string; storage_backend: st
 
 const EXT_MIME: Record<string, string> = {
   mp3: 'audio/mpeg',
+  // MP3 salvo como .mpeg/.mpga (o navegador diz que é vídeo)
+  mpeg: 'audio/mpeg',
+  mpga: 'audio/mpeg',
   m4a: 'audio/mp4',
   aac: 'audio/aac',
   wav: 'audio/wav',
   ogg: 'audio/ogg',
+  oga: 'audio/ogg',
+  opus: 'audio/ogg',
   flac: 'audio/flac',
   webm: 'audio/webm',
   pdf: 'application/pdf',
@@ -40,10 +45,17 @@ const EXT_MIME: Record<string, string> = {
 
 export type FileKind = 'audio' | 'pdf' | 'image' | 'other'
 
-/** Tipo do arquivo (alguns celulares não informam o tipo: usa a extensão). */
+/**
+ * Tipo do arquivo. Alguns celulares não informam o tipo e o Windows chama
+ * ".mpeg" de vídeo: com extensão de áudio conhecida, vale a extensão.
+ */
 export function fileInfo(file: { name: string; type: string }): { mime: string; kind: FileKind } {
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-  const mime = file.type || EXT_MIME[ext] || 'application/octet-stream'
+  const byExt = EXT_MIME[ext]
+  const mime =
+    byExt?.startsWith('audio/') && !file.type.startsWith('audio/')
+      ? byExt
+      : file.type || byExt || 'application/octet-stream'
   const kind: FileKind = mime.startsWith('audio/')
     ? 'audio'
     : mime === 'application/pdf'
