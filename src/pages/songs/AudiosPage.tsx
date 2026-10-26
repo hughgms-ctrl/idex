@@ -491,7 +491,7 @@ function UploadAudio({
       <input
         ref={inputRef}
         type="file"
-        accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac"
+        accept="audio/*,.mp3,.mpeg,.mpga,.m4a,.wav,.ogg,.oga,.opus,.aac,.flac"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0] ?? null
