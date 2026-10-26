@@ -14,7 +14,7 @@ export const scheduleKeys = {
 }
 
 const EVENT_SELECT =
-  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, soundcheck_at, ends_at, service_event_id, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status, benched_reason)'
+  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, soundcheck_at, ends_at, service_event_id, rehearsal_group_id, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status, benched_reason)'
 
 export function useMonthEvents(ministryId: string | undefined, year: number, month: number) {
   return useQuery({
@@ -128,19 +128,43 @@ export function useMyUpcomingAssignments(memberId: string | undefined, limit = 3
   })
 }
 
-/** Ensaio ligado a um culto (pode cair no mês anterior). */
-export function useLinkedRehearsal(serviceId: string | undefined) {
+const LINKED_COLS =
+  'id, title, starts_at, arrive_at, ends_at, service_event_id, rehearsal_group_id, rehearsal_groups(name)'
+
+type LinkedRow = {
+  id: string
+  title: string
+  starts_at: string
+  arrive_at: string | null
+  ends_at: string | null
+  service_event_id: string | null
+  rehearsal_group_id: string | null
+  rehearsal_groups: { name: string } | null
+}
+
+const toLinked = (r: LinkedRow): LinkedRehearsal => ({
+  id: r.id,
+  title: r.title,
+  starts_at: r.starts_at,
+  arrive_at: r.arrive_at,
+  ends_at: r.ends_at,
+  group_id: r.rehearsal_group_id,
+  group_name: r.rehearsal_groups?.name ?? null,
+})
+
+/** Ensaios ligados a um culto (banda, vozes…; podem cair no mês anterior). */
+export function useLinkedRehearsals(serviceId: string | undefined) {
   return useQuery({
-    queryKey: [...scheduleKeys.all, 'rehearsal-of', serviceId ?? ''],
+    queryKey: [...scheduleKeys.all, 'rehearsals-of', serviceId ?? ''],
     enabled: Boolean(serviceId),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('id, title, starts_at, arrive_at, ends_at')
+        .select(LINKED_COLS)
         .eq('service_event_id', serviceId ?? '')
-        .maybeSingle()
+        .order('starts_at')
       if (error) throw error
-      return data
+      return (data as LinkedRow[]).map(toLinked)
     },
   })
 }
@@ -149,24 +173,36 @@ export function useLinkedRehearsal(serviceId: string | undefined) {
 export function useRehearsalsFor(serviceIds: string[]) {
   const ids = [...serviceIds].sort()
   return useQuery({
-    queryKey: [...scheduleKeys.all, 'rehearsals-for', ids.join(',')],
+    queryKey: [...scheduleKeys.all, 'rehearsals-for-services', ids.join(',')],
     enabled: ids.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('events')
-        .select('id, service_event_id, starts_at, arrive_at')
+        .select(LINKED_COLS)
         .in('service_event_id', ids)
+        .order('starts_at')
       if (error) throw error
       // objeto simples (não Map): esta consulta é salva no aparelho (offline)
-      return Object.fromEntries(data.map((r) => [r.service_event_id as string, r])) as Record<
-        string,
-        LinkedRehearsal
-      >
+      const out: Record<string, LinkedRehearsal[]> = {}
+      for (const r of data as LinkedRow[]) {
+        const key = r.service_event_id as string
+        ;(out[key] ??= []).push(toLinked(r))
+      }
+      return out
     },
   })
 }
 
-export type LinkedRehearsal = { id: string; starts_at: string; arrive_at: string | null }
+export type LinkedRehearsal = {
+  id: string
+  title: string
+  starts_at: string
+  arrive_at: string | null
+  ends_at: string | null
+  group_id: string | null
+  /** "Ensaio de vozes"; null = ensaio da equipe toda */
+  group_name: string | null
+}
 
 export type ConfirmEvent = {
   id: string
@@ -215,10 +251,13 @@ export function useConfirmation(eventId: string | undefined, memberIds: string[]
       if (assignments.error) throw assignments.error
       if (justifications.error) throw justifications.error
       const service = events.data.find((e) => e.id === serviceId) as ConfirmEvent
-      const rehearsal = (events.data.find((e) => e.id !== serviceId) ?? null) as ConfirmEvent | null
+      // os ensaios do culto (banda, vozes…); a tela mostra os da pessoa
+      const rehearsals = events.data
+        .filter((e) => e.id !== serviceId)
+        .sort((a, b) => a.starts_at.localeCompare(b.starts_at)) as ConfirmEvent[]
       return {
         service,
-        rehearsal,
+        rehearsals,
         assignments: assignments.data,
         justifications: justifications.data,
       }

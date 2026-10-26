@@ -423,22 +423,23 @@ export type SeriesOccurrence = {
   ends_at: string | null
   arrive_at: string | null
   soundcheck_at: string | null
-  rehearsal: { starts_at: string; ends_at: string | null; arrive_at: string | null } | null
+  /** um por ensaio do último culto, na mesma ordem de `lastRehearsals` */
+  rehearsals: { starts_at: string; ends_at: string | null; arrive_at: string | null }[]
 }
 
 /**
  * Próximas semanas de uma série que parou antes de `untilKey` (inclusive):
  * copia do último evento o horário (no fuso), a duração, a chegada e a
- * passagem de som (em minutos antes do início) e, se ele tinha ensaio, o
- * ensaio na mesma distância em dias e no mesmo horário.
+ * passagem de som (em minutos antes do início) e, para cada ensaio dele
+ * (ex.: banda e vozes), o ensaio na mesma distância em dias e no mesmo horário.
  */
 export function extendWeeklySeries(params: {
   last: Times
-  lastRehearsal?: Times | null
+  lastRehearsals?: Times[]
   untilKey: string
   tz?: string
 }): SeriesOccurrence[] {
-  const { last, lastRehearsal, untilKey, tz = DEFAULT_TZ } = params
+  const { last, lastRehearsals = [], untilKey, tz = DEFAULT_TZ } = params
   const start = new Date(last.starts_at).getTime()
   const minutesBeforeStart = (iso: string | null | undefined) =>
     iso ? Math.round((start - new Date(iso).getTime()) / 60_000) : null
@@ -449,20 +450,17 @@ export function extendWeeklySeries(params: {
   const time = `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
   const lastKey = localDateKey(last.starts_at, tz)
 
-  const reh = lastRehearsal
-    ? (() => {
-        const rs = new Date(lastRehearsal.starts_at).getTime()
-        const rp = localParts(lastRehearsal.starts_at, tz)
-        return {
-          daysBefore: daysBetweenKeys(localDateKey(lastRehearsal.starts_at, tz), lastKey),
-          time: `${String(rp.hour).padStart(2, '0')}:${String(rp.minute).padStart(2, '0')}`,
-          duration: lastRehearsal.ends_at ? new Date(lastRehearsal.ends_at).getTime() - rs : null,
-          arrival: lastRehearsal.arrive_at
-            ? Math.round((rs - new Date(lastRehearsal.arrive_at).getTime()) / 60_000)
-            : null,
-        }
-      })()
-    : null
+  const rehs = lastRehearsals.map((r) => {
+    const rs = new Date(r.starts_at).getTime()
+    const rp = localParts(r.starts_at, tz)
+    return {
+      daysBefore: daysBetweenKeys(localDateKey(r.starts_at, tz), lastKey),
+      hour: rp.hour,
+      minute: rp.minute,
+      duration: r.ends_at ? new Date(r.ends_at).getTime() - rs : null,
+      arrival: r.arrive_at ? Math.round((rs - new Date(r.arrive_at).getTime()) / 60_000) : null,
+    }
+  })
 
   const minus = (d: Date, min: number | null) =>
     min == null ? null : new Date(d.getTime() - min * 60_000).toISOString()
@@ -474,24 +472,19 @@ export function extendWeeklySeries(params: {
     time,
     untilDate: untilKey,
     tz,
-  }).map((d) => {
-    let rehearsal: SeriesOccurrence['rehearsal'] = null
-    if (reh) {
+  }).map((d) => ({
+    starts_at: d.toISOString(),
+    ends_at: plus(d, duration),
+    arrive_at: minus(d, arrival),
+    soundcheck_at: minus(d, soundcheck),
+    rehearsals: rehs.map((reh) => {
       const day = parseDateKey(addDaysToKey(localDateKey(d, tz), -reh.daysBefore))
-      const [hh, mm] = reh.time.split(':').map(Number)
-      const rs = zonedToUtc(day.year, day.month, day.day, hh ?? 0, mm ?? 0, tz)
-      rehearsal = {
+      const rs = zonedToUtc(day.year, day.month, day.day, reh.hour, reh.minute, tz)
+      return {
         starts_at: rs.toISOString(),
         ends_at: plus(rs, reh.duration),
         arrive_at: minus(rs, reh.arrival),
       }
-    }
-    return {
-      starts_at: d.toISOString(),
-      ends_at: plus(d, duration),
-      arrive_at: minus(d, arrival),
-      soundcheck_at: minus(d, soundcheck),
-      rehearsal,
-    }
-  })
+    }),
+  }))
 }

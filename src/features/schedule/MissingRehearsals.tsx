@@ -5,14 +5,15 @@ import { defaultRehearsal } from '@domain/schedule.ts'
 
 import { useUser } from '@/auth/auth-context'
 import { Button } from '@/components/ui/button'
-import { useMinistrySettings } from '@/features/ministries/queries'
+import { useMinistrySettings, useRehearsalGroups } from '@/features/ministries/queries'
 import { fromLocalInputs, toLocalInputs } from '@/features/schedule/datetime'
 import { scheduleKeys } from '@/features/schedule/queries'
+import { rehearsalSlots, rehearsalTitle } from '@/features/schedule/rehearsal-groups'
 import { errorMessage } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
 
-/** Cultos futuros sem ensaio ligado (ou sem horário de chegada). */
+/** Cultos futuros com os ensaios que já têm (ou sem horário de chegada). */
 function useServicesMissingSetup(ministryId: string) {
   return useQuery({
     queryKey: [...scheduleKeys.all, 'missing-setup', ministryId],
@@ -28,11 +29,18 @@ function useServicesMissingSetup(ministryId: string) {
       if (error) throw error
       const ids = services.map((s) => s.id)
       const { data: linked, error: err } = ids.length
-        ? await supabase.from('events').select('service_event_id').in('service_event_id', ids)
+        ? await supabase
+            .from('events')
+            .select('id, service_event_id, rehearsal_group_id')
+            .in('service_event_id', ids)
         : { data: [], error: null }
       if (err) throw err
-      const has = new Set(linked.map((r) => r.service_event_id))
-      return services.map((s) => ({ ...s, hasRehearsal: has.has(s.id) }))
+      return services.map((s) => ({
+        ...s,
+        rehearsals: linked
+          .filter((r) => r.service_event_id === s.id)
+          .map((r) => ({ id: r.id, groupId: r.rehearsal_group_id })),
+      }))
     },
   })
 }
@@ -43,7 +51,19 @@ export function MissingRehearsals({ ministry }: { ministry: Tables<'ministries'>
   const queryClient = useQueryClient()
   const settings = useMinistrySettings(ministry.id).data
   const services = useServicesMissingSetup(ministry.id)
-  const withoutRehearsal = (services.data ?? []).filter((s) => !s.hasRehearsal)
+  const groups = useRehearsalGroups(ministry.id).data
+  const slots = rehearsalSlots(settings, groups)
+  // Cada culto precisa de um ensaio por grupo (banda, vozes…). O ensaio antigo
+  // da equipe toda vira o do primeiro grupo que falta (mantém dia e horário).
+  const plans = (services.data ?? [])
+    .map((s) => {
+      const missing = slots.filter((slot) => !s.rehearsals.some((r) => r.groupId === slot.groupId))
+      const legacy =
+        slots[0]?.groupId != null ? s.rehearsals.find((r) => r.groupId === null) : undefined
+      return { service: s, missing, legacy }
+    })
+    .filter((p) => p.missing.length > 0)
+  const withoutRehearsal = plans
   const withoutArrival = (services.data ?? []).filter((s) => !s.arrive_at)
 
   const fix = useMutation({
@@ -65,36 +85,50 @@ export function MissingRehearsals({ ministry }: { ministry: Tables<'ministries'>
         if (error) throw error
       }
       if (!settings.rehearsal_enabled || withoutRehearsal.length === 0) return 0
-      const rows = withoutRehearsal.map((s) => {
-        const { date } = toLocalInputs(s.starts_at)
-        const r = defaultRehearsal(date, settings)
-        const start = fromLocalInputs(r.date, r.time)
-        return {
-          church_id: ministry.church_id,
-          ministry_id: ministry.id,
-          kind: 'rehearsal' as const,
-          title: `Ensaio · ${s.title}`,
-          location_name: s.location_name,
-          starts_at: start.toISOString(),
-          ends_at: new Date(
-            start.getTime() + settings.rehearsal_duration_min * 60_000,
-          ).toISOString(),
-          arrive_at: new Date(
-            start.getTime() - settings.rehearsal_arrival_minutes * 60_000,
-          ).toISOString(),
-          service_event_id: s.id,
-          created_by: user.id,
+      let count = 0
+      const rows = []
+      for (const { service: s, missing, legacy } of withoutRehearsal) {
+        const [first, ...rest] = missing
+        const toCreate = legacy ? rest : missing
+        if (legacy && first) {
+          const { error } = await supabase
+            .from('events')
+            .update({
+              rehearsal_group_id: first.groupId,
+              title: rehearsalTitle(first.name, s.title),
+            })
+            .eq('id', legacy.id)
+          if (error) throw error
+          count++
         }
-      })
-      // ensaio que cairia depois do culto (regra no mesmo dia, horário depois) fica de fora
-      const valid = rows.filter(
-        (r, i) => r.starts_at < (withoutRehearsal[i]?.starts_at ?? r.starts_at),
-      )
-      if (valid.length) {
-        const { error } = await supabase.from('events').insert(valid)
+        for (const slot of toCreate) {
+          const { date } = toLocalInputs(s.starts_at)
+          const r = defaultRehearsal(date, slot.defaults)
+          const start = fromLocalInputs(r.date, r.time)
+          // ensaio que cairia depois do culto (regra no mesmo dia, horário depois) fica de fora
+          if (start.toISOString() >= s.starts_at) continue
+          rows.push({
+            church_id: ministry.church_id,
+            ministry_id: ministry.id,
+            kind: 'rehearsal' as const,
+            title: rehearsalTitle(slot.groupId ? slot.name : null, s.title),
+            location_name: s.location_name,
+            starts_at: start.toISOString(),
+            ends_at: new Date(start.getTime() + slot.durationMin * 60_000).toISOString(),
+            arrive_at: new Date(
+              start.getTime() - settings.rehearsal_arrival_minutes * 60_000,
+            ).toISOString(),
+            service_event_id: s.id,
+            rehearsal_group_id: slot.groupId,
+            created_by: user.id,
+          })
+        }
+      }
+      if (rows.length) {
+        const { error } = await supabase.from('events').insert(rows)
         if (error) throw error
       }
-      return valid.length
+      return count + rows.length
     },
     onSuccess: async (n) => {
       await queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
@@ -114,7 +148,13 @@ export function MissingRehearsals({ ministry }: { ministry: Tables<'ministries'>
         {needsRehearsal && (
           <>
             <strong>{withoutRehearsal.length}</strong>{' '}
-            {withoutRehearsal.length === 1 ? 'culto sem ensaio' : 'cultos sem ensaio'}
+            {slots[0]?.groupId
+              ? withoutRehearsal.length === 1
+                ? `culto sem ${slots.map((sl) => sl.name.toLowerCase()).join(' e ')}`
+                : `cultos sem ${slots.map((sl) => sl.name.toLowerCase()).join(' e ')}`
+              : withoutRehearsal.length === 1
+                ? 'culto sem ensaio'
+                : 'cultos sem ensaio'}
           </>
         )}
         {needsRehearsal && withoutArrival.length > 0 && ' e '}

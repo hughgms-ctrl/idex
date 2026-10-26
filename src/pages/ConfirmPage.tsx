@@ -66,14 +66,16 @@ export function ConfirmPage() {
     return <PageHeader title="Confirmar presença" description="Culto não encontrado." />
   }
 
-  const { service, rehearsal, assignments, justifications } = info
+  const { service, rehearsals, assignments, justifications } = info
   const mine = (id: string) => assignments.filter((a) => a.event_id === id)
+  // só os ensaios em que a pessoa está (quem canta não vê o ensaio da banda)
+  const myRehearsals = rehearsals.filter((r) => mine(r.id).length > 0)
   const serviceAssignment = mine(service.id)[0]
   const past = new Date(service.starts_at).getTime() < now
   // "Registrar presença" só com o ponto aberto (2 h antes da chegada até o fim)
   const checkinOpen =
     presenceState(
-      [service, ...(rehearsal ? [rehearsal] : [])].filter((e) => mine(e.id).length > 0),
+      [service, ...myRehearsals].filter((e) => mine(e.id).length > 0),
       now,
     ).kind === 'open'
 
@@ -107,7 +109,7 @@ export function ConfirmPage() {
         description="O compromisso é com o culto: confirmando, você confirma o ensaio também."
       />
 
-      {[service, ...(rehearsal ? [rehearsal] : [])]
+      {[service, ...myRehearsals]
         .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
         .map((event) => {
           const a = mine(event.id)[0]
@@ -159,7 +161,7 @@ export function ConfirmPage() {
               {a &&
                 !started &&
                 a.status !== 'benched' &&
-                (isRehearsal || !rehearsal) &&
+                (isRehearsal ? event.id === myRehearsals[0]?.id : rehearsals.length === 0) &&
                 serviceAssignment.status !== 'benched' &&
                 !absence && (
                   <RehearsalAvailabilityField

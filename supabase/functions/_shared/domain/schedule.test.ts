@@ -301,19 +301,29 @@ describe('extendWeeklySeries', () => {
     arrive_at: '2027-01-14T22:40:00.000Z',
   }
 
-  it('completa os domingos até o fim do trimestre com os mesmos horários e o ensaio', () => {
-    const next = extendWeeklySeries({ last, lastRehearsal, untilKey: '2027-03-31' })
+  // ensaio de vozes: sábado 16/01 9h, sem chegada nem duração
+  const voices = { starts_at: '2027-01-16T12:00:00.000Z', ends_at: null, arrive_at: null }
+
+  it('completa os domingos até o fim do trimestre com os mesmos horários e os ensaios', () => {
+    const next = extendWeeklySeries({
+      last,
+      lastRehearsals: [lastRehearsal, voices],
+      untilKey: '2027-03-31',
+    })
     expect(next).toHaveLength(10)
     expect(next[0]).toEqual({
       starts_at: '2027-01-24T22:00:00.000Z',
       ends_at: '2027-01-25T00:00:00.000Z',
       arrive_at: '2027-01-24T21:30:00.000Z',
       soundcheck_at: '2027-01-24T21:45:00.000Z',
-      rehearsal: {
-        starts_at: '2027-01-21T23:00:00.000Z',
-        ends_at: '2027-01-22T01:00:00.000Z',
-        arrive_at: '2027-01-21T22:40:00.000Z',
-      },
+      rehearsals: [
+        {
+          starts_at: '2027-01-21T23:00:00.000Z',
+          ends_at: '2027-01-22T01:00:00.000Z',
+          arrive_at: '2027-01-21T22:40:00.000Z',
+        },
+        { starts_at: '2027-01-23T12:00:00.000Z', ends_at: null, arrive_at: null },
+      ],
     })
     expect(next.at(-1)?.starts_at).toBe('2027-03-28T22:00:00.000Z')
   })
@@ -324,7 +334,7 @@ describe('extendWeeklySeries', () => {
       '2027-01-24T22:00:00.000Z',
       '2027-01-31T22:00:00.000Z',
     ])
-    expect(next[0]?.rehearsal).toBeNull()
+    expect(next[0]?.rehearsals).toEqual([])
     expect(extendWeeklySeries({ last, untilKey: '2027-01-23' })).toEqual([])
   })
 })

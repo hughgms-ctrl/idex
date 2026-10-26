@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { scheduleKeys } from '@/features/schedule/queries'
+import { rehearsalTitle } from '@/features/schedule/rehearsal-groups'
 import { errorMessage } from '@/lib/errors'
 import { formatDate } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
@@ -62,12 +63,16 @@ function useWeeklySeries(ministryId: string) {
       const lastIds = series.map((s) => s.last.id)
       const { data: rehearsals, error: rErr } = await supabase
         .from('events')
-        .select('service_event_id, starts_at, ends_at, arrive_at')
+        .select(
+          'service_event_id, starts_at, ends_at, arrive_at, rehearsal_group_id, rehearsal_groups(name)',
+        )
         .in('service_event_id', lastIds)
+        .order('starts_at')
       if (rErr) throw rErr
       return series.map((s) => ({
         ...s,
-        lastRehearsal: rehearsals.find((r) => r.service_event_id === s.last.id) ?? null,
+        // banda, vozes…: cada ensaio continua com o seu grupo
+        lastRehearsals: rehearsals.filter((r) => r.service_event_id === s.last.id),
       }))
     },
   })
@@ -101,13 +106,13 @@ export function ContinueSeries({
     .filter((s) => new Date(s.last.starts_at).getTime() > recent)
     .map((s) => ({
       ...s,
-      next: extendWeeklySeries({ last: s.last, lastRehearsal: s.lastRehearsal, untilKey }),
+      next: extendWeeklySeries({ last: s.last, lastRehearsals: s.lastRehearsals, untilKey }),
     }))
     .filter((s) => s.next.length > 0)
 
   const extend = useMutation({
     mutationFn: async (item: Pending & { next: SeriesOccurrence[] }) => {
-      const { parent, last, next } = item
+      const { parent, last, next, lastRehearsals } = item
       const { data: created, error } = await supabase
         .from('events')
         .insert(
@@ -127,23 +132,24 @@ export function ContinueSeries({
         )
         .select('id, starts_at')
       if (error) throw error
-      const withRehearsal = next.filter((n) => n.rehearsal)
-      if (withRehearsal.length > 0) {
-        const idByStart = new Map(created.map((c) => [new Date(c.starts_at).getTime(), c.id]))
-        const { error: err } = await supabase.from('events').insert(
-          withRehearsal.map((n) => ({
-            church_id: ministry.church_id,
-            ministry_id: ministry.id,
-            kind: 'rehearsal' as const,
-            title: `Ensaio · ${last.title}`,
-            location_name: last.location_name,
-            starts_at: n.rehearsal!.starts_at,
-            ends_at: n.rehearsal!.ends_at,
-            arrive_at: n.rehearsal!.arrive_at,
-            service_event_id: idByStart.get(new Date(n.starts_at).getTime()) ?? null,
-            created_by: user.id,
-          })),
-        )
+      const idByStart = new Map(created.map((c) => [new Date(c.starts_at).getTime(), c.id]))
+      const rows = next.flatMap((n) =>
+        n.rehearsals.map((r, i) => ({
+          church_id: ministry.church_id,
+          ministry_id: ministry.id,
+          kind: 'rehearsal' as const,
+          title: rehearsalTitle(lastRehearsals[i]?.rehearsal_groups?.name, last.title),
+          location_name: last.location_name,
+          starts_at: r.starts_at,
+          ends_at: r.ends_at,
+          arrive_at: r.arrive_at,
+          service_event_id: idByStart.get(new Date(n.starts_at).getTime()) ?? null,
+          rehearsal_group_id: lastRehearsals[i]?.rehearsal_group_id ?? null,
+          created_by: user.id,
+        })),
+      )
+      if (rows.length > 0) {
+        const { error: err } = await supabase.from('events').insert(rows)
         if (err) throw err
       }
       return next.length
@@ -184,7 +190,13 @@ export function ContinueSeries({
 type Pending = {
   parent: Row
   last: Row
-  lastRehearsal: { starts_at: string; ends_at: string | null; arrive_at: string | null } | null
+  lastRehearsals: {
+    starts_at: string
+    ends_at: string | null
+    arrive_at: string | null
+    rehearsal_group_id: string | null
+    rehearsal_groups: { name: string } | null
+  }[]
 }
 
 /** Uma série: escolher até quando continuar (padrão: fim do trimestre). */
@@ -206,7 +218,7 @@ function SeriesRow({
   const lastKey = localDateKey(item.last.starts_at)
   const minKey = addDaysToKey(lastKey, 7)
   const next = /^\d{4}-\d{2}-\d{2}$/.test(until)
-    ? extendWeeklySeries({ last: item.last, lastRehearsal: item.lastRehearsal, untilKey: until })
+    ? extendWeeklySeries({ last: item.last, lastRehearsals: item.lastRehearsals, untilKey: until })
     : []
   const lastNew = next.at(-1)
   return (
@@ -232,7 +244,7 @@ function SeriesRow({
           <p className="text-muted-foreground text-[13px]">
             {next.length === 0
               ? `Escolha uma data a partir de ${formatDate(minKey)}.`
-              : `Vai criar ${next.length} ${next.length === 1 ? 'data' : 'datas'}: de ${formatDate(localDateKey(next[0]!.starts_at))} a ${formatDate(localDateKey(lastNew!.starts_at))}${item.lastRehearsal ? ', cada uma com ensaio' : ''}.`}
+              : `Vai criar ${next.length} ${next.length === 1 ? 'data' : 'datas'}: de ${formatDate(localDateKey(next[0]!.starts_at))} a ${formatDate(localDateKey(lastNew!.starts_at))}${item.lastRehearsals.length > 1 ? `, cada uma com ${item.lastRehearsals.length} ensaios` : item.lastRehearsals.length ? ', cada uma com ensaio' : ''}.`}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button

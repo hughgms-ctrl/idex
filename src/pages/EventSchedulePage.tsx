@@ -26,13 +26,13 @@ import { Button } from '@/components/ui/button'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useChurch } from '@/features/church/church-context'
 import { EVENT_KIND_LABEL, eventTimeRows } from '@/features/schedule/datetime'
-import { useMinistrySettings } from '@/features/ministries/queries'
+import { useMinistrySettings, useRehearsalGroups } from '@/features/ministries/queries'
 import { EventDialog } from '@/features/schedule/EventDialog'
 import { MemberPicker } from '@/features/schedule/MemberPicker'
 import {
   scheduleKeys,
   useEvent,
-  useLinkedRehearsal,
+  useLinkedRehearsals,
   type ScheduleEvent,
 } from '@/features/schedule/queries'
 import { useScheduleData, type ScheduleData } from '@/features/schedule/useScheduleData'
@@ -89,6 +89,17 @@ function Editor({
   const [params] = useSearchParams()
   const [editOpen, setEditOpen] = useState(() => params.get('remarcar') === '1')
   const invalidate = () => queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
+  // ensaio de um grupo (ex.: vozes): só as funções dele (e as que já têm gente)
+  const group = useRehearsalGroups(
+    event.rehearsal_group_id ? event.ministry_id : undefined,
+  ).data?.find((g) => g.id === event.rehearsal_group_id)
+  const roles = group
+    ? data.roles.filter(
+        (r) =>
+          group.role_ids.includes(r.id) ||
+          event.schedule_assignments.some((a) => a.ministry_role_id === r.id),
+      )
+    : data.roles
 
   const add = useMutation({
     mutationFn: async ({ memberId, roleId }: { memberId: string; roleId: string | null }) => {
@@ -252,7 +263,7 @@ function Editor({
 
       {canEdit && <AnswersSummary event={event} data={data} />}
 
-      {data.roles.map((role) => {
+      {roles.map((role) => {
         const inRole = event.schedule_assignments.filter((a) => a.ministry_role_id === role.id)
         return (
           <RoleSlot
@@ -743,19 +754,25 @@ function RehearsalAnswers({
 }
 
 function LinkedEvent({ event }: { event: ScheduleEvent }) {
-  const rehearsal = useLinkedRehearsal(event.kind === 'service' ? event.id : undefined).data
+  const rehearsals = useLinkedRehearsals(event.kind === 'service' ? event.id : undefined).data
   const service = useEvent(event.service_event_id ?? undefined).data
-  if (event.kind === 'service' && rehearsal) {
+  if (event.kind === 'service' && rehearsals && rehearsals.length > 0) {
     return (
-      <Link
-        to={`/escalas/${rehearsal.id}`}
-        className="border-info/60 bg-info/10 text-info flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-sm"
-      >
-        <span>
-          <strong>Ensaio:</strong> {formatEventDate(rehearsal.starts_at)}
-        </span>
-        <span className="text-xs underline">ver / remarcar ›</span>
-      </Link>
+      <div className="flex flex-col gap-1.5">
+        {rehearsals.map((rehearsal) => (
+          <Link
+            key={rehearsal.id}
+            to={`/escalas/${rehearsal.id}`}
+            className="border-info/60 bg-info/10 text-info flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3.5 py-2 text-sm"
+          >
+            <span>
+              <strong>{rehearsal.group_name ?? 'Ensaio'}:</strong>{' '}
+              {formatEventDate(rehearsal.starts_at)}
+            </span>
+            <span className="text-xs underline">ver / remarcar ›</span>
+          </Link>
+        ))}
+      </div>
     )
   }
   if (service) {
@@ -771,7 +788,9 @@ function LinkedEvent({ event }: { event: ScheduleEvent }) {
           <span aria-hidden="true">›</span>
         </Link>
         <p className="text-muted-foreground text-[13px]">
-          Quem é escalado no culto entra neste ensaio automaticamente.
+          {event.rehearsal_group_id
+            ? 'Quem é escalado no culto nas funções deste ensaio entra aqui automaticamente.'
+            : 'Quem é escalado no culto entra neste ensaio automaticamente.'}
         </p>
       </div>
     )

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { MarginText, StreakLine } from '@/features/attendance/Gamification'
 import { useMyAvailability, useMyRoleIds, useUpcomingEvents } from '@/features/availability/queries'
 import { PresenceCard } from '@/features/attendance/PresenceCard'
+import { useMyCommitments } from '@/features/attendance/queries'
 import { useChurch } from '@/features/church/church-context'
 import { PushCard } from '@/features/push/PushCard'
 import { useMinistryMembers } from '@/features/members/queries'
@@ -61,15 +62,19 @@ export function DashboardPage() {
 
   const firstName = profile.data?.full_name.split(' ')[0]
   const event = nextEvent.data
+  // o título fala do MEU próximo compromisso (quem canta não vê o ensaio da banda)
+  const commitments = useMyCommitments(myMembership?.id)
+  const headline = commitments.data?.[0] ?? event
 
   return (
     <>
       <h1 className="font-display text-[28px] leading-tight font-medium">
         {firstName ? `Olá, ${firstName}.` : 'Olá!'}
-        {event && (
+        {headline && (
           <>
             <br />
-            {event.kind === 'rehearsal' ? 'Ensaio' : event.title} {relativeDays(event.starts_at)}.
+            {headline.kind === 'rehearsal' ? 'Ensaio' : headline.title}{' '}
+            {relativeDays(headline.starts_at)}.
           </>
         )}
       </h1>

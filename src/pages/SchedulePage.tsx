@@ -192,7 +192,7 @@ export function SchedulePage() {
                 data={data}
                 myMemberId={myMember?.id}
                 leader={leader}
-                rehearsal={rehearsals?.[event.id] ?? null}
+                rehearsals={rehearsals?.[event.id]}
               />
             </div>
           ))}

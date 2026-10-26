@@ -58,6 +58,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: 'announcements_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
             foreignKeyName: 'announcements_event_id_church_id_fkey'
             columns: ['event_id', 'church_id']
             isOneToOne: false
@@ -725,6 +732,7 @@ export type Database = {
           radius_m: number | null
           recurrence_parent_id: string | null
           recurrence_rule: string | null
+          rehearsal_group_id: string | null
           service_event_id: string | null
           soundcheck_at: string | null
           starts_at: string
@@ -748,6 +756,7 @@ export type Database = {
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
+          rehearsal_group_id?: string | null
           service_event_id?: string | null
           soundcheck_at?: string | null
           starts_at: string
@@ -770,6 +779,7 @@ export type Database = {
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
+          rehearsal_group_id?: string | null
           service_event_id?: string | null
           soundcheck_at?: string | null
           starts_at?: string
@@ -797,6 +807,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'events'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'events_rehearsal_group_fk'
+            columns: ['rehearsal_group_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'rehearsal_groups'
+            referencedColumns: ['id', 'church_id']
           },
           {
             foreignKeyName: 'events_service_link_fk'
@@ -1179,6 +1196,9 @@ export type Database = {
           late_penalty_tiers: NonNullable<Json>
           late_tolerance_min: number
           ministry_id: string
+          recovery_enabled: boolean
+          recovery_every: number
+          recovery_points: number
           rehearsal_arrival_minutes: number
           rehearsal_days_before: number
           rehearsal_duration_min: number
@@ -1189,9 +1209,6 @@ export type Database = {
           rehearsal_mode: string
           rehearsal_time: string
           rehearsal_tolerance_min: number
-          recovery_enabled: boolean
-          recovery_every: number
-          recovery_points: number
           rehearsal_weekday: number | null
           service_arrival_minutes: number
           service_late_consequence: string
@@ -1219,6 +1236,9 @@ export type Database = {
           late_penalty_tiers?: NonNullable<Json>
           late_tolerance_min?: number
           ministry_id: string
+          recovery_enabled?: boolean
+          recovery_every?: number
+          recovery_points?: number
           rehearsal_arrival_minutes?: number
           rehearsal_days_before?: number
           rehearsal_duration_min?: number
@@ -1229,9 +1249,6 @@ export type Database = {
           rehearsal_mode?: string
           rehearsal_time?: string
           rehearsal_tolerance_min?: number
-          recovery_enabled?: boolean
-          recovery_every?: number
-          recovery_points?: number
           rehearsal_weekday?: number | null
           service_arrival_minutes?: number
           service_late_consequence?: string
@@ -1258,6 +1275,9 @@ export type Database = {
           late_penalty_tiers?: NonNullable<Json>
           late_tolerance_min?: number
           ministry_id?: string
+          recovery_enabled?: boolean
+          recovery_every?: number
+          recovery_points?: number
           rehearsal_arrival_minutes?: number
           rehearsal_days_before?: number
           rehearsal_duration_min?: number
@@ -1268,9 +1288,6 @@ export type Database = {
           rehearsal_mode?: string
           rehearsal_time?: string
           rehearsal_tolerance_min?: number
-          recovery_enabled?: boolean
-          recovery_every?: number
-          recovery_points?: number
           rehearsal_weekday?: number | null
           service_arrival_minutes?: number
           service_late_consequence?: string
@@ -1604,6 +1621,60 @@ export type Database = {
             columns: ['ministry_member_id', 'church_id']
             isOneToOne: false
             referencedRelation: 'ministry_members'
+            referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
+      rehearsal_groups: {
+        Row: {
+          church_id: string
+          created_at: string
+          days_before: number
+          duration_min: number
+          id: string
+          ministry_id: string
+          mode: string
+          name: string
+          role_ids: string[]
+          sort_order: number
+          time: string
+          weekday: number | null
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          created_at?: string
+          days_before?: number
+          duration_min?: number
+          id?: string
+          ministry_id: string
+          mode?: string
+          name: string
+          role_ids?: string[]
+          sort_order?: number
+          time?: string
+          weekday?: number | null
+        }
+        Update: {
+          church_id?: string
+          created_at?: string
+          days_before?: number
+          duration_min?: number
+          id?: string
+          ministry_id?: string
+          mode?: string
+          name?: string
+          role_ids?: string[]
+          sort_order?: number
+          time?: string
+          weekday?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'rehearsal_groups_ministry_id_church_id_fkey'
+            columns: ['ministry_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministries'
             referencedColumns: ['id', 'church_id']
           },
         ]
@@ -1990,6 +2061,38 @@ export type Database = {
     }
     Functions: {
       accept_invite: { Args: { p_full_name?: string; p_token: string }; Returns: Json }
+      announcement_audience_people: {
+        Args: {
+          p_audience: string
+          p_event_id?: string
+          p_member_ids?: string[]
+          p_ministry_id: string
+        }
+        Returns: {
+          full_name: string
+          has_push: boolean
+          has_whatsapp: boolean
+          profile_id: string
+        }[]
+      }
+      announcement_deliveries: {
+        Args: { p_announcement_id: string }
+        Returns: {
+          full_name: string
+          has_whatsapp: boolean
+          last_error: string
+          profile_id: string
+          push_sent_at: string
+          sent_at: string
+          status: Database['public']['Enums']['notification_status']
+        }[]
+      }
+      announcement_recipients: {
+        Args: { p_announcement_id: string }
+        Returns: {
+          profile_id: string
+        }[]
+      }
       apply_checkin_request_review: {
         Args: {
           p_arrived_at: string
@@ -2011,6 +2114,8 @@ export type Database = {
         }
         Returns: number
       }
+      can_access_chat_topic: { Args: { p_topic: string }; Returns: boolean }
+      can_access_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
       can_edit_setlist: { Args: { p_setlist_id: string }; Returns: boolean }
       can_edit_setlist_of_event: { Args: { p_event_id: string }; Returns: boolean }
       can_justify_event: {
@@ -2018,6 +2123,15 @@ export type Database = {
         Returns: boolean
       }
       can_manage_song: { Args: { p_song_id: string }; Returns: boolean }
+      can_send_to_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
+      chat_conversation_members: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          profile_id: string
+        }[]
+      }
+      chat_event_end: { Args: { p_event_id: string }; Returns: string }
+      chat_is_archived: { Args: { p_conversation_id: string }; Returns: boolean }
       claim_notifications: {
         Args: { p_limit?: number }
         Returns: {
@@ -2030,8 +2144,19 @@ export type Database = {
           push_sent: boolean
         }[]
       }
+      cleanup_event_conversations: { Args: Record<PropertyKey, never>; Returns: number }
       close_due_cycles: { Args: Record<PropertyKey, never>; Returns: number }
+      commitment_outcome: { Args: { p_event_id: string; p_member_id: string }; Returns: string }
       confirm_my_presence: { Args: { p_event_id: string }; Returns: number }
+      count_announcement_audience: {
+        Args: {
+          p_audience: string
+          p_event_id?: string
+          p_member_ids?: string[]
+          p_ministry_id: string
+        }
+        Returns: number
+      }
       create_checkin_request: {
         Args: {
           p_declared_arrived_at: string
@@ -2046,41 +2171,7 @@ export type Database = {
         Returns: string
       }
       cycle_for_event: { Args: { p_event_id: string }; Returns: string }
-      announcement_audience_people: {
-        Args: {
-          p_audience: string
-          p_event_id?: string
-          p_member_ids?: string[]
-          p_ministry_id: string
-        }
-        Returns: {
-          full_name: string
-          has_push: boolean
-          has_whatsapp: boolean
-          profile_id: string
-        }[]
-      }
-      announcement_deliveries: {
-        Args: { p_announcement_id: string }
-        Returns: {
-          full_name: string
-          has_whatsapp: boolean
-          last_error: string | null
-          profile_id: string
-          push_sent_at: string | null
-          sent_at: string | null
-          status: Database['public']['Enums']['notification_status']
-        }[]
-      }
-      count_announcement_audience: {
-        Args: {
-          p_audience: string
-          p_event_id?: string
-          p_member_ids?: string[]
-          p_ministry_id: string
-        }
-        Returns: number
-      }
+      delete_chat_message: { Args: { p_message_id: string }; Returns: undefined }
       delete_push_subscription: { Args: { p_endpoint: string }; Returns: undefined }
       dispatch_announcements: { Args: Record<PropertyKey, never>; Returns: number }
       dispatch_notifications_http: { Args: Record<PropertyKey, never>; Returns: undefined }
@@ -2135,6 +2226,42 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_app_installed: { Args: Record<PropertyKey, never>; Returns: undefined }
+      mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined }
+      member_cycle_summary: { Args: { p_cycle_id: string; p_member_id: string }; Returns: Json }
+      ministry_member_devices: {
+        Args: { p_ministry_id: string }
+        Returns: {
+          app_installed: boolean
+          ministry_member_id: string
+          push_enabled: boolean
+        }[]
+      }
+      ministry_month_stats: { Args: { p_ministry_id: string }; Returns: Json }
+      my_conversations: {
+        Args: { p_church_id: string }
+        Returns: {
+          archived: boolean
+          event_id: string
+          event_starts_at: string
+          id: string
+          kind: string
+          last_body: string
+          last_deleted: boolean
+          last_message_at: string
+          last_sender_id: string
+          last_sender_name: string
+          ministry_id: string
+          muted: boolean
+          other_profile_id: string
+          title: string
+          unread: number
+        }[]
+      }
+      open_direct_conversation: {
+        Args: { p_church_id: string; p_profile_id: string }
+        Returns: string
+      }
       process_absences: { Args: Record<PropertyKey, never>; Returns: number }
       record_attendance: {
         Args: {
@@ -2154,6 +2281,10 @@ export type Database = {
         Returns: string
       }
       regenerate_checkin_code: { Args: { p_ministry_id: string }; Returns: string }
+      rehearsal_takes_role: {
+        Args: { p_rehearsal_id: string; p_role_id: string }
+        Returns: boolean
+      }
       reminder_fire_at: {
         Args: {
           p_arrive_at: string
@@ -2172,55 +2303,6 @@ export type Database = {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
         Returns: undefined
       }
-      set_current_cycle: {
-        Args: {
-          p_ends_on: string
-          p_ministry_id: string
-          p_next_months: number
-          p_starts_on: string
-        }
-        Returns: Database['public']['Tables']['cycles']['Row']
-      }
-      can_access_chat_topic: { Args: { p_topic: string }; Returns: boolean }
-      can_access_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
-      can_send_to_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
-      delete_chat_message: { Args: { p_message_id: string }; Returns: undefined }
-      mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined }
-      my_conversations: {
-        Args: { p_church_id: string }
-        Returns: {
-          archived: boolean
-          event_id: string | null
-          event_starts_at: string | null
-          id: string
-          kind: string
-          last_body: string | null
-          last_deleted: boolean
-          last_message_at: string | null
-          last_sender_id: string | null
-          last_sender_name: string
-          ministry_id: string | null
-          muted: boolean
-          other_profile_id: string | null
-          title: string
-          unread: number
-        }[]
-      }
-      open_direct_conversation: {
-        Args: { p_church_id: string; p_profile_id: string }
-        Returns: string
-      }
-      set_conversation_muted: {
-        Args: { p_conversation_id: string; p_muted: boolean }
-        Returns: undefined
-      }
-      mark_app_installed: { Args: Record<PropertyKey, never>; Returns: undefined }
-      ministry_month_stats: { Args: { p_ministry_id: string }; Returns: Json }
-      ministry_member_devices: {
-        Args: { p_ministry_id: string }
-        Returns: { app_installed: boolean; ministry_member_id: string; push_enabled: boolean }[]
-      }
-      send_test_push: { Args: Record<PropertyKey, never>; Returns: boolean }
       save_push_subscription: {
         Args: { p_auth: string; p_endpoint: string; p_p256dh: string; p_user_agent?: string }
         Returns: undefined
@@ -2229,10 +2311,41 @@ export type Database = {
         Args: { p_church_id: string; p_ministry_id: string }
         Returns: undefined
       }
+      send_test_push: { Args: Record<PropertyKey, never>; Returns: boolean }
+      set_conversation_muted: {
+        Args: { p_conversation_id: string; p_muted: boolean }
+        Returns: undefined
+      }
+      set_current_cycle: {
+        Args: {
+          p_ends_on: string
+          p_ministry_id: string
+          p_next_months: number
+          p_starts_on: string
+        }
+        Returns: {
+          church_id: string
+          closed_at: string | null
+          created_at: string
+          ends_on: string
+          id: string
+          ministry_id: string
+          starts_on: string
+          status: Database['public']['Enums']['cycle_status']
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'cycles'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }
       storage_church_id: { Args: { p_name: string }; Returns: string }
       storage_song_id: { Args: { p_name: string }; Returns: string }
+      sync_rehearsal_team: { Args: { p_rehearsal_id: string }; Returns: undefined }
+      tolerance_for_event: { Args: { p_event_id: string }; Returns: number }
     }
     Enums: {
       assignment_status: 'scheduled' | 'confirmed' | 'declined' | 'benched'
