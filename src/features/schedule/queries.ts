@@ -117,6 +117,8 @@ export function useMyUpcomingAssignments(memberId: string | undefined, limit = 3
         )
         .eq('ministry_member_id', memberId ?? '')
         .gte('events.starts_at', new Date().toISOString())
+        // Ensaio de um culto fica implícito: a pessoa é escalada para o culto.
+        .is('events.service_event_id', null)
         .order('starts_at', { referencedTable: 'events' })
       if (error) throw error
       return data
