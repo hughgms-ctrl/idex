@@ -2,7 +2,16 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowDown, ArrowLeft, Bell, BellOff, SendHorizontal, Trash2 } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDown,
+  ArrowLeft,
+  Bell,
+  BellOff,
+  SendHorizontal,
+  Trash2,
+} from 'lucide-react'
 
 import { useUser } from '@/auth/auth-context'
 import { ErrorState } from '@/components/ErrorState'
@@ -42,19 +51,27 @@ function useConversationInfo(conversationId: string) {
         supabase
           .from('chat_conversations')
           .select(
-            'id, kind, ministry_id, event_id, ministries(name), events(title, starts_at, ends_at), chat_participants(profile_id)',
+            'id, kind, ministry_id, event_id, last_message_at, ministries(name), events(title, starts_at, ends_at), chat_participants(profile_id)',
           )
           .eq('id', conversationId)
           .maybeSingle(),
         supabase
           .from('chat_reads')
-          .select('muted')
+          .select('muted, archived_at')
           .eq('conversation_id', conversationId)
           .maybeSingle(),
       ])
       if (conv.error) throw conv.error
       if (read.error) throw read.error
-      return conv.data ? { ...conv.data, muted: read.data?.muted ?? false } : null
+      const archivedAt = read.data?.archived_at ?? null
+      return conv.data
+        ? {
+            ...conv.data,
+            muted: read.data?.muted ?? false,
+            // arquivada pela pessoa; mensagem nova depois disso traz de volta
+            userArchived: archivedAt !== null && (conv.data.last_message_at ?? '') <= archivedAt,
+          }
+        : null
     },
   })
 }
@@ -242,6 +259,27 @@ export function ConversationPage() {
     onError: (err) => toast.error(errorMessage(err)),
   })
 
+  const archive = useMutation({
+    mutationFn: async (archived: boolean) => {
+      const { error } = await supabase.rpc('set_conversation_archived', {
+        p_conversation_id: conversationId,
+        p_archived: archived,
+      })
+      if (error) throw error
+      return archived
+    },
+    onSuccess: async (archived) => {
+      await queryClient.invalidateQueries({ queryKey: ['chat', 'info', conversationId] })
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list(church.id) })
+      toast.success(
+        archived
+          ? 'Conversa arquivada. Volta para a lista quando chegar mensagem nova.'
+          : 'Conversa de volta à lista.',
+      )
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
   // textarea cresce até ~5 linhas
   useLayoutEffect(() => {
     const el = inputRef.current
@@ -286,6 +324,22 @@ export function ConversationPage() {
             {typingLine ?? subtitle}
           </span>
         </div>
+        {conv && (
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={archive.isPending}
+            onClick={() => archive.mutate(!conv.userArchived)}
+            aria-label={conv.userArchived ? 'Desarquivar esta conversa' : 'Arquivar esta conversa'}
+            title={conv.userArchived ? 'Desarquivar' : 'Arquivar'}
+          >
+            {conv.userArchived ? (
+              <ArchiveRestore className="size-5" />
+            ) : (
+              <Archive className="size-5" />
+            )}
+          </Button>
+        )}
         {conv && (
           <Button
             variant="ghost"

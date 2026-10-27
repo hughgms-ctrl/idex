@@ -19,6 +19,8 @@ export type ConversationRow = {
   kind: string
   title: string
   archived: boolean
+  /** a pessoa arquivou (volta sozinha com mensagem nova) */
+  user_archived?: boolean
   muted: boolean
   unread: number
   last_message_at: string | null
@@ -171,7 +173,15 @@ export function sortConversations<T extends ConversationRow>(rows: T[]): T[] {
 
 /** Total de não lidas para o selo do menu (não conta silenciadas nem arquivadas). */
 export function totalUnread(rows: ConversationRow[]): number {
-  return rows.reduce((n, r) => (r.muted || r.archived ? n : n + r.unread), 0)
+  return rows.reduce((n, r) => (r.muted || r.archived || r.user_archived ? n : n + r.unread), 0)
+}
+
+/** Lista principal × "Arquivadas" (culto que já passou ou arquivada pela pessoa). */
+export function splitArchived<T extends ConversationRow>(
+  rows: T[],
+): { active: T[]; archived: T[] } {
+  const isArchived = (r: T) => r.archived || Boolean(r.user_archived)
+  return { active: rows.filter((r) => !isArchived(r)), archived: rows.filter(isArchived) }
 }
 
 export type TextPart = { text: string; href?: string }
