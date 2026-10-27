@@ -17,8 +17,13 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useChurch } from '@/features/church/church-context'
 import { CycleSettings } from '@/features/ministries/CycleSettings'
+import { RehearsalGroups } from '@/features/ministries/RehearsalGroups'
 import { ReminderRules } from '@/features/push/ReminderRules'
-import { ministryKeys, useMinistrySettings } from '@/features/ministries/queries'
+import {
+  ministryKeys,
+  useMinistrySettings,
+  useRehearsalGroups,
+} from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatDate } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -55,6 +60,13 @@ export function SettingsPage() {
         <ServiceTimes
           key={`horarios-${settings.data.updated_at}`}
           settings={settings.data}
+          canEdit={isLeader(ministry.id)}
+        />
+      )}
+      {ministry && settings.data && (
+        <RehearsalGroups
+          settings={settings.data}
+          churchId={church.id}
           canEdit={isLeader(ministry.id)}
         />
       )}
@@ -189,6 +201,8 @@ function ServiceTimes({
   settings: Tables<'ministry_settings'>
   canEdit: boolean
 }) {
+  // com ensaios separados (banda, vozes…), dia e horário ficam em cada um
+  const separate = (useRehearsalGroups(settings.ministry_id).data ?? []).length > 0
   const save = useSaveSettings(settings.ministry_id, 'Regras de horário salvas')
   const [v, setV] = useState({
     serviceArrival: String(settings.service_arrival_minutes),
@@ -319,21 +333,29 @@ function ServiceTimes({
           />
           Todo culto tem ensaio
         </Label>
+        {v.rehearsalEnabled && separate && (
+          <p className="text-muted-foreground text-[13px]">
+            Os ensaios são separados: o dia, o horário e a duração de cada um ficam em &quot;Ensaios
+            do culto&quot;, abaixo.
+          </p>
+        )}
         {v.rehearsalEnabled && (
           <>
-            <FormField id="rt-mode" label="Quando">
-              <NativeSelect
-                id="rt-mode"
-                value={v.rehearsalMode}
-                disabled={!canEdit}
-                onChange={set('rehearsalMode')}
-              >
-                <option value="weekday">Sempre no mesmo dia da semana</option>
-                <option value="days_before">Alguns dias antes do culto</option>
-              </NativeSelect>
-            </FormField>
+            {!separate && (
+              <FormField id="rt-mode" label="Quando">
+                <NativeSelect
+                  id="rt-mode"
+                  value={v.rehearsalMode}
+                  disabled={!canEdit}
+                  onChange={set('rehearsalMode')}
+                >
+                  <option value="weekday">Sempre no mesmo dia da semana</option>
+                  <option value="days_before">Alguns dias antes do culto</option>
+                </NativeSelect>
+              </FormField>
+            )}
             <div className="grid grid-cols-2 gap-3">
-              {v.rehearsalMode === 'weekday' ? (
+              {separate ? null : v.rehearsalMode === 'weekday' ? (
                 <FormField id="rt-weekday" label="Dia">
                   <NativeSelect
                     id="rt-weekday"
@@ -365,16 +387,18 @@ function ServiceTimes({
                   </NativeSelect>
                 </FormField>
               )}
-              <FormField id="rt-rtime" label="Começa às">
-                <Input
-                  id="rt-rtime"
-                  type="time"
-                  value={v.rehearsalTime}
-                  disabled={!canEdit}
-                  onChange={set('rehearsalTime')}
-                />
-              </FormField>
-              {minutes('rehearsalDuration', 'Duração (min)')}
+              {!separate && (
+                <FormField id="rt-rtime" label="Começa às">
+                  <Input
+                    id="rt-rtime"
+                    type="time"
+                    value={v.rehearsalTime}
+                    disabled={!canEdit}
+                    onChange={set('rehearsalTime')}
+                  />
+                </FormField>
+              )}
+              {!separate && minutes('rehearsalDuration', 'Duração (min)')}
               {minutes('rehearsalArrival', 'Chegada (min antes)')}
               {minutes('rehearsalTolerance', 'Tolerância (min)')}
             </div>

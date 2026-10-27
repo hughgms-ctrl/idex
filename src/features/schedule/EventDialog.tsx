@@ -27,9 +27,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { NativeSelect } from '@/components/ui/native-select'
-import { useMinistrySettings } from '@/features/ministries/queries'
+import { useMinistrySettings, useRehearsalGroups } from '@/features/ministries/queries'
 import { fromLocalInputs, toLocalInputs, WEEKDAY_SHORT } from '@/features/schedule/datetime'
-import { scheduleKeys, useLinkedRehearsal, type ScheduleEvent } from '@/features/schedule/queries'
+import { scheduleKeys, useLinkedRehearsals, type ScheduleEvent } from '@/features/schedule/queries'
+import { rehearsalSlots, rehearsalTitle } from '@/features/schedule/rehearsal-groups'
 import { errorMessage } from '@/lib/errors'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
@@ -49,10 +50,19 @@ const schema = z
     location: z.string().trim().max(120),
     repeat: z.boolean(),
     repeatUntil: z.string(),
-    hasRehearsal: z.boolean(),
-    rehearsalDate: z.string(),
-    rehearsalTime: z.string(),
-    rehearsalArrival: z.string(),
+    // um por ensaio do culto (um só, ou banda e vozes…)
+    rehearsals: z.array(
+      z.object({
+        groupId: z.string().nullable(),
+        name: z.string(),
+        existingId: z.string().nullable(),
+        durationMin: z.number(),
+        enabled: z.boolean(),
+        date: z.string(),
+        time: z.string(),
+        arrival: z.string(),
+      }),
+    ),
   })
   .refine((v) => !v.repeat || DATE.test(v.repeatUntil), {
     message: 'Informe até quando repete',
@@ -74,28 +84,32 @@ const schema = z
       v.kind !== 'service' || !v.soundcheck || (TIME.test(v.soundcheck) && v.soundcheck <= v.time),
     { message: 'A passagem de som precisa ser antes do início', path: ['soundcheck'] },
   )
-  .refine(
-    (v) =>
-      v.kind !== 'service' ||
-      !v.hasRehearsal ||
-      !v.rehearsalArrival ||
-      (TIME.test(v.rehearsalArrival) && v.rehearsalArrival <= v.rehearsalTime),
-    { message: 'A chegada precisa ser antes do início do ensaio', path: ['rehearsalArrival'] },
-  )
-  .refine(
-    (v) =>
-      v.kind !== 'service' ||
-      !v.hasRehearsal ||
-      (DATE.test(v.rehearsalDate) && TIME.test(v.rehearsalTime)),
-    { message: 'Informe o dia e o horário do ensaio', path: ['rehearsalDate'] },
-  )
-  .refine(
-    (v) =>
-      v.kind !== 'service' ||
-      !v.hasRehearsal ||
-      `${v.rehearsalDate} ${v.rehearsalTime}` < `${v.date} ${v.time}`,
-    { message: 'O ensaio precisa ser antes do culto', path: ['rehearsalDate'] },
-  )
+  .superRefine((v, ctx) => {
+    if (v.kind !== 'service') return
+    v.rehearsals.forEach((r, i) => {
+      if (!r.enabled) return
+      if (!DATE.test(r.date) || !TIME.test(r.time)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Informe o dia e o horário do ensaio',
+          path: ['rehearsals', i, 'date'],
+        })
+      } else if (`${r.date} ${r.time}` >= `${v.date} ${v.time}`) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'O ensaio precisa ser antes do culto',
+          path: ['rehearsals', i, 'date'],
+        })
+      }
+      if (r.arrival && !(TIME.test(r.arrival) && r.arrival <= r.time)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'A chegada precisa ser antes do início do ensaio',
+          path: ['rehearsals', i, 'arrival'],
+        })
+      }
+    })
+  })
 type Values = z.infer<typeof schema>
 
 const DURATIONS: [number, string][] = [
@@ -134,17 +148,12 @@ export function EventDialog({
   const queryClient = useQueryClient()
   const settings = useMinistrySettings(ministry.id).data
   const editing = Boolean(event)
-  const rehearsal = useLinkedRehearsal(event?.kind === 'service' ? event.id : undefined).data
+  const linked = useLinkedRehearsals(event?.kind === 'service' ? event.id : undefined).data
+  const groups = useRehearsalGroups(ministry.id).data
   const initial = event ? toLocalInputs(event.starts_at) : null
   const startTime = initial?.time ?? '19:00'
   const startDate = initial?.date ?? defaultDate ?? ''
   const arrivalMin = settings?.service_arrival_minutes ?? 30
-  const rehearsalDefaults = {
-    rehearsal_days_before: settings?.rehearsal_days_before ?? 3,
-    rehearsal_time: settings?.rehearsal_time ?? '20:00',
-    rehearsal_mode: settings?.rehearsal_mode ?? 'days_before',
-    rehearsal_weekday: settings?.rehearsal_weekday ?? null,
-  }
   const soundcheckMin = settings?.service_soundcheck_minutes ?? null
   const rehearsalArrivalMin = settings?.rehearsal_arrival_minutes ?? 20
   const initialArrivalOffset = event?.arrive_at
@@ -152,9 +161,46 @@ export function EventDialog({
         (new Date(event.starts_at).getTime() - new Date(event.arrive_at).getTime()) / 60_000,
       )
     : null
-  const defaultRehearsalTime = rehearsalDefaults.rehearsal_time.slice(0, 5)
-  const suggested = startDate ? defaultRehearsal(startDate, rehearsalDefaults) : null
-  const existingRehearsal = rehearsal ? toLocalInputs(rehearsal.starts_at) : null
+  // Um bloco por ensaio: os grupos das Configurações (banda, vozes…) ou um só.
+  // Na edição, um ensaio antigo de outro formato (ex.: o único, da equipe toda)
+  // aparece também, para poder apagar.
+  const slots = rehearsalSlots(settings, groups)
+  const extra = (linked ?? []).filter((r) => !slots.some((s) => s.groupId === r.group_id))
+  const rehearsalInitial: Values['rehearsals'] = [
+    ...slots.map((slot) => ({ slot, existing: linked?.find((r) => r.group_id === slot.groupId) })),
+    ...extra.map((r) => ({
+      slot: {
+        groupId: r.group_id,
+        name: r.group_name ?? 'Ensaio (equipe toda)',
+        defaults: slots[0]!.defaults,
+        durationMin: slots[0]!.durationMin,
+      },
+      existing: r,
+    })),
+  ].map(({ slot, existing }) => {
+    const time = existing
+      ? toLocalInputs(existing.starts_at).time
+      : slot.defaults.rehearsal_time.slice(0, 5)
+    return {
+      groupId: slot.groupId,
+      name: slot.name,
+      existingId: existing?.id ?? null,
+      durationMin: slot.durationMin,
+      enabled: event ? Boolean(existing) : (settings?.rehearsal_enabled ?? true),
+      date: existing
+        ? toLocalInputs(existing.starts_at).date
+        : startDate
+          ? defaultRehearsal(startDate, slot.defaults).date
+          : '',
+      time,
+      arrival: existing
+        ? existing.arrive_at
+          ? toLocalInputs(existing.arrive_at).time
+          : ''
+        : defaultArrival(time, rehearsalArrivalMin),
+    }
+  })
+  const defaultsOf = (i: number) => (slots[i] ?? slots[0]!).defaults
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -183,28 +229,24 @@ export function EventDialog({
       location: event?.location_name ?? '',
       repeat: false,
       repeatUntil: '',
-      hasRehearsal: event ? Boolean(rehearsal) : (settings?.rehearsal_enabled ?? true),
-      rehearsalDate: existingRehearsal?.date ?? suggested?.date ?? '',
-      rehearsalTime: existingRehearsal?.time ?? defaultRehearsalTime,
-      rehearsalArrival: rehearsal
-        ? rehearsal.arrive_at
-          ? toLocalInputs(rehearsal.arrive_at).time
-          : ''
-        : defaultArrival(defaultRehearsalTime, rehearsalArrivalMin),
+      rehearsals: rehearsalInitial,
     },
   })
   const { errors } = form.formState
-  const [kind, repeat, date, hasRehearsal, rehearsalDate] = useWatch({
+  const [kind, repeat, date, rehearsals] = useWatch({
     control: form.control,
-    name: ['kind', 'repeat', 'date', 'hasRehearsal', 'rehearsalDate'],
+    name: ['kind', 'repeat', 'date', 'rehearsals'],
   })
   const isService = kind === 'service'
 
   // Ao mudar data/horário do culto, ajusta chegada e ensaio que o líder não mexeu
   const onDateChange = (value: string) => {
-    if (!form.getFieldState('rehearsalDate').isDirty && DATE.test(value)) {
-      form.setValue('rehearsalDate', defaultRehearsal(value, rehearsalDefaults).date)
-    }
+    if (!DATE.test(value)) return
+    form.getValues('rehearsals').forEach((_, i) => {
+      if (!form.getFieldState(`rehearsals.${i}.date`).isDirty) {
+        form.setValue(`rehearsals.${i}.date`, defaultRehearsal(value, defaultsOf(i)).date)
+      }
+    })
   }
   const onTimeChange = (value: string) => {
     if (!form.getFieldState('arrival').isDirty && TIME.test(value)) {
@@ -218,9 +260,9 @@ export function EventDialog({
       form.setValue('soundcheck', defaultArrival(value, soundcheckMin))
     }
   }
-  const onRehearsalTimeChange = (value: string) => {
-    if (!form.getFieldState('rehearsalArrival').isDirty && TIME.test(value)) {
-      form.setValue('rehearsalArrival', defaultArrival(value, rehearsalArrivalMin))
+  const onRehearsalTimeChange = (i: number, value: string) => {
+    if (!form.getFieldState(`rehearsals.${i}.arrival`).isDirty && TIME.test(value)) {
+      form.setValue(`rehearsals.${i}.arrival`, defaultArrival(value, rehearsalArrivalMin))
     }
   }
 
@@ -246,25 +288,26 @@ export function EventDialog({
         arrive_at: arrivalFor(start),
         soundcheck_at: soundcheckFor(start),
       })
-      // o ensaio fica a mesma distância (em dias) antes de cada culto
-      const offsetDays =
-        isServiceKind(v) && v.hasRehearsal ? daysBetweenKeys(v.rehearsalDate, v.date) : 0
-      const rehearsalDuration = settings?.rehearsal_duration_min ?? 120
-      const rehearsalRow = (serviceId: string, serviceStart: Date) => {
-        const day = addDaysToKey(localDateKey(serviceStart), -offsetDays)
-        const start = fromLocalInputs(day, v.rehearsalTime)
+      // cada ensaio fica a mesma distância (em dias) antes de cada culto
+      const enabled = isServiceKind(v) ? v.rehearsals.filter((r) => r.enabled) : []
+      const rehearsalRow = (
+        r: Values['rehearsals'][number],
+        serviceId: string,
+        serviceStart: Date,
+      ) => {
+        const day = addDaysToKey(localDateKey(serviceStart), -daysBetweenKeys(r.date, v.date))
+        const start = fromLocalInputs(day, r.time)
         return {
           church_id: ministry.church_id,
           ministry_id: ministry.id,
           kind: 'rehearsal' as const,
-          title: `Ensaio · ${v.title}`,
+          title: rehearsalTitle(r.groupId ? r.name : null, v.title),
           location_name: v.location || null,
           starts_at: start.toISOString(),
-          ends_at: new Date(start.getTime() + rehearsalDuration * 60_000).toISOString(),
-          arrive_at: v.rehearsalArrival
-            ? beforeStart(start, v.rehearsalTime, v.rehearsalArrival)
-            : null,
+          ends_at: new Date(start.getTime() + r.durationMin * 60_000).toISOString(),
+          arrive_at: r.arrival ? beforeStart(start, r.time, r.arrival) : null,
           service_event_id: serviceId,
+          rehearsal_group_id: r.groupId,
           created_by: user.id,
         }
       }
@@ -277,23 +320,26 @@ export function EventDialog({
           .eq('id', event.id)
         if (error) throw error
         if (event.kind === 'service' || isServiceKind(v)) {
-          if (isServiceKind(v) && v.hasRehearsal) {
-            const row = rehearsalRow(event.id, start)
-            const { error: err } = rehearsal
-              ? await supabase
-                  .from('events')
-                  .update({
-                    starts_at: row.starts_at,
-                    ends_at: row.ends_at,
-                    arrive_at: row.arrive_at,
-                    title: row.title,
-                  })
-                  .eq('id', rehearsal.id)
-              : await supabase.from('events').insert(row)
-            if (err) throw err
-          } else if (rehearsal) {
-            const { error: err } = await supabase.from('events').delete().eq('id', rehearsal.id)
-            if (err) throw err
+          for (const r of v.rehearsals) {
+            const keep = isServiceKind(v) && r.enabled
+            if (keep) {
+              const row = rehearsalRow(r, event.id, start)
+              const { error: err } = r.existingId
+                ? await supabase
+                    .from('events')
+                    .update({
+                      starts_at: row.starts_at,
+                      ends_at: row.ends_at,
+                      arrive_at: row.arrive_at,
+                      title: row.title,
+                    })
+                    .eq('id', r.existingId)
+                : await supabase.from('events').insert(row)
+              if (err) throw err
+            } else if (r.existingId) {
+              const { error: err } = await supabase.from('events').delete().eq('id', r.existingId)
+              if (err) throw err
+            }
           }
         }
         return 1
@@ -331,10 +377,14 @@ export function EventDialog({
         if (err) throw err
         created.push(...children)
       }
-      if (isServiceKind(v) && v.hasRehearsal) {
+      if (enabled.length > 0) {
         const { error: err } = await supabase
           .from('events')
-          .insert(created.map((c) => rehearsalRow(c.id, new Date(c.starts_at))))
+          .insert(
+            created.flatMap((c) =>
+              enabled.map((r) => rehearsalRow(r, c.id, new Date(c.starts_at))),
+            ),
+          )
         if (err) throw err
       }
       return dates.length
@@ -342,13 +392,14 @@ export function EventDialog({
     onSuccess: async (count, v) => {
       await queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
       await queryClient.invalidateQueries({ queryKey: ['planning'] })
-      const withRehearsal = isServiceKind(v) && v.hasRehearsal ? ', cada um com ensaio' : ''
+      const n = isServiceKind(v) ? v.rehearsals.filter((r) => r.enabled).length : 0
+      const withRehearsal = n > 1 ? `, cada um com ${n} ensaios` : n ? ', cada um com ensaio' : ''
       toast.success(
         editing
           ? 'Evento atualizado'
           : count > 1
             ? `${count} ${isServiceKind(v) ? 'cultos' : 'eventos'} criados${withRehearsal}`
-            : `${isServiceKind(v) ? 'Culto criado' : 'Evento criado'}${withRehearsal ? ' com ensaio' : ''}`,
+            : `${isServiceKind(v) ? 'Culto criado' : 'Evento criado'}${n > 1 ? ` com ${n} ensaios` : n ? ' com ensaio' : ''}`,
       )
       onOpenChange(false)
     },
@@ -461,59 +512,69 @@ export function EventDialog({
             />
           </FormField>
 
-          {isService && (
-            <div className="border-info/60 flex flex-col gap-3 rounded-xl border p-3">
-              <Label className="min-h-11 cursor-pointer font-normal">
-                <Checkbox
-                  checked={hasRehearsal}
-                  onCheckedChange={(v) => form.setValue('hasRehearsal', v === true)}
-                />
-                <span className="text-info font-semibold">Ensaio deste culto</span>
-              </Label>
-              {hasRehearsal && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
+          {isService &&
+            rehearsals.map((r, i) => (
+              <div
+                key={`${r.groupId}:${i}`}
+                className="border-info/60 flex flex-col gap-3 rounded-xl border p-3"
+              >
+                <Label className="min-h-11 cursor-pointer font-normal">
+                  <Checkbox
+                    checked={r.enabled}
+                    onCheckedChange={(v) => form.setValue(`rehearsals.${i}.enabled`, v === true)}
+                  />
+                  <span className="text-info font-semibold">
+                    {r.groupId || r.existingId ? r.name : 'Ensaio deste culto'}
+                  </span>
+                </Label>
+                {r.enabled && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <FormField
+                        id={`rehearsal-date-${i}`}
+                        label={`Dia${r.date ? ` (${weekdayLabel(r.date)})` : ''}`}
+                        error={errors.rehearsals?.[i]?.date?.message}
+                      >
+                        <Input
+                          id={`rehearsal-date-${i}`}
+                          type="date"
+                          max={date || undefined}
+                          {...form.register(`rehearsals.${i}.date`)}
+                        />
+                      </FormField>
+                      <FormField id={`rehearsal-time-${i}`} label="Horário">
+                        <Input
+                          id={`rehearsal-time-${i}`}
+                          type="time"
+                          {...form.register(`rehearsals.${i}.time`, {
+                            onChange: (e) => onRehearsalTimeChange(i, e.target.value),
+                          })}
+                        />
+                      </FormField>
+                    </div>
                     <FormField
-                      id="rehearsal-date"
-                      label={`Dia${rehearsalDate ? ` (${weekdayLabel(rehearsalDate)})` : ''}`}
-                      error={errors.rehearsalDate?.message}
+                      id={`rehearsal-arrival-${i}`}
+                      label="Chegada para o ensaio"
+                      error={errors.rehearsals?.[i]?.arrival?.message}
                     >
                       <Input
-                        id="rehearsal-date"
-                        type="date"
-                        max={date || undefined}
-                        {...form.register('rehearsalDate')}
-                      />
-                    </FormField>
-                    <FormField id="rehearsal-time" label="Horário">
-                      <Input
-                        id="rehearsal-time"
+                        id={`rehearsal-arrival-${i}`}
                         type="time"
-                        {...form.register('rehearsalTime', {
-                          onChange: (e) => onRehearsalTimeChange(e.target.value),
-                        })}
+                        {...form.register(`rehearsals.${i}.arrival`)}
                       />
                     </FormField>
-                  </div>
-                  <FormField
-                    id="rehearsal-arrival"
-                    label="Chegada para o ensaio"
-                    error={errors.rehearsalArrival?.message}
-                  >
-                    <Input
-                      id="rehearsal-arrival"
-                      type="time"
-                      {...form.register('rehearsalArrival')}
-                    />
-                  </FormField>
-                  <p className="text-muted-foreground text-[13px]">
-                    A equipe escalada no culto vai para o ensaio automaticamente.
-                    {repeat && ' Nas outras semanas o ensaio fica a mesma distância do culto.'}
-                  </p>
-                </>
-              )}
-            </div>
-          )}
+                    {i === rehearsals.length - 1 && (
+                      <p className="text-muted-foreground text-[13px]">
+                        {r.groupId
+                          ? 'Cada integrante escalado no culto vai ao ensaio da sua função.'
+                          : 'A equipe escalada no culto vai para o ensaio automaticamente.'}
+                        {repeat && ' Nas outras semanas o ensaio fica a mesma distância do culto.'}
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            ))}
 
           {!editing && (
             <div className="flex flex-col gap-3 rounded-xl border p-3">

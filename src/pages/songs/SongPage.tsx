@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { ArrowDown, ChevronLeft, Pause, Pencil } from 'lucide-react'
+import { ArrowDown, ChevronLeft, ExternalLink, Pause, Pencil } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useChurch } from '@/features/church/church-context'
 import { ChordSheet } from '@/features/songs/ChordSheet'
 import { SongFiles } from '@/features/songs/SongFiles'
+import { songLinks } from '@/features/songs/links'
 import { useSetlist, useSong } from '@/features/songs/queries'
 import { semitonesBetween, transposeKey } from '@/lib/music'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,7 @@ export function SongPage() {
   const s = song.data
   const baseSemi = semitonesBetween(s.original_key, targetKey)
   const semitones = semi ?? baseSemi
+  const links = songLinks(s.links)
   const currentKey = s.original_key ? transposeKey(s.original_key, semitones) : null
   const items = setlist.data?.setlist_items ?? []
   const index = items.findIndex((i) => i.song_id === s.id)
@@ -157,6 +159,18 @@ export function SongPage() {
           )}
         </div>
       </div>
+
+      {links.length > 0 && (
+        <nav aria-label="Links da música" className="flex flex-wrap gap-2 px-5 pt-4">
+          {links.map((l) => (
+            <Button key={l.url} asChild variant="outline" size="sm" className="min-h-11">
+              <a href={l.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink aria-hidden="true" /> {l.label}
+              </a>
+            </Button>
+          ))}
+        </nav>
+      )}
 
       <div className="px-5 pt-4">
         <SongFiles

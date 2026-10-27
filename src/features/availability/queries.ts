@@ -47,12 +47,18 @@ export function useUpcomingEvents(
       const { data: rehearsals, error: err } = ids.length
         ? await supabase
             .from('events')
-            .select('service_event_id, starts_at')
+            .select('service_event_id, starts_at, rehearsal_groups(name)')
             .in('service_event_id', ids)
+            .order('starts_at')
         : { data: [], error: null }
       if (err) throw err
-      const rehearsalOf = new Map(rehearsals.map((r) => [r.service_event_id, r.starts_at]))
-      return data.map((e) => ({ ...e, rehearsal_at: rehearsalOf.get(e.id) ?? null }))
+      // um culto pode ter mais de um ensaio (banda, vozes…)
+      return data.map((e) => ({
+        ...e,
+        rehearsals: rehearsals
+          .filter((r) => r.service_event_id === e.id)
+          .map((r) => ({ starts_at: r.starts_at, name: r.rehearsal_groups?.name ?? null })),
+      }))
     },
   })
 }

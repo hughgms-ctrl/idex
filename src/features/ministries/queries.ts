@@ -7,6 +7,8 @@ export const ministryKeys = {
   settings: (ministryId: string) => ['ministry-settings', ministryId] as const,
   openCycle: (ministryId: string) => ['open-cycle', ministryId] as const,
   nextEvent: (ministryId: string) => ['next-event', ministryId] as const,
+  rehearsalGroups: (ministryId: string) =>
+    ['ministry-settings', ministryId, 'rehearsal-groups'] as const,
 }
 
 export function useMinistryRoles(ministryId: string | undefined) {
@@ -16,6 +18,24 @@ export function useMinistryRoles(ministryId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ministry_roles')
+        .select('*')
+        .eq('ministry_id', ministryId ?? '')
+        .order('sort_order')
+        .order('name')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+/** Ensaios separados do culto (ex.: banda e vozes). Vazio = um ensaio só. */
+export function useRehearsalGroups(ministryId: string | undefined) {
+  return useQuery({
+    queryKey: ministryKeys.rehearsalGroups(ministryId ?? ''),
+    enabled: Boolean(ministryId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('rehearsal_groups')
         .select('*')
         .eq('ministry_id', ministryId ?? '')
         .order('sort_order')

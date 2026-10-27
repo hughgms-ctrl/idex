@@ -212,11 +212,11 @@ export function AvailabilityPage() {
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
-                    {e.rehearsal_at && (
-                      <span className="text-info text-[13px] font-medium">
-                        Ensaio: {formatEventDate(e.rehearsal_at)}
+                    {e.rehearsals.map((r) => (
+                      <span key={r.starts_at} className="text-info text-[13px] font-medium">
+                        {r.name ?? 'Ensaio'}: {formatEventDate(r.starts_at)}
                       </span>
-                    )}
+                    ))}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button

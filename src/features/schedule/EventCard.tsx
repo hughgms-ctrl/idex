@@ -20,14 +20,14 @@ export function EventCard({
   data,
   myMemberId,
   leader,
-  rehearsal = null,
+  rehearsals = [],
 }: {
   event: ScheduleEvent
   data: ScheduleData
   myMemberId?: string
   leader: boolean
-  /** ensaio ligado a este culto (aparece dentro do cartão) */
-  rehearsal?: LinkedRehearsal | null
+  /** ensaios ligados a este culto (banda, vozes…; aparecem dentro do cartão) */
+  rehearsals?: LinkedRehearsal[]
 }) {
   const navigate = useNavigate()
   const p = localParts(event.starts_at)
@@ -113,10 +113,14 @@ export function EventCard({
           {EVENT_KIND_LABEL[event.kind]?.toUpperCase()}
         </span>
       </div>
-      {rehearsal && (
-        <div className="border-info/50 bg-info/10 flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-[13px]">
+      {rehearsals.map((rehearsal) => (
+        <div
+          key={rehearsal.id}
+          className="border-info/50 bg-info/10 flex min-h-11 items-center justify-between gap-2 rounded-xl border px-3 py-1.5 text-[13px]"
+        >
           <span className="text-info">
-            <strong>Ensaio:</strong> {formatEventDate(rehearsal.starts_at)}
+            <strong>{rehearsal.group_name ?? 'Ensaio'}:</strong>{' '}
+            {formatEventDate(rehearsal.starts_at)}
             {rehearsal.arrive_at && ` · chegada ${hour(rehearsal.arrive_at)}`}
           </span>
           {leader && (
@@ -129,11 +133,11 @@ export function EventCard({
             </Link>
           )}
         </div>
-      )}
+      ))}
       {assignments.length === 0 ? (
         <p className="text-muted-foreground text-[13px]">
           {event.service_event_id
-            ? 'A equipe escalada no culto entra aqui automaticamente.'
+            ? 'A equipe escalada no culto (nas funções deste ensaio) entra aqui automaticamente.'
             : leader
               ? 'Ninguém escalado ainda. Toque para montar a escala.'
               : 'Escala ainda não montada.'}
