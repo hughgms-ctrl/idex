@@ -263,6 +263,7 @@ export type Database = {
       }
       chat_reads: {
         Row: {
+          archived_at: string | null
           church_id: string
           conversation_id: string
           last_notified_at: string | null
@@ -272,6 +273,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          archived_at?: string | null
           church_id: string
           conversation_id: string
           last_notified_at?: string | null
@@ -280,6 +282,7 @@ export type Database = {
           profile_id: string
         }
         Update: {
+          archived_at?: string | null
           church_id?: string
           conversation_id?: string
           last_notified_at?: string | null
@@ -2256,6 +2259,7 @@ export type Database = {
           other_profile_id: string
           title: string
           unread: number
+          user_archived: boolean
         }[]
       }
       open_direct_conversation: {
@@ -2312,6 +2316,10 @@ export type Database = {
         Returns: undefined
       }
       send_test_push: { Args: Record<PropertyKey, never>; Returns: boolean }
+      set_conversation_archived: {
+        Args: { p_archived: boolean; p_conversation_id: string }
+        Returns: undefined
+      }
       set_conversation_muted: {
         Args: { p_conversation_id: string; p_muted: boolean }
         Returns: undefined

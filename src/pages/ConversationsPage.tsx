@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useChurch } from '@/features/church/church-context'
-import { conversationTime, previewText, unreadLabel } from '@/features/chat/chat'
+import { conversationTime, previewText, splitArchived, unreadLabel } from '@/features/chat/chat'
 import {
   useChurchPeople,
   useConversations,
@@ -45,8 +45,7 @@ export function ConversationsPage() {
   const [showArchived, setShowArchived] = useState(false)
 
   const rows = conversations.data ?? []
-  const active = rows.filter((r) => !r.archived)
-  const archived = rows.filter((r) => r.archived)
+  const { active, archived } = splitArchived(rows)
 
   return (
     <>
@@ -97,8 +96,8 @@ export function ConversationsPage() {
           {showArchived && (
             <>
               <p className="text-muted-foreground text-[13px]">
-                Conversas de cultos que já passaram: ficam só para leitura e somem 30 dias depois do
-                culto.
+                Conversas que você arquivou (voltam para a lista quando chega mensagem nova) e as de
+                cultos que já passaram (só leitura; somem 30 dias depois do culto).
               </p>
               <ul className="flex flex-col gap-2 opacity-80">
                 {archived.map((row) => (
@@ -116,7 +115,7 @@ export function ConversationsPage() {
 }
 
 function ConversationItem({ row, myId }: { row: ConversationListRow; myId: string }) {
-  const unread = row.unread > 0 && !row.archived
+  const unread = row.unread > 0 && !row.archived && !row.user_archived
   return (
     <li>
       <Link

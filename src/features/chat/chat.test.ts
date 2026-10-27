@@ -8,6 +8,7 @@ import {
   sortConversations,
   splitLinks,
   threadItems,
+  splitArchived,
   totalUnread,
   typingText,
   unreadLabel,
@@ -159,11 +160,19 @@ describe('lista de conversas', () => {
         row({ unread: 3 }),
         row({ unread: 5, muted: true }),
         row({ unread: 2, archived: true }),
+        row({ unread: 4, user_archived: true }),
         row({ unread: 1 }),
       ]),
     ).toBe(4)
     expect(unreadLabel(7)).toBe('7')
     expect(unreadLabel(99)).toBe('99+')
+  })
+
+  it('arquivadas: culto que já passou ou arquivada pela pessoa', () => {
+    const a = row({ id: 'a' })
+    const b = row({ id: 'b', archived: true })
+    const c = row({ id: 'c', user_archived: true })
+    expect(splitArchived([a, b, c])).toEqual({ active: [a], archived: [b, c] })
   })
 })
 

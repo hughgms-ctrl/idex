@@ -134,10 +134,12 @@ export function AppLayout() {
 
         <main
           className={cn(
-            'mx-auto flex w-full flex-1 flex-col',
+            'mx-auto flex w-full flex-col',
+            // conversa: altura fixa da tela (flex-1 deixaria crescer com as mensagens
+            // e a caixa de digitar sumiria lá embaixo)
             thread
-              ? 'h-dvh max-w-3xl overflow-hidden md:px-8 md:pt-6'
-              : 'gap-5 px-5 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10',
+              ? 'h-dvh max-h-dvh max-w-3xl flex-none overflow-hidden md:px-8 md:pt-6'
+              : 'flex-1 gap-5 px-5 pt-5 pb-28 md:px-8 md:pt-8 md:pb-10',
             !thread && (wide ? 'max-w-6xl' : 'max-w-3xl'),
           )}
         >
