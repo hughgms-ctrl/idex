@@ -296,7 +296,7 @@ export function SongPage() {
   )
 }
 
-/** Cor das indicações (seções, "[Crescendo]"): gosto de cada um, salvo no aparelho. */
+/** Cor das anotações ("[Crescendo]"): gosto de cada um, salvo no aparelho. */
 function NoteColorPicker() {
   const current = useNoteColor()
   const [open, setOpen] = useState(false)
@@ -307,7 +307,7 @@ function NoteColorPicker() {
         variant="ghost"
         size="sm"
         aria-expanded={open}
-        aria-label={open ? 'Fechar cores' : 'Escolher cor das seções e anotações'}
+        aria-label={open ? 'Fechar cores' : 'Escolher cor das anotações'}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="size-3.5 rounded-full" style={{ backgroundColor: chosen.value }} />
@@ -318,7 +318,7 @@ function NoteColorPicker() {
         />
       </Button>
       {open && (
-        <span role="radiogroup" aria-label="Cor das indicações da cifra" className="flex">
+        <span role="radiogroup" aria-label="Cor das anotações da cifra" className="flex">
           {NOTE_COLORS.map((c) => (
             <button
               key={c.id}
@@ -326,7 +326,7 @@ function NoteColorPicker() {
               role="radio"
               aria-checked={current === c.id}
               aria-label={c.label}
-              title={`Seções e anotações em ${c.label.toLowerCase()}`}
+              title={`Anotações em ${c.label.toLowerCase()}`}
               onClick={() => {
                 setNoteColor(c.id)
                 setOpen(false)

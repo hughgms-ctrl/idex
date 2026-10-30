@@ -7,6 +7,7 @@ import {
   type SheetSection,
 } from '@/features/songs/chordpro'
 import { noteColorValue, useNoteColor } from '@/features/songs/note-color'
+import { sectionColor } from '@/features/songs/section-color'
 import { cn } from '@/lib/utils'
 
 // Cifra no estilo dos protótipos: acorde (verde, mono) sobre a sílaba.
@@ -54,7 +55,8 @@ export function ChordSheet({
           {section.label && (
             <span
               data-sheet-label={si}
-              className="text-note bg-note/12 border-note/45 self-start rounded-lg border px-2.5 py-1 text-[0.72em] leading-none font-bold tracking-wider uppercase"
+              className="self-start rounded-lg border px-2.5 py-1 text-[0.72em] leading-none font-bold tracking-[0.1em] uppercase"
+              style={labelStyle(section.label)}
             >
               {section.label}
             </span>
@@ -91,6 +93,16 @@ export function ChordSheet({
       ))}
     </div>
   )
+}
+
+// Pílula na cor do tipo da parte (verso, refrão…): texto cheio, fundo e contorno leves.
+function labelStyle(label: string): CSSProperties {
+  const color = sectionColor(label)
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+    borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
+  }
 }
 
 /**
