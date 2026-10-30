@@ -1,13 +1,12 @@
 import { useSyncExternalStore } from 'react'
 
-// Cor das indicações da cifra (rótulos de seção e anotações como "[Crescendo]").
+// Cor das anotações da cifra ("[Crescendo]", "[2x]"). Os rótulos de seção
+// têm cor própria por parte (section-color.ts).
 // É gosto de cada um: fica salva neste aparelho.
 
 export const NOTE_COLORS = [
   { id: 'roxo', label: 'Roxo neon', value: '#c78bff' },
-  { id: 'laranja', label: 'Laranja neon', value: '#ff9f45' },
   { id: 'rosa', label: 'Rosa neon', value: '#ff5cc8' },
-  { id: 'ciano', label: 'Ciano neon', value: '#3de8ff' },
 ] as const
 
 export type NoteColorId = (typeof NOTE_COLORS)[number]['id']
