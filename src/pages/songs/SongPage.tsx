@@ -60,12 +60,14 @@ export function SongPage() {
   if (!song.data) return <ErrorState error="Música não encontrada." />
 
   const s = song.data
-  const baseSemi = semitonesBetween(s.original_key, targetKey)
-  // a cifra acompanha o tom escolhido no áudio
-  const semitones = (semi ?? baseSemi) + engine.semitones
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
   // abre no áudio padrão; trocar vale só para esta pessoa, agora
   const audio = audios.find((a) => a.id === audioId) ?? defaultAudio(audios)
+  // a cifra parte do tom do culto; sem ele, do tom cadastrado no áudio (que
+  // pode não ser o original da música); e acompanha o tom mudado no player
+  const audioKey = targetKey ? null : (audio?.musical_key ?? null)
+  const baseSemi = semitonesBetween(s.original_key, targetKey ?? audioKey)
+  const semitones = (semi ?? baseSemi) + engine.semitones
   const links = songLinks(s.links)
   const currentKey = s.original_key ? transposeKey(s.original_key, semitones) : null
   const items = setlist.data?.setlist_items ?? []
@@ -222,7 +224,7 @@ export function SongPage() {
           )}
           {semi !== null && semi !== baseSemi && (
             <Button variant="ghost" size="sm" onClick={() => setSemi(null)}>
-              Voltar ao tom {targetKey ? 'do culto' : 'original'}
+              Voltar ao tom {targetKey ? 'do culto' : audioKey ? 'do áudio' : 'original'}
             </Button>
           )}
         </div>
