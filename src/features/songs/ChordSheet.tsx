@@ -50,7 +50,7 @@ export function ChordSheet({
           {section.label && (
             <span
               data-sheet-label={si}
-              className="bg-muted-foreground text-background self-start rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase"
+              className="text-note bg-note/12 border-note/45 self-start rounded-lg border px-2.5 py-1 text-[0.72em] leading-none font-bold tracking-wider uppercase"
             >
               {section.label}
             </span>
@@ -70,7 +70,7 @@ export function ChordSheet({
                     >
                       {seg.chord ||
                         (seg.note && (
-                          <span className="text-muted-foreground font-sans font-medium italic">
+                          <span className="text-note font-sans font-semibold italic">
                             {seg.note}
                           </span>
                         ))}
