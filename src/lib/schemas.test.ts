@@ -26,8 +26,17 @@ describe('schemas', () => {
       multiUse: false,
       expiresInDays: 7,
       email: '',
+      supportLabel: '',
     }
     expect(inviteSchema.safeParse(base).success).toBe(true)
+    // apoio: o líder escreve o que a pessoa faz
+    expect(inviteSchema.safeParse({ ...base, role: 'support' }).success).toBe(false)
+    expect(inviteSchema.safeParse({ ...base, role: 'support', supportLabel: '  ' }).success).toBe(
+      false,
+    )
+    expect(
+      inviteSchema.safeParse({ ...base, role: 'support', supportLabel: 'Mesa de som' }).success,
+    ).toBe(true)
     expect(inviteSchema.safeParse({ ...base, expiresInDays: 90 }).success).toBe(false)
     expect(inviteSchema.safeParse({ ...base, email: 'invalido' }).success).toBe(false)
   })

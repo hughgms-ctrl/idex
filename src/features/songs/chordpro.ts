@@ -198,3 +198,24 @@ export function sheetToText(sections: SheetSection[], lyricsOnly = false): strin
   }
   return blocks.join('\n\n')
 }
+
+/**
+ * Várias músicas num texto só (setlist inteira para o telão): cada uma com o
+ * cabeçalho e a cifra já no tom pedido.
+ */
+export function songsToText(
+  songs: { heading: string; chordpro: string; semitones: number }[],
+  lyricsOnly = false,
+): string {
+  return songs
+    .map((s) => {
+      let body: string
+      try {
+        body = sheetToText(readChordPro(s.chordpro, s.semitones), lyricsOnly)
+      } catch {
+        body = ''
+      }
+      return body ? `${s.heading}\n\n${body}` : s.heading
+    })
+    .join('\n\n\n')
+}

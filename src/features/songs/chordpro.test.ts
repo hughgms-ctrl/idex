@@ -6,6 +6,7 @@ import {
   looksLikeChordPro,
   readChordPro,
   sheetToText,
+  songsToText,
 } from '@/features/songs/chordpro'
 
 const COLADO = `Intro: G D
@@ -141,5 +142,21 @@ Não me calar[Dm7]ei
   it('acordes encostados não quebram a palavra', () => {
     const text = sheetToText(readChordPro('Lou[Bb9]va[C]i'))
     expect(text).toBe('   Bb9 C\nLouvai')
+  })
+})
+
+describe('songsToText', () => {
+  it('junta as músicas com cabeçalho, cada uma no seu tom', () => {
+    const text = songsToText([
+      { heading: '1. Primeira — Tom: A', chordpro: '[G]Santo [D]és', semitones: 2 },
+      { heading: '2. Segunda', chordpro: '', semitones: 0 },
+    ])
+    expect(text).toBe('1. Primeira — Tom: A\n\nA     E\nSanto és\n\n\n2. Segunda')
+  })
+
+  it('só letra', () => {
+    expect(songsToText([{ heading: '1. X', chordpro: '[G]Santo [D]és', semitones: 2 }], true)).toBe(
+      '1. X\n\nSanto és',
+    )
   })
 })
