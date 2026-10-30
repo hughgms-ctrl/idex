@@ -6,6 +6,7 @@ export const churchKeys = {
   mine: (userId: string) => ['my-churches', userId] as const,
   ministries: (churchId: string) => ['ministries', churchId] as const,
   memberships: (userId: string) => ['my-memberships', userId] as const,
+  supports: (userId: string) => ['my-supports', userId] as const,
 }
 
 export function useMyChurches(userId: string) {
@@ -48,6 +49,21 @@ export function useMyMemberships(userId: string) {
         .select(
           'id, ministry_id, role, status, can_edit_songs, can_manage_song_files, can_edit_setlists, can_send_announcements',
         )
+        .eq('user_id', userId)
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+/** Ministérios que eu acompanho como apoio. */
+export function useMySupports(userId: string) {
+  return useQuery({
+    queryKey: churchKeys.supports(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ministry_supporters')
+        .select('id, ministry_id, label')
         .eq('user_id', userId)
       if (error) throw error
       return data
