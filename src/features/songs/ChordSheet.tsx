@@ -1,6 +1,11 @@
 import { useMemo, type ClipboardEvent } from 'react'
 
-import { readChordPro, sheetToText, type SheetSection } from '@/features/songs/chordpro'
+import {
+  readChordPro,
+  sheetToHtml,
+  sheetToText,
+  type SheetSection,
+} from '@/features/songs/chordpro'
 import { cn } from '@/lib/utils'
 
 // Cifra no estilo dos protótipos: acorde (verde, mono) sobre a sílaba.
@@ -63,7 +68,12 @@ export function ChordSheet({
                       className="text-primary h-[1.6em] pr-1.5 font-mono leading-[1.6em] font-semibold"
                       style={{ fontSize: '0.88em' }}
                     >
-                      {seg.chord}
+                      {seg.chord ||
+                        (seg.note && (
+                          <span className="text-muted-foreground font-sans font-medium italic">
+                            {seg.note}
+                          </span>
+                        ))}
                     </span>
                   )}
                   <span data-sheet-lyrics className="leading-snug whitespace-pre">
@@ -109,4 +119,5 @@ function copySelection(
   if (picked.length === 0) return
   e.preventDefault()
   e.clipboardData.setData('text/plain', sheetToText(picked, lyricsOnly))
+  e.clipboardData.setData('text/html', sheetToHtml(picked, lyricsOnly))
 }

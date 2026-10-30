@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import { ChevronUp, Loader2, Pause, Play, Settings2, Timer } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Music2,
+  Pause,
+  Play,
+  Settings2,
+  Timer,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { NativeSelect } from '@/components/ui/native-select'
 import { effectiveBpm, formatClock, rateForBpm } from '@/features/songs/audio-math'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { transposeKey } from '@/lib/music'
@@ -18,6 +26,7 @@ export type AudioFile = {
   url: string | null
   bpm: number | null
   musical_key: string | null
+  is_default?: boolean
 }
 
 type Engine = ReturnType<typeof useAudioEngine>
@@ -52,6 +61,7 @@ export function AudioPlayer({
   const baseKey = file.musical_key ?? songKey ?? null
   const [manualBpm, setManualBpm] = useState(baseBpm ?? 80)
   const [open, setOpen] = useState(!compact)
+  const [choosing, setChoosing] = useState(false)
   const bpm = baseBpm ?? manualBpm
   const { setTempo } = engine
 
@@ -105,21 +115,21 @@ export function AudioPlayer({
         </Button>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {files && files.length > 1 && onSelect ? (
-            <NativeSelect
-              aria-label="Áudio"
-              value={file.id}
-              className="h-8 text-[13px] font-semibold"
-              onChange={(e) => {
-                const next = files.find((f) => f.id === e.target.value)
-                if (next) onSelect(next)
-              }}
+            <button
+              type="button"
+              aria-expanded={choosing}
+              onClick={() => setChoosing((v) => !v)}
+              className="flex min-w-0 items-center gap-1.5 text-left"
             >
-              {files.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </NativeSelect>
+              <span className="truncate text-[15px] font-semibold">{file.name}</span>
+              <span className="text-primary flex shrink-0 items-center text-xs font-medium">
+                {files.length} áudios
+                <ChevronDown
+                  className={cn('size-4 transition-transform', choosing && 'rotate-180')}
+                  aria-hidden="true"
+                />
+              </span>
+            </button>
           ) : (
             <span className="truncate text-[15px] font-semibold">{file.name}</span>
           )}
@@ -165,6 +175,37 @@ export function AudioPlayer({
           </Button>
         )}
       </div>
+
+      {choosing && files && onSelect && (
+        <ul aria-label="Escolha o áudio" className="flex flex-col gap-1.5">
+          {files.map((f) => (
+            <li key={f.id}>
+              <button
+                type="button"
+                onClick={() => {
+                  setChoosing(false)
+                  if (f.id !== file.id) onSelect(f)
+                }}
+                className={cn(
+                  'flex min-h-11 w-full items-center gap-2 rounded-xl border px-3 text-left text-sm',
+                  f.id === file.id && 'border-primary text-primary',
+                )}
+              >
+                <Music2 className="size-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate font-medium">{f.name}</span>
+                {f.is_default && (
+                  <span className="text-muted-foreground shrink-0 text-[11px] font-semibold tracking-wider">
+                    PADRÃO
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+          <li className="text-muted-foreground px-1 text-[11px]">
+            A troca vale só para você, agora. Para os outros continua o áudio padrão.
+          </li>
+        </ul>
+      )}
 
       {engine.error && file.url && (
         <div className="flex flex-col gap-2 rounded-xl border p-3">

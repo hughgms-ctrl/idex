@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Music2, Pencil, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Music2, Pencil, Star, Trash2, Upload } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FormField } from '@/components/FormField'
@@ -15,9 +15,11 @@ import { useChurch } from '@/features/church/church-context'
 import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
 import { beatsPerBar } from '@/features/songs/audio-math'
 import {
+  defaultAudio,
   deleteSongFile,
   fileInfo,
   isR2Enabled,
+  setDefaultAudio,
   songFileKeys,
   uploadSongFile,
   useSongFiles,
@@ -46,7 +48,9 @@ export function AudiosPage() {
   const s = song.data
   const canEdit = can(s.ministry_id, 'song_files')
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
-  const current = selected ? (audios.find((a) => a.id === selected.id) ?? selected) : null
+  const current = selected
+    ? (audios.find((a) => a.id === selected.id) ?? selected)
+    : (defaultAudio(audios) ?? null)
 
   return (
     <>
@@ -60,11 +64,22 @@ export function AudiosPage() {
         title={s.title}
         description="Ouça sua parte no tom que precisar, mude o andamento e ligue o metrônomo."
       />
+      {canEdit && audios.length > 1 && (
+        <p className="text-muted-foreground text-xs">
+          A estrela marca o áudio padrão: é o que abre no player para todos. Cada integrante pode
+          trocar para ouvir a própria voz; a troca vale só para ele, naquele momento.
+        </p>
+      )}
 
       {current && (
         <AudioPlayer
           key={current.id}
           file={current}
+          files={audios}
+          onSelect={(a) => {
+            setSelected(a)
+            if (a.url) void engine.load(a.url, a.id)
+          }}
           songBpm={s.bpm}
           songKey={s.original_key}
           beats={beatsPerBar(s.time_signature)}
@@ -88,6 +103,7 @@ export function AudiosPage() {
                 songId={s.id}
                 active={current?.id === a.id}
                 canEdit={canEdit}
+                multiple={audios.length > 1}
                 onSelect={() => {
                   setSelected(a)
                   if (a.url && engine.loadedKey !== a.id) void engine.load(a.url, a.id)
@@ -104,6 +120,7 @@ export function AudiosPage() {
           songId={s.id}
           defaultBpm={s.bpm}
           defaultKey={s.original_key}
+          firstAudio={audios.length === 0}
         />
       )}
     </>
@@ -115,12 +132,14 @@ function AudioRow({
   songId,
   active,
   canEdit,
+  multiple,
   onSelect,
 }: {
   file: AudioFile
   songId: string
   active: boolean
   canEdit: boolean
+  multiple: boolean
   onSelect: () => void
 }) {
   const queryClient = useQueryClient()
@@ -148,6 +167,15 @@ function AudioRow({
       setEditing(false)
       await invalidate()
       toast.success('Áudio atualizado')
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  const makeDefault = useMutation({
+    mutationFn: () => setDefaultAudio(file.id, !file.is_default),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success(file.is_default ? 'Áudio padrão desmarcado' : 'Agora este é o áudio padrão')
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
@@ -213,7 +241,14 @@ function AudioRow({
       >
         <Music2 className="text-primary size-5 shrink-0" aria-hidden="true" />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-[15px] font-medium">{file.name}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[15px] font-medium">{file.name}</span>
+            {file.is_default && multiple && (
+              <span className="bg-primary text-primary-foreground shrink-0 rounded-md px-1.5 py-px text-[10px] font-semibold tracking-wider">
+                PADRÃO
+              </span>
+            )}
+          </span>
           <span className="text-muted-foreground text-xs">
             {[file.musical_key && `Tom ${file.musical_key}`, file.bpm && `${file.bpm} BPM`]
               .filter(Boolean)
@@ -223,6 +258,23 @@ function AudioRow({
       </button>
       {canEdit && (
         <>
+          {multiple && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={
+                file.is_default
+                  ? `Desmarcar ${file.name} como padrão`
+                  : `Tornar ${file.name} o padrão`
+              }
+              aria-pressed={!!file.is_default}
+              title="Áudio padrão: abre no player para todos"
+              disabled={makeDefault.isPending}
+              onClick={() => makeDefault.mutate()}
+            >
+              <Star className={cn('size-4', file.is_default && 'fill-primary text-primary')} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -253,11 +305,13 @@ function UploadAudio({
   songId,
   defaultBpm,
   defaultKey,
+  firstAudio,
 }: {
   churchId: string
   songId: string
   defaultBpm: number | null
   defaultKey: string | null
+  firstAudio: boolean
 }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -265,6 +319,7 @@ function UploadAudio({
   const [name, setName] = useState('')
   const [bpm, setBpm] = useState(defaultBpm ? String(defaultBpm) : '')
   const [key, setKey] = useState(defaultKey ?? '')
+  const [isDefault, setIsDefault] = useState(false)
   const r2 = useQuery({ queryKey: ['song-storage-r2'], queryFn: isR2Enabled, staleTime: Infinity })
   const maxMb = r2.data ? 100 : 50
 
@@ -278,11 +333,20 @@ function UploadAudio({
       if (b !== null && (!Number.isInteger(b) || b < 20 || b > 300)) {
         throw new Error('BPM entre 20 e 300')
       }
-      await uploadSongFile({ churchId, songId, file, name, bpm: b, musicalKey: key || null })
+      await uploadSongFile({
+        churchId,
+        songId,
+        file,
+        name,
+        bpm: b,
+        musicalKey: key || null,
+        isDefault: firstAudio || isDefault,
+      })
     },
     onSuccess: async () => {
       setFile(null)
       setName('')
+      setIsDefault(false)
       await queryClient.invalidateQueries({ queryKey: songFileKeys.list(songId) })
       toast.success('Áudio enviado')
     },
@@ -335,6 +399,22 @@ function UploadAudio({
           </NativeSelect>
         </FormField>
       </div>
+      {!firstAudio && (
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="accent-primary size-5"
+            checked={isDefault}
+            onChange={(e) => setIsDefault(e.target.checked)}
+          />
+          <span>
+            Áudio padrão
+            <span className="text-muted-foreground block text-xs">
+              Abre no player para todos (ex.: voz principal). Cada um pode trocar para ouvir outro.
+            </span>
+          </span>
+        </label>
+      )}
       <Button
         className="self-start"
         disabled={upload.isPending || !file}
