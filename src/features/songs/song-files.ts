@@ -77,7 +77,7 @@ export function useSongFiles(songId: string) {
       const { data, error } = await supabase
         .from('song_files')
         .select(
-          'id, name, kind, storage_path, storage_backend, size_bytes, bpm, musical_key, created_at',
+          'id, name, kind, storage_path, storage_backend, size_bytes, bpm, musical_key, is_default, created_at',
         )
         .eq('song_id', songId)
         .order('created_at')
@@ -152,6 +152,8 @@ export async function uploadSongFile(params: {
   name?: string
   bpm?: number | null
   musicalKey?: string | null
+  /** Áudio que abre no player para todos. */
+  isDefault?: boolean
 }): Promise<void> {
   const { churchId, songId, file } = params
   const { mime, kind } = fileInfo(file)
@@ -187,20 +189,41 @@ export async function uploadSongFile(params: {
       .upload(path, file, { contentType: mime, upsert: false })
     if (error) throw error
   }
-  const { error: err } = await supabase.from('song_files').insert({
-    church_id: churchId,
-    song_id: songId,
-    name: (params.name?.trim() || file.name).slice(0, 200),
-    kind,
-    storage_path: path,
-    mime_type: mime,
-    size_bytes: file.size,
-    bpm: kind === 'audio' ? (params.bpm ?? null) : null,
-    musical_key: kind === 'audio' ? (params.musicalKey ?? null) : null,
-    storage_backend: useR2 ? 'r2' : 'supabase',
-  })
+  const { data: row, error: err } = await supabase
+    .from('song_files')
+    .insert({
+      church_id: churchId,
+      song_id: songId,
+      name: (params.name?.trim() || file.name).slice(0, 200),
+      kind,
+      storage_path: path,
+      mime_type: mime,
+      size_bytes: file.size,
+      bpm: kind === 'audio' ? (params.bpm ?? null) : null,
+      musical_key: kind === 'audio' ? (params.musicalKey ?? null) : null,
+      storage_backend: useR2 ? 'r2' : 'supabase',
+    })
+    .select('id')
+    .single()
   if (err) {
     if (!useR2) await supabase.storage.from(BUCKET).remove([path])
     throw err
   }
+  if (kind === 'audio' && params.isDefault) await setDefaultAudio(row.id)
+}
+
+/** Marca o áudio que abre no player para todos (desmarca o anterior). */
+export async function setDefaultAudio(fileId: string, isDefault = true): Promise<void> {
+  const { error } = await supabase.rpc('set_default_song_audio', {
+    p_file_id: fileId,
+    p_default: isDefault,
+  })
+  if (error) throw error
+}
+
+/** Áudio que abre no player: o marcado como padrão ou, sem marcação, o primeiro enviado. */
+export function defaultAudio<T extends { is_default?: boolean | null }>(
+  audios: T[],
+): T | undefined {
+  return audios.find((a) => a.is_default) ?? audios[0]
 }

@@ -1897,6 +1897,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_default: boolean
           kind: string
           mime_type: string | null
           musical_key: string | null
@@ -1913,6 +1914,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_default?: boolean
           kind: string
           mime_type?: string | null
           musical_key?: string | null
@@ -1928,6 +1930,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_default?: boolean
           kind?: string
           mime_type?: string | null
           musical_key?: string | null
@@ -2322,6 +2325,10 @@ export type Database = {
       }
       set_conversation_muted: {
         Args: { p_conversation_id: string; p_muted: boolean }
+        Returns: undefined
+      }
+      set_default_song_audio: {
+        Args: { p_default?: boolean; p_file_id: string }
         Returns: undefined
       }
       set_current_cycle: {

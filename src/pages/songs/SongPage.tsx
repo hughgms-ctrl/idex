@@ -10,8 +10,8 @@ import { useChurch } from '@/features/church/church-context'
 import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
 import { ChordSheet } from '@/features/songs/ChordSheet'
 import { beatsPerBar } from '@/features/songs/audio-math'
-import { readChordPro, sheetToText } from '@/features/songs/chordpro'
-import { useSongFiles } from '@/features/songs/song-files'
+import { readChordPro, sheetToHtml, sheetToText } from '@/features/songs/chordpro'
+import { defaultAudio, useSongFiles } from '@/features/songs/song-files'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { SongFiles } from '@/features/songs/SongFiles'
 import { songLinks } from '@/features/songs/links'
@@ -55,7 +55,8 @@ export function SongPage() {
   // a cifra acompanha o tom escolhido no áudio
   const semitones = (semi ?? baseSemi) + engine.semitones
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
-  const audio = audios.find((a) => a.id === audioId) ?? audios[0]
+  // abre no áudio padrão; trocar vale só para esta pessoa, agora
+  const audio = audios.find((a) => a.id === audioId) ?? defaultAudio(audios)
   const links = songLinks(s.links)
   const currentKey = s.original_key ? transposeKey(s.original_key, semitones) : null
   const items = setlist.data?.setlist_items ?? []
@@ -285,7 +286,19 @@ export function SongPage() {
 
 async function copySheet(chordpro: string, semitones: number, lyricsOnly: boolean) {
   try {
-    await navigator.clipboard.writeText(sheetToText(readChordPro(chordpro, semitones), lyricsOnly))
+    const sections = readChordPro(chordpro, semitones)
+    const text = sheetToText(sections, lyricsOnly)
+    // em HTML vai em fonte de largura fixa: Word/PowerPoint/Docs mantêm os acordes no lugar
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([sheetToHtml(sections, lyricsOnly)], { type: 'text/html' }),
+        }),
+      ])
+    } catch {
+      await navigator.clipboard.writeText(text) // navegador sem cópia em HTML
+    }
     toast.success(lyricsOnly ? 'Letra copiada' : 'Cifra copiada')
   } catch {
     toast.error('Não foi possível copiar. Selecione o texto e copie.')
