@@ -73,7 +73,7 @@ export default defineConfig(({ mode }) => ({
             // bibliotecas só de algumas telas (cifra, QR, áudio) ficam nos blocos delas
             {
               name: 'vendor',
-              test: /^(?!.*[\\/]node_modules[\\/](tone|standardized-audio-context|automation-events|chordsheetjs|qr-scanner|qrcode)[\\/]).*[\\/]node_modules[\\/]/,
+              test: /^(?!.*[\\/]node_modules[\\/](signalsmith-stretch|chordsheetjs|qr-scanner|qrcode)[\\/]).*[\\/]node_modules[\\/]/,
             },
           ],
         },

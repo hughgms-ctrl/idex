@@ -1,8 +1,11 @@
 // Contas do player de áudio (puras, testáveis).
 
-/** Correção de tom quando o andamento muda (playbackRate também muda o tom). */
-export function pitchShiftFor(semitones: number, rate: number): number {
-  return semitones - 12 * Math.log2(rate)
+/**
+ * Sem mudança de tom nem de andamento o áudio toca direto do arquivo, sem
+ * nenhum processamento (qualidade original).
+ */
+export function isOriginal(semitones: number, rate: number): boolean {
+  return semitones === 0 && rate === 1
 }
 
 /** BPM tocando com a velocidade escolhida. */
