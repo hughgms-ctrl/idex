@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
-import { ArrowDown, ChevronLeft, Copy, ExternalLink, Pause, Pencil } from 'lucide-react'
+import {
+  ArrowDown,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  ExternalLink,
+  Pause,
+  Pencil,
+} from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
@@ -289,30 +297,52 @@ export function SongPage() {
 /** Cor das indicações (seções, "[Crescendo]"): gosto de cada um, salvo no aparelho. */
 function NoteColorPicker() {
   const current = useNoteColor()
+  const [open, setOpen] = useState(false)
+  const chosen = NOTE_COLORS.find((c) => c.id === current) ?? NOTE_COLORS[0]
   return (
-    <span role="radiogroup" aria-label="Cor das indicações da cifra" className="flex items-center">
-      <span className="mr-0.5">Cor</span>
-      {NOTE_COLORS.map((c) => (
-        <button
-          key={c.id}
-          type="button"
-          role="radio"
-          aria-checked={current === c.id}
-          aria-label={c.label}
-          title={`Seções e anotações em ${c.label.toLowerCase()}`}
-          onClick={() => setNoteColor(c.id)}
-          className="flex size-9 items-center justify-center"
-        >
-          <span
-            className={cn(
-              'size-5 rounded-full transition-transform',
-              current === c.id &&
-                'ring-foreground ring-offset-background scale-110 ring-2 ring-offset-2',
-            )}
-            style={{ backgroundColor: c.value }}
-          />
-        </button>
-      ))}
+    <span className="flex items-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        aria-label={open ? 'Fechar cores' : 'Escolher cor das seções e anotações'}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="size-3.5 rounded-full" style={{ backgroundColor: chosen.value }} />
+        Cor
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('transition-transform', open && 'rotate-180')}
+        />
+      </Button>
+      {open && (
+        <span role="radiogroup" aria-label="Cor das indicações da cifra" className="flex">
+          {NOTE_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={current === c.id}
+              aria-label={c.label}
+              title={`Seções e anotações em ${c.label.toLowerCase()}`}
+              onClick={() => {
+                setNoteColor(c.id)
+                setOpen(false)
+              }}
+              className="flex size-9 items-center justify-center"
+            >
+              <span
+                className={cn(
+                  'size-5 rounded-full transition-transform',
+                  current === c.id &&
+                    'ring-foreground ring-offset-background scale-110 ring-2 ring-offset-2',
+                )}
+                style={{ backgroundColor: c.value }}
+              />
+            </button>
+          ))}
+        </span>
+      )}
     </span>
   )
 }
