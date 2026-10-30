@@ -11,6 +11,7 @@ import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
 import { ChordSheet } from '@/features/songs/ChordSheet'
 import { beatsPerBar } from '@/features/songs/audio-math'
 import { readChordPro, sheetToHtml, sheetToText } from '@/features/songs/chordpro'
+import { NOTE_COLORS, setNoteColor, useNoteColor } from '@/features/songs/note-color'
 import { defaultAudio, useSongFiles } from '@/features/songs/song-files'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { SongFiles } from '@/features/songs/SongFiles'
@@ -165,7 +166,7 @@ export function SongPage() {
           {scrolling ? <Pause aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
           Rolagem
         </Button>
-        <div className="text-muted-foreground flex w-full items-center justify-between gap-2 text-xs">
+        <div className="text-muted-foreground flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
           <span className="flex items-center gap-1">
             Letra
             <Button
@@ -194,6 +195,7 @@ export function SongPage() {
               {lyricsOnly ? 'Copiar letra' : 'Copiar cifra'}
             </Button>
           </span>
+          <NoteColorPicker />
           {scrolling && (
             <span className="flex items-center gap-1">
               Velocidade
@@ -281,6 +283,37 @@ export function SongPage() {
         )}
       </article>
     </div>
+  )
+}
+
+/** Cor das indicações (seções, "[Crescendo]"): gosto de cada um, salvo no aparelho. */
+function NoteColorPicker() {
+  const current = useNoteColor()
+  return (
+    <span role="radiogroup" aria-label="Cor das indicações da cifra" className="flex items-center">
+      <span className="mr-0.5">Cor</span>
+      {NOTE_COLORS.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          role="radio"
+          aria-checked={current === c.id}
+          aria-label={c.label}
+          title={`Seções e anotações em ${c.label.toLowerCase()}`}
+          onClick={() => setNoteColor(c.id)}
+          className="flex size-9 items-center justify-center"
+        >
+          <span
+            className={cn(
+              'size-5 rounded-full transition-transform',
+              current === c.id &&
+                'ring-foreground ring-offset-background scale-110 ring-2 ring-offset-2',
+            )}
+            style={{ backgroundColor: c.value }}
+          />
+        </button>
+      ))}
+    </span>
   )
 }
 

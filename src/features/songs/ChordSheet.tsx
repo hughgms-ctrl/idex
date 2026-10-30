@@ -1,4 +1,4 @@
-import { useMemo, type ClipboardEvent } from 'react'
+import { useMemo, type ClipboardEvent, type CSSProperties } from 'react'
 
 import {
   readChordPro,
@@ -6,6 +6,7 @@ import {
   sheetToText,
   type SheetSection,
 } from '@/features/songs/chordpro'
+import { noteColorValue, useNoteColor } from '@/features/songs/note-color'
 import { cn } from '@/lib/utils'
 
 // Cifra no estilo dos protótipos: acorde (verde, mono) sobre a sílaba.
@@ -20,6 +21,7 @@ export function ChordSheet({
   lyricsOnly?: boolean
   fontScale?: number
 }) {
+  const noteColor = useNoteColor()
   const sections = useMemo(() => {
     try {
       return readChordPro(chordpro, semitones)
@@ -42,7 +44,9 @@ export function ChordSheet({
   return (
     <div
       className="flex flex-col gap-5"
-      style={{ fontSize: `${17 * fontScale}px` }}
+      style={
+        { fontSize: `${17 * fontScale}px`, '--note': noteColorValue(noteColor) } as CSSProperties
+      }
       onCopy={(e) => copySelection(e, sections, lyricsOnly)}
     >
       {sections.map((section, si) => (
