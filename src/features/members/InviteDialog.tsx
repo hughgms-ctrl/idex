@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -51,8 +51,10 @@ export function InviteDialog({
       multiUse: false,
       expiresInDays: 7,
       email: '',
+      supportLabel: '',
     },
   })
+  const support = useWatch({ control: form.control, name: 'role' }) === 'support'
   const { errors } = form.formState
 
   const create = useMutation({
@@ -62,8 +64,9 @@ export function InviteDialog({
         .insert({
           church_id: ministry.church_id,
           ministry_id: ministry.id,
-          role: values.role,
-          ministry_role_ids: values.ministryRoleIds,
+          ...(values.role === 'support'
+            ? { kind: 'support', role: 'member' as const, support_label: values.supportLabel }
+            : { role: values.role, ministry_role_ids: values.ministryRoleIds }),
           max_uses: values.multiUse ? 50 : 1,
           expires_at: new Date(Date.now() + values.expiresInDays * 86_400_000).toISOString(),
           email: values.email || null,
@@ -95,12 +98,18 @@ export function InviteDialog({
         <DialogHeader>
           <DialogTitle>Convidar para {ministry.name}</DialogTitle>
           <DialogDescription>
-            Gere um link e mande pelo WhatsApp. Quem abrir cria a conta e já entra na equipe.
+            Gere um link e mande pelo WhatsApp. Quem abrir cria a conta e já entra na equipe (ou
+            como apoio, só para consultar).
           </DialogDescription>
         </DialogHeader>
 
         {link ? (
-          <InviteLinkResult link={link} churchName={churchName} ministryName={ministry.name} />
+          <InviteLinkResult
+            link={link}
+            churchName={churchName}
+            ministryName={ministry.name}
+            support={support}
+          />
         ) : (
           <form
             onSubmit={form.handleSubmit((v) => create.mutate(v))}
@@ -111,10 +120,27 @@ export function InviteDialog({
               <NativeSelect id="invite-role" {...form.register('role')}>
                 <option value="member">Integrante</option>
                 <option value="leader">Líder do ministério</option>
+                <option value="support">Apoio (só consulta)</option>
               </NativeSelect>
             </FormField>
 
-            {roles.length > 0 && (
+            {support && (
+              <FormField
+                id="invite-support-label"
+                label="O que essa pessoa faz"
+                error={errors.supportLabel?.message}
+                hint="Aparece ao lado do nome. O apoio só consulta horários, equipe e setlist com as cifras no tom do culto: não entra na escala, nos pontos nem nas conversas."
+              >
+                <Input
+                  id="invite-support-label"
+                  autoComplete="off"
+                  maxLength={40}
+                  {...form.register('supportLabel')}
+                />
+              </FormField>
+            )}
+
+            {!support && roles.length > 0 && (
               <fieldset className="flex flex-col gap-2">
                 <legend className="mb-2 text-sm font-medium">Funções (opcional)</legend>
                 <Controller
@@ -205,10 +231,13 @@ export function InviteLinkResult({
   link,
   churchName,
   ministryName,
+  support = false,
 }: {
   link: string
   churchName: string
   ministryName: string
+  /** convite de apoio (só consulta) */
+  support?: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const copy = async () => {
@@ -232,7 +261,7 @@ export function InviteLinkResult({
         </Button>
         <Button asChild>
           <a
-            href={whatsappShareUrl(inviteMessage(churchName, ministryName, link))}
+            href={whatsappShareUrl(inviteMessage(churchName, ministryName, link, support))}
             target="_blank"
             rel="noreferrer"
           >

@@ -6,6 +6,7 @@ export const churchKeys = {
   mine: (userId: string) => ['my-churches', userId] as const,
   ministries: (churchId: string) => ['ministries', churchId] as const,
   memberships: (userId: string) => ['my-memberships', userId] as const,
+  supports: (userId: string) => ['my-supports', userId] as const,
 }
 
 export function useMyChurches(userId: string) {
@@ -49,7 +50,32 @@ export function useMyMemberships(userId: string) {
           'id, ministry_id, role, status, can_edit_songs, can_manage_song_files, can_edit_setlists, can_send_announcements',
         )
         .eq('user_id', userId)
-      if (error) throw error
+      // não trava o app: sem a tabela (banco ainda sem a migration) ou com erro,
+      // a pessoa só não aparece como apoio
+      if (error) {
+        console.warn('Apoio indisponível:', error.message)
+        return []
+      }
+      return data
+    },
+  })
+}
+
+/** Ministérios que eu acompanho como apoio. */
+export function useMySupports(userId: string) {
+  return useQuery({
+    queryKey: churchKeys.supports(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ministry_supporters')
+        .select('id, ministry_id, label')
+        .eq('user_id', userId)
+      // não trava o app: sem a tabela (banco ainda sem a migration) ou com erro,
+      // a pessoa só não aparece como apoio
+      if (error) {
+        console.warn('Apoio indisponível:', error.message)
+        return []
+      }
       return data
     },
   })

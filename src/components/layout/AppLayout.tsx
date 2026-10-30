@@ -1,8 +1,8 @@
-import { NavLink, Outlet, useMatch } from 'react-router'
+import { Navigate, NavLink, Outlet, useLocation, useMatch } from 'react-router'
 import { BellRing, CalendarCheck, CalendarRange } from 'lucide-react'
 
 import { AccountMenu } from '@/components/layout/AccountMenu'
-import { NAV_ITEMS } from '@/components/layout/nav-items'
+import { NAV_ITEMS, SUPPORT_NAV_ITEMS, supportCanOpen } from '@/components/layout/nav-items'
 import { Logo } from '@/components/Logo'
 import { InstallBanner } from '@/components/pwa/InstallBanner'
 import { useMarkAppInstalled } from '@/components/pwa/mark-installed'
@@ -13,7 +13,8 @@ import { SetupPrompt } from '@/features/push/SetupPrompt'
 import { cn } from '@/lib/utils'
 
 export function AppLayout() {
-  const { church, ministry, memberships, isLeader, can } = useChurch()
+  const { church, ministry, memberships, supportOnly, isLeader, can } = useChurch()
+  const { pathname } = useLocation()
   const wide = useMatch('/planejamento')
   // conversa aberta: tela cheia no celular (sem cabeçalho nem barra de baixo)
   const thread = useMatch('/conversas/:conversationId')
@@ -30,6 +31,10 @@ export function AppLayout() {
         {unreadLabel(unread)}
       </span>
     ) : null
+  const navItems = supportOnly ? SUPPORT_NAV_ITEMS : NAV_ITEMS
+
+  // quem é só apoio vê a agenda do ministério (e a tela de instalar o app)
+  if (supportOnly && !supportCanOpen(pathname)) return <Navigate to="/apoio" replace />
 
   return (
     <div className="flex min-h-dvh">
@@ -42,7 +47,7 @@ export function AppLayout() {
           </span>
         </div>
         <nav aria-label="Navegação principal" className="flex flex-col gap-1">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {navItems.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -61,7 +66,7 @@ export function AppLayout() {
               <span className="ml-auto">{badge(to)}</span>
             </NavLink>
           ))}
-          {ministry && memberships.some((m) => m.ministry_id === ministry.id) && (
+          {!supportOnly && ministry && memberships.some((m) => m.ministry_id === ministry.id) && (
             <NavLink
               to="/disponibilidade"
               className={({ isActive }) =>
@@ -144,7 +149,7 @@ export function AppLayout() {
           )}
         >
           {!thread && <InstallBanner />}
-          {!thread && <SetupPrompt />}
+          {!thread && !supportOnly && <SetupPrompt />}
           <Outlet />
         </main>
 
@@ -153,7 +158,7 @@ export function AppLayout() {
           aria-label="Navegação principal"
           className={cn(
             'bg-nav fixed inset-x-0 bottom-0 z-40 flex justify-around border-t px-1 pt-2 pb-[max(1.375rem,env(safe-area-inset-bottom))] md:hidden',
-            thread && 'hidden',
+            (thread || supportOnly) && 'hidden',
           )}
         >
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (

@@ -63,18 +63,29 @@ export function InvitePage() {
   }
 
   const invite = preview.data
+  const support = invite.kind === 'support'
   return (
     <AuthShell
-      title={`Entrar no ${invite.ministry_name}`}
+      title={support ? `Acompanhar o ${invite.ministry_name}` : `Entrar no ${invite.ministry_name}`}
       subtitle={
         <div className="flex flex-col gap-2">
-          <span>
-            Você foi convidado para a equipe de{' '}
-            <strong className="text-foreground">{invite.ministry_name}</strong> da{' '}
-            <strong className="text-foreground">{invite.church_name}</strong>.
-          </span>
+          {support ? (
+            <span>
+              Você foi convidado como apoio do{' '}
+              <strong className="text-foreground">{invite.ministry_name}</strong> da{' '}
+              <strong className="text-foreground">{invite.church_name}</strong>: horários dos cultos
+              e ensaios, equipe e setlist com as cifras no tom do culto.
+            </span>
+          ) : (
+            <span>
+              Você foi convidado para a equipe de{' '}
+              <strong className="text-foreground">{invite.ministry_name}</strong> da{' '}
+              <strong className="text-foreground">{invite.church_name}</strong>.
+            </span>
+          )}
           <span className="flex flex-wrap items-center gap-2">
             {invite.role === 'leader' && <Badge>Como líder</Badge>}
+            {support && invite.support_label && <Badge>Apoio · {invite.support_label}</Badge>}
             <span className="text-xs">Válido até {formatDateTime(invite.expires_at)}</span>
           </span>
         </div>
@@ -99,7 +110,12 @@ function useAcceptInvite(token: string) {
         ...(fullName ? { p_full_name: fullName } : {}),
       })
       if (error) throw error
-      return data as { church_id: string; ministry_id: string; already_member: boolean }
+      return data as {
+        church_id: string
+        ministry_id: string
+        already_member: boolean
+        kind?: 'member' | 'support'
+      }
     },
     onSuccess: async (result) => {
       try {
@@ -109,6 +125,11 @@ function useAcceptInvite(token: string) {
         // ignora
       }
       await queryClient.invalidateQueries()
+      if (result.kind === 'support') {
+        toast.success(result.already_member ? 'Você já acompanha este ministério.' : 'Bem-vindo!')
+        navigate('/apoio', { replace: true })
+        return
+      }
       toast.success(
         result.already_member ? 'Você já faz parte desta equipe.' : 'Bem-vindo à equipe!',
       )

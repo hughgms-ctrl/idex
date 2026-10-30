@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useChurch } from '@/features/church/church-context'
 import { EditMemberDialog } from '@/features/members/EditMemberDialog'
+import { SupportersSection } from '@/features/support/SupportersSection'
 import { InviteDialog, InviteLinkResult } from '@/features/members/InviteDialog'
 import {
   memberKeys,
@@ -107,6 +108,8 @@ export function MembersPage() {
           />
         </section>
       )}
+
+      {leader && <SupportersSection ministryId={ministry.id} />}
 
       {leader && (
         <PendingInvites
@@ -279,6 +282,7 @@ function PendingInvites({
                     {invite.email ??
                       (invite.max_uses > 1 ? 'Link para várias pessoas' : 'Link individual')}
                     {invite.role === 'leader' && ' · líder'}
+                    {invite.kind === 'support' && ` · apoio (${invite.support_label})`}
                   </span>
                   <span className="text-muted-foreground text-xs">
                     {invite.max_uses > 1 && `${invite.uses_count} de ${invite.max_uses} usos · `}
@@ -291,6 +295,7 @@ function PendingInvites({
                   link={inviteUrl(invite.token)}
                   churchName={churchName}
                   ministryName={ministryName}
+                  support={invite.kind === 'support'}
                 />
               ) : (
                 <div className="flex gap-2">

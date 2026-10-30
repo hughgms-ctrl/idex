@@ -221,7 +221,7 @@ function NewConversationSheet({
   const [query, setQuery] = useState('')
   const q = query.trim().toLowerCase()
   const list = (people.data ?? []).filter(
-    (p) => p.id !== user.id && (!q || p.name.toLowerCase().includes(q)),
+    (p) => p.chat && p.id !== user.id && (!q || p.name.toLowerCase().includes(q)),
   )
 
   const start = useMutation({

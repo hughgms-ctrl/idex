@@ -4,7 +4,12 @@ import { Navigate } from 'react-router'
 import { useUser } from '@/auth/auth-context'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
 import { ChurchContext, type ChurchState } from '@/features/church/church-context'
-import { useMinistries, useMyChurches, useMyMemberships } from '@/features/church/queries'
+import {
+  useMinistries,
+  useMyChurches,
+  useMyMemberships,
+  useMySupports,
+} from '@/features/church/queries'
 import { ErrorState } from '@/components/ErrorState'
 
 const CHURCH_KEY = 'idex.churchId'
@@ -30,6 +35,7 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
   const user = useUser()
   const churchesQuery = useMyChurches(user.id)
   const membershipsQuery = useMyMemberships(user.id)
+  const supportsQuery = useMySupports(user.id)
   const [churchId, setChurchId] = useState(() => readPref(CHURCH_KEY))
   const [ministryId, setMinistryId] = useState(() => readPref(MINISTRY_KEY))
 
@@ -52,8 +58,17 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
     const memberships = (membershipsQuery.data ?? []).filter((m) =>
       ministries.some((min) => min.id === m.ministry_id),
     )
+    const supports = (supportsQuery.data ?? []).filter((s) =>
+      ministries.some((min) => min.id === s.ministry_id),
+    )
     const isOwner = church.role === 'owner'
+    const supportOnly = !isOwner && memberships.length === 0 && supports.length > 0
     const ministry =
+      (supportOnly
+        ? (ministries.find(
+            (m) => m.id === ministryId && supports.some((s) => s.ministry_id === m.id),
+          ) ?? ministries.find((m) => supports.some((s) => s.ministry_id === m.id)))
+        : undefined) ??
       ministries.find((m) => m.id === ministryId) ??
       ministries.find((m) => memberships.some((mm) => mm.ministry_id === m.id)) ??
       ministries[0] ??
@@ -69,6 +84,8 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
       ministries,
       ministry,
       memberships,
+      supports,
+      supportOnly,
       isOwner,
       isLeader,
       can: (id, permission) =>
@@ -92,14 +109,18 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
     churches,
     ministriesQuery.data,
     membershipsQuery.data,
+    supportsQuery.data,
     ministryId,
     selectChurch,
     selectMinistry,
   ])
 
-  const error = churchesQuery.error ?? membershipsQuery.error ?? ministriesQuery.error
+  const error =
+    churchesQuery.error ?? membershipsQuery.error ?? supportsQuery.error ?? ministriesQuery.error
   if (error) return <ErrorState error={error} onRetry={() => void churchesQuery.refetch()} />
-  if (churchesQuery.isPending || membershipsQuery.isPending) return <FullScreenLoader />
+  if (churchesQuery.isPending || membershipsQuery.isPending || supportsQuery.isPending) {
+    return <FullScreenLoader />
+  }
   if (!church) return <Navigate to="/bem-vindo" replace />
   if (ministriesQuery.isPending || !value) return <FullScreenLoader />
 

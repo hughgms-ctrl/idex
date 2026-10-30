@@ -835,11 +835,13 @@ export type Database = {
           email: string | null
           expires_at: string
           id: string
+          kind: string
           max_uses: number
           ministry_id: string
           ministry_role_ids: string[]
           revoked_at: string | null
           role: Database['public']['Enums']['ministry_member_role']
+          support_label: string | null
           token: string
           uses_count: number
         }
@@ -851,11 +853,13 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
+          kind?: string
           max_uses?: number
           ministry_id: string
           ministry_role_ids?: string[]
           revoked_at?: string | null
           role?: Database['public']['Enums']['ministry_member_role']
+          support_label?: string | null
           token?: string
           uses_count?: number
         }
@@ -866,11 +870,13 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
+          kind?: string
           max_uses?: number
           ministry_id?: string
           ministry_role_ids?: string[]
           revoked_at?: string | null
           role?: Database['public']['Enums']['ministry_member_role']
+          support_label?: string | null
           token?: string
           uses_count?: number
         }
@@ -1307,6 +1313,49 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'ministries'
             referencedColumns: ['id', 'church_id']
+          },
+        ]
+      }
+      ministry_supporters: {
+        Row: {
+          church_id: string
+          created_at: string
+          id: string
+          label: string
+          ministry_id: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          created_at?: string
+          id?: string
+          label: string
+          ministry_id: string
+          user_id: string
+        }
+        Update: {
+          church_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          ministry_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'ministry_supporters_ministry_id_church_id_fkey'
+            columns: ['ministry_id', 'church_id']
+            isOneToOne: false
+            referencedRelation: 'ministries'
+            referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'ministry_supporters_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2202,9 +2251,11 @@ export type Database = {
         Returns: {
           church_name: string
           expires_at: string
+          kind: string
           ministry_name: string
           role: Database['public']['Enums']['ministry_member_role']
           status: string
+          support_label: string
         }[]
       }
       has_ministry_permission: {
@@ -2220,6 +2271,7 @@ export type Database = {
       is_ministry_member: { Args: { p_ministry_id: string }; Returns: boolean }
       is_self_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_setlist_leader: { Args: { p_setlist_id: string }; Returns: boolean }
+      is_support_only: { Args: { p_church_id: string; p_user_id: string }; Returns: boolean }
       log_checkin_attempt: {
         Args: {
           p_accuracy_m?: number
@@ -2305,6 +2357,7 @@ export type Database = {
         }
         Returns: string
       }
+      remove_supporter: { Args: { p_supporter_id: string }; Returns: undefined }
       requeue_stuck_notifications: { Args: Record<PropertyKey, never>; Returns: number }
       review_justification: {
         Args: { p_approve: boolean; p_justification_id: string; p_note?: string }
@@ -2325,10 +2378,6 @@ export type Database = {
       }
       set_conversation_muted: {
         Args: { p_conversation_id: string; p_muted: boolean }
-        Returns: undefined
-      }
-      set_default_song_audio: {
-        Args: { p_default?: boolean; p_file_id: string }
         Returns: undefined
       }
       set_current_cycle: {
@@ -2354,6 +2403,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_default_song_audio: {
+        Args: { p_default?: boolean; p_file_id: string }
+        Returns: undefined
       }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }
