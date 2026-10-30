@@ -5,6 +5,7 @@ import {
   isChordLine,
   looksLikeChordPro,
   readChordPro,
+  sheetToText,
 } from '@/features/songs/chordpro'
 
 const COLADO = `Intro: G D
@@ -102,5 +103,43 @@ describe('cifra copiada do Cifra Club', () => {
     expect(isChordLine('   C (C4) C  C9')).toBe(true)
     expect(isChordLine('F7M  G/B  Am7(9)  Bb°')).toBe(true)
     expect(isChordLine('E eu canto')).toBe(false)
+  })
+})
+
+describe('copiar a cifra', () => {
+  const pro = `{comment: Verso}
+Eu o louva[F]rei
+Suas maravilhas cantarei
+Não me calar[Dm7]ei
+
+{comment: Interlúdio}
+[F] [F] [F] [F]`
+
+  it('acordes em cima, letra inteira embaixo, como na tela', () => {
+    expect(sheetToText(readChordPro(pro))).toBe(
+      [
+        'Verso',
+        '          F',
+        'Eu o louvarei',
+        'Suas maravilhas cantarei',
+        '            Dm7',
+        'Não me calarei',
+        '',
+        'Interlúdio',
+        'F F F F',
+      ].join('\n'),
+    )
+  })
+
+  it('transposta e só a letra', () => {
+    expect(sheetToText(readChordPro(pro, 2)).split('\n')[1]).toBe('          G')
+    expect(sheetToText(readChordPro(pro), true)).toBe(
+      'Verso\nEu o louvarei\nSuas maravilhas cantarei\nNão me calarei\n\nInterlúdio',
+    )
+  })
+
+  it('acordes encostados não quebram a palavra', () => {
+    const text = sheetToText(readChordPro('Lou[Bb9]va[C]i'))
+    expect(text).toBe('   Bb9 C\nLouvai')
   })
 })

@@ -163,3 +163,38 @@ export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
 }
+
+/**
+ * Cifra em texto, como aparece na tela: acordes na linha de cima, alinhados
+ * com a sílaba, e a letra inteira embaixo (para colar no telão/WhatsApp).
+ * A letra nunca é quebrada no meio da palavra: se dois acordes se encostam,
+ * o seguinte anda para a direita. `lyricsOnly`: só a letra.
+ */
+export function sheetToText(sections: SheetSection[], lyricsOnly = false): string {
+  const blocks: string[] = []
+  for (const section of sections) {
+    const out: string[] = []
+    if (section.label) out.push(section.label)
+    for (const line of section.lines) {
+      let chords = ''
+      let lyrics = ''
+      for (const seg of line.segments) {
+        if (seg.chord && !lyricsOnly) {
+          if (chords.length > lyrics.length) {
+            // abre espaço na letra só entre palavras (ou onde não há letra)
+            const between = lyrics === '' || /\s$/.test(lyrics) || !/^\S/.test(seg.lyrics)
+            if (between) lyrics = lyrics.padEnd(chords.length)
+          }
+          chords = chords.padEnd(Math.max(lyrics.length, chords.length)) + seg.chord + ' '
+        }
+        lyrics += seg.lyrics
+      }
+      chords = chords.trimEnd()
+      lyrics = lyrics.trimEnd()
+      if (chords) out.push(chords)
+      if (lyrics.trim()) out.push(lyrics)
+    }
+    if (out.length) blocks.push(out.join('\n'))
+  }
+  return blocks.join('\n\n')
+}
