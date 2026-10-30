@@ -1,6 +1,12 @@
-import { useMemo, type ClipboardEvent } from 'react'
+import { useMemo, type ClipboardEvent, type CSSProperties } from 'react'
 
-import { readChordPro, sheetToText, type SheetSection } from '@/features/songs/chordpro'
+import {
+  readChordPro,
+  sheetToHtml,
+  sheetToText,
+  type SheetSection,
+} from '@/features/songs/chordpro'
+import { noteColorValue, useNoteColor } from '@/features/songs/note-color'
 import { cn } from '@/lib/utils'
 
 // Cifra no estilo dos protótipos: acorde (verde, mono) sobre a sílaba.
@@ -15,6 +21,7 @@ export function ChordSheet({
   lyricsOnly?: boolean
   fontScale?: number
 }) {
+  const noteColor = useNoteColor()
   const sections = useMemo(() => {
     try {
       return readChordPro(chordpro, semitones)
@@ -37,7 +44,9 @@ export function ChordSheet({
   return (
     <div
       className="flex flex-col gap-5"
-      style={{ fontSize: `${17 * fontScale}px` }}
+      style={
+        { fontSize: `${17 * fontScale}px`, '--note': noteColorValue(noteColor) } as CSSProperties
+      }
       onCopy={(e) => copySelection(e, sections, lyricsOnly)}
     >
       {sections.map((section, si) => (
@@ -45,7 +54,7 @@ export function ChordSheet({
           {section.label && (
             <span
               data-sheet-label={si}
-              className="bg-muted-foreground text-background self-start rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase"
+              className="text-note bg-note/12 border-note/45 self-start rounded-lg border px-2.5 py-1 text-[0.72em] leading-none font-bold tracking-wider uppercase"
             >
               {section.label}
             </span>
@@ -63,7 +72,12 @@ export function ChordSheet({
                       className="text-primary h-[1.6em] pr-1.5 font-mono leading-[1.6em] font-semibold"
                       style={{ fontSize: '0.88em' }}
                     >
-                      {seg.chord}
+                      {seg.chord ||
+                        (seg.note && (
+                          <span className="text-note font-sans font-semibold italic">
+                            {seg.note}
+                          </span>
+                        ))}
                     </span>
                   )}
                   <span data-sheet-lyrics className="leading-snug whitespace-pre">
@@ -109,4 +123,5 @@ function copySelection(
   if (picked.length === 0) return
   e.preventDefault()
   e.clipboardData.setData('text/plain', sheetToText(picked, lyricsOnly))
+  e.clipboardData.setData('text/html', sheetToHtml(picked, lyricsOnly))
 }

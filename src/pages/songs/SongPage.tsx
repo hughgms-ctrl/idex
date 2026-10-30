@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
-import { ArrowDown, ChevronLeft, Copy, ExternalLink, Pause, Pencil } from 'lucide-react'
+import {
+  ArrowDown,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  ExternalLink,
+  Pause,
+  Pencil,
+} from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
@@ -10,8 +18,9 @@ import { useChurch } from '@/features/church/church-context'
 import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
 import { ChordSheet } from '@/features/songs/ChordSheet'
 import { beatsPerBar } from '@/features/songs/audio-math'
-import { readChordPro, sheetToText } from '@/features/songs/chordpro'
-import { useSongFiles } from '@/features/songs/song-files'
+import { readChordPro, sheetToHtml, sheetToText } from '@/features/songs/chordpro'
+import { NOTE_COLORS, setNoteColor, useNoteColor } from '@/features/songs/note-color'
+import { defaultAudio, useSongFiles } from '@/features/songs/song-files'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { SongFiles } from '@/features/songs/SongFiles'
 import { songLinks } from '@/features/songs/links'
@@ -51,11 +60,14 @@ export function SongPage() {
   if (!song.data) return <ErrorState error="Música não encontrada." />
 
   const s = song.data
-  const baseSemi = semitonesBetween(s.original_key, targetKey)
-  // a cifra acompanha o tom escolhido no áudio
-  const semitones = (semi ?? baseSemi) + engine.semitones
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
-  const audio = audios.find((a) => a.id === audioId) ?? audios[0]
+  // abre no áudio padrão; trocar vale só para esta pessoa, agora
+  const audio = audios.find((a) => a.id === audioId) ?? defaultAudio(audios)
+  // a cifra parte do tom do culto; sem ele, do tom cadastrado no áudio (que
+  // pode não ser o original da música); e acompanha o tom mudado no player
+  const audioKey = targetKey ? null : (audio?.musical_key ?? null)
+  const baseSemi = semitonesBetween(s.original_key, targetKey ?? audioKey)
+  const semitones = (semi ?? baseSemi) + engine.semitones
   const links = songLinks(s.links)
   const currentKey = s.original_key ? transposeKey(s.original_key, semitones) : null
   const items = setlist.data?.setlist_items ?? []
@@ -164,7 +176,7 @@ export function SongPage() {
           {scrolling ? <Pause aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
           Rolagem
         </Button>
-        <div className="text-muted-foreground flex w-full items-center justify-between gap-2 text-xs">
+        <div className="text-muted-foreground flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
           <span className="flex items-center gap-1">
             Letra
             <Button
@@ -193,6 +205,7 @@ export function SongPage() {
               {lyricsOnly ? 'Copiar letra' : 'Copiar cifra'}
             </Button>
           </span>
+          <NoteColorPicker />
           {scrolling && (
             <span className="flex items-center gap-1">
               Velocidade
@@ -211,7 +224,7 @@ export function SongPage() {
           )}
           {semi !== null && semi !== baseSemi && (
             <Button variant="ghost" size="sm" onClick={() => setSemi(null)}>
-              Voltar ao tom {targetKey ? 'do culto' : 'original'}
+              Voltar ao tom {targetKey ? 'do culto' : audioKey ? 'do áudio' : 'original'}
             </Button>
           )}
         </div>
@@ -283,9 +296,74 @@ export function SongPage() {
   )
 }
 
+/** Cor das indicações (seções, "[Crescendo]"): gosto de cada um, salvo no aparelho. */
+function NoteColorPicker() {
+  const current = useNoteColor()
+  const [open, setOpen] = useState(false)
+  const chosen = NOTE_COLORS.find((c) => c.id === current) ?? NOTE_COLORS[0]
+  return (
+    <span className="flex items-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        aria-label={open ? 'Fechar cores' : 'Escolher cor das seções e anotações'}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="size-3.5 rounded-full" style={{ backgroundColor: chosen.value }} />
+        Cor
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('transition-transform', open && 'rotate-180')}
+        />
+      </Button>
+      {open && (
+        <span role="radiogroup" aria-label="Cor das indicações da cifra" className="flex">
+          {NOTE_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={current === c.id}
+              aria-label={c.label}
+              title={`Seções e anotações em ${c.label.toLowerCase()}`}
+              onClick={() => {
+                setNoteColor(c.id)
+                setOpen(false)
+              }}
+              className="flex size-9 items-center justify-center"
+            >
+              <span
+                className={cn(
+                  'size-5 rounded-full transition-transform',
+                  current === c.id &&
+                    'ring-foreground ring-offset-background scale-110 ring-2 ring-offset-2',
+                )}
+                style={{ backgroundColor: c.value }}
+              />
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
 async function copySheet(chordpro: string, semitones: number, lyricsOnly: boolean) {
   try {
-    await navigator.clipboard.writeText(sheetToText(readChordPro(chordpro, semitones), lyricsOnly))
+    const sections = readChordPro(chordpro, semitones)
+    const text = sheetToText(sections, lyricsOnly)
+    // em HTML vai em fonte de largura fixa: Word/PowerPoint/Docs mantêm os acordes no lugar
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([sheetToHtml(sections, lyricsOnly)], { type: 'text/html' }),
+        }),
+      ])
+    } catch {
+      await navigator.clipboard.writeText(text) // navegador sem cópia em HTML
+    }
     toast.success(lyricsOnly ? 'Letra copiada' : 'Cifra copiada')
   } catch {
     toast.error('Não foi possível copiar. Selecione o texto e copie.')

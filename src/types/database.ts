@@ -1946,6 +1946,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_default: boolean
           kind: string
           mime_type: string | null
           musical_key: string | null
@@ -1962,6 +1963,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_default?: boolean
           kind: string
           mime_type?: string | null
           musical_key?: string | null
@@ -1977,6 +1979,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_default?: boolean
           kind?: string
           mime_type?: string | null
           musical_key?: string | null
@@ -2400,6 +2403,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_default_song_audio: {
+        Args: { p_default?: boolean; p_file_id: string }
+        Returns: undefined
       }
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }

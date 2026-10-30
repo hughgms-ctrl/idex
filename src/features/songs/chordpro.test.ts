@@ -4,7 +4,9 @@ import {
   chordsOverWordsToChordPro,
   isChordLine,
   looksLikeChordPro,
+  markNotes,
   readChordPro,
+  sheetToHtml,
   sheetToText,
   songsToText,
 } from '@/features/songs/chordpro'
@@ -142,6 +144,27 @@ Não me calar[Dm7]ei
   it('acordes encostados não quebram a palavra', () => {
     const text = sheetToText(readChordPro('Lou[Bb9]va[C]i'))
     expect(text).toBe('   Bb9 C\nLouvai')
+  })
+
+  it('em HTML vai em fonte fixa', () => {
+    const html = sheetToHtml(readChordPro('Eu o louva[F]rei'))
+    expect(html).toContain('monospace')
+    expect(html).toContain('<b>          F</b>\nEu o louvarei')
+  })
+})
+
+describe('texto entre colchetes que não é acorde', () => {
+  it('vira anotação e não muda de tom', () => {
+    expect(markNotes('[Crescendo]Tes[F9]tifico [pausa] [E7/9]')).toBe(
+      '[*Crescendo]Tes[F9]tifico [*pausa] [E7/9]',
+    )
+    const line = readChordPro('[Crescendo]Testifico [F]que', 4)[0]!.lines[0]!.segments
+    expect(line[0]).toMatchObject({ chord: '', note: 'Crescendo', lyrics: 'Testifico ' })
+    expect(line[1]).toMatchObject({ chord: 'A', lyrics: 'que' })
+  })
+
+  it('aparece na cópia no lugar do acorde', () => {
+    expect(sheetToText(readChordPro('Deu[pausa]s', 2))).toBe('   pausa\nDeus')
   })
 })
 

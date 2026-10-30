@@ -27,7 +27,7 @@ export function cleanPastedText(text: string): string {
 }
 
 const CHORD_TOKEN =
-  /^\(?[A-G][#b]?(?:maj|min|dim|aug|sus|add|[mM]|[0-9]|[#b+°º()-])*(?:\/[A-G][#b]?)?\)?$/
+  /^\(?[A-G][#b]?(?:maj|min|dim|aug|sus|add|[mM]|[0-9]|[#b+°º()-])*(?:\/(?:[A-G][#b]?|[0-9]+))?\)?$/
 
 export function isChordToken(token: string): boolean {
   return CHORD_TOKEN.test(token)
@@ -111,7 +111,8 @@ export function repairChordPro(text: string): string {
   return chordsOverWordsToChordPro(clean, { title, key })
 }
 
-export type SheetSegment = { chord: string; lyrics: string }
+/** `note`: texto entre colchetes que não é acorde ("[Crescendo]", "[pausa]"): não muda de tom. */
+export type SheetSegment = { chord: string; lyrics: string; note?: string }
 export type SheetLine = { segments: SheetSegment[] }
 export type SheetSection = { label: string | null; lines: SheetLine[] }
 
@@ -122,9 +123,20 @@ const PARAGRAPH_LABEL: Record<string, string> = {
   tab: 'Tablatura',
 }
 
+/**
+ * "[Crescendo]", "[pausa]", "[2x]": o leitor de ChordPro trataria como acorde
+ * (e "Crescendo" viraria "Erescendo" ao mudar o tom). Viram anotação ("[*…]"),
+ * que aparece no lugar do acorde mas nunca é transposta.
+ */
+export function markNotes(chordpro: string): string {
+  return chordpro.replace(/\[([^\]*\n][^\]\n]*)\]/g, (whole, inner: string) =>
+    isChordToken(inner.trim()) ? whole : `[*${inner}]`,
+  )
+}
+
 /** ChordPro → seções/linhas prontas para desenhar, já transpostas. */
 export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
-  let song = new ChordProParser().parse(repairChordPro(chordpro || ''))
+  let song = new ChordProParser().parse(markNotes(repairChordPro(chordpro || '')))
   if (semitones) song = song.transpose(semitones)
   const sections: SheetSection[] = []
   for (const paragraph of song.paragraphs) {
@@ -136,14 +148,21 @@ export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
       const segments: SheetSegment[] = []
       for (const item of line.items) {
         if (item instanceof ChordLyricsPair) {
-          segments.push({ chord: item.chords ?? '', lyrics: item.lyrics ?? '' })
+          const note = item.annotation?.trim()
+          segments.push({
+            chord: item.chords ?? '',
+            lyrics: item.lyrics ?? '',
+            ...(note ? { note } : {}),
+          })
         } else if (item instanceof Tag && item.name === 'comment' && item.value) {
           // comentário vira o rótulo de uma nova seção
           if (current.lines.length > 0 || current.label) sections.push(current)
           current = { label: item.value, lines: [] }
         }
       }
-      if (segments.some((s) => s.chord || s.lyrics.trim())) current.lines.push({ segments })
+      if (segments.some((s) => s.chord || s.note || s.lyrics.trim())) {
+        current.lines.push({ segments })
+      }
     }
     if (current.lines.length > 0 || current.label) sections.push(current)
   }
@@ -164,39 +183,66 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
 }
 
+export type SheetTextLine = { kind: 'label' | 'chords' | 'lyrics' | 'blank'; text: string }
+
 /**
  * Cifra em texto, como aparece na tela: acordes na linha de cima, alinhados
  * com a sílaba, e a letra inteira embaixo (para colar no telão/WhatsApp).
  * A letra nunca é quebrada no meio da palavra: se dois acordes se encostam,
  * o seguinte anda para a direita. `lyricsOnly`: só a letra.
+ * O alinhamento por espaços só fica certo em fonte de largura fixa; por isso
+ * a cópia também leva a versão HTML (`sheetToHtml`), já em fonte fixa.
  */
-export function sheetToText(sections: SheetSection[], lyricsOnly = false): string {
-  const blocks: string[] = []
+export function sheetToLines(sections: SheetSection[], lyricsOnly = false): SheetTextLine[] {
+  const out: SheetTextLine[] = []
   for (const section of sections) {
-    const out: string[] = []
-    if (section.label) out.push(section.label)
+    const block: SheetTextLine[] = []
+    if (section.label) block.push({ kind: 'label', text: section.label })
     for (const line of section.lines) {
       let chords = ''
       let lyrics = ''
       for (const seg of line.segments) {
-        if (seg.chord && !lyricsOnly) {
+        const mark = seg.chord || seg.note || ''
+        if (mark && !lyricsOnly) {
           if (chords.length > lyrics.length) {
             // abre espaço na letra só entre palavras (ou onde não há letra)
             const between = lyrics === '' || /\s$/.test(lyrics) || !/^\S/.test(seg.lyrics)
             if (between) lyrics = lyrics.padEnd(chords.length)
           }
-          chords = chords.padEnd(Math.max(lyrics.length, chords.length)) + seg.chord + ' '
+          chords = chords.padEnd(Math.max(lyrics.length, chords.length)) + mark + ' '
         }
         lyrics += seg.lyrics
       }
       chords = chords.trimEnd()
       lyrics = lyrics.trimEnd()
-      if (chords) out.push(chords)
-      if (lyrics.trim()) out.push(lyrics)
+      if (chords) block.push({ kind: 'chords', text: chords })
+      if (lyrics.trim()) block.push({ kind: 'lyrics', text: lyrics })
     }
-    if (out.length) blocks.push(out.join('\n'))
+    if (block.length === 0) continue
+    if (out.length) out.push({ kind: 'blank', text: '' })
+    out.push(...block)
   }
-  return blocks.join('\n\n')
+  return out
+}
+
+export function sheetToText(sections: SheetSection[], lyricsOnly = false): string {
+  return sheetToLines(sections, lyricsOnly)
+    .map((l) => l.text)
+    .join('\n')
+}
+
+const escapeHtml = (t: string) =>
+  t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** Mesma cópia em HTML com fonte de largura fixa (Word, PowerPoint, Docs mantêm o alinhamento). */
+export function sheetToHtml(sections: SheetSection[], lyricsOnly = false): string {
+  const body = sheetToLines(sections, lyricsOnly)
+    .map((l) => {
+      const t = escapeHtml(l.text)
+      return l.kind === 'chords' || l.kind === 'label' ? `<b>${t}</b>` : t
+    })
+    .join('\n')
+  return `<pre style="font-family: Consolas, 'Courier New', monospace; white-space: pre">${body}</pre>`
 }
 
 /**

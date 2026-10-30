@@ -1,4 +1,4 @@
--- Fase 31 — apoio do ministério (som, data show…): só consulta, sem ser integrante.
+-- Fase 32 — apoio do ministério (som, data show…): só consulta, sem ser integrante.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
