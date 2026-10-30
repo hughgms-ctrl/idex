@@ -53,15 +53,13 @@ export function ChordSheet({
       {sections.map((section, si) => (
         <section key={si} className="flex flex-col gap-2.5">
           {section.label && (
-            // Rótulo com linha fina; a cor vem do tipo da parte (verso, refrão…).
-            <div
+            <span
               data-sheet-label={si}
-              className="flex items-center gap-2.5 text-[0.72em] leading-none font-bold tracking-[0.14em] uppercase"
-              style={{ color: sectionColor(section.label) }}
+              className="self-start rounded-lg border px-2.5 py-1 text-[0.72em] leading-none font-bold tracking-[0.1em] uppercase"
+              style={labelStyle(section.label)}
             >
               {section.label}
-              <span aria-hidden="true" className="h-px flex-1 bg-current opacity-35" />
-            </div>
+            </span>
           )}
           {section.lines.map((line, li) => (
             <div
@@ -95,6 +93,16 @@ export function ChordSheet({
       ))}
     </div>
   )
+}
+
+// Pílula na cor do tipo da parte (verso, refrão…): texto cheio, fundo e contorno leves.
+function labelStyle(label: string): CSSProperties {
+  const color = sectionColor(label)
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+    borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
+  }
 }
 
 /**
