@@ -149,7 +149,9 @@ Não me calar[Dm7]ei
   it('em HTML vai em fonte fixa', () => {
     const html = sheetToHtml(readChordPro('Eu o louva[F]rei'))
     expect(html).toContain('monospace')
-    expect(html).toContain('<b>          F</b>\nEu o louvarei')
+    expect(html).toContain('<b>' + '&nbsp;'.repeat(10) + 'F</b>')
+    expect(html).toContain('>Eu o louvarei<')
+    expect(html).not.toContain('<pre')
   })
 })
 
