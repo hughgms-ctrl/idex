@@ -234,15 +234,26 @@ export function sheetToText(sections: SheetSection[], lyricsOnly = false): strin
 const escapeHtml = (t: string) =>
   t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-/** Mesma cópia em HTML com fonte de largura fixa (Word, PowerPoint, Docs mantêm o alinhamento). */
+const MONO = "font-family:'Courier New',Courier,monospace"
+
+/** Espaços que o HTML juntaria (no começo da linha ou em sequência) viram `&nbsp;`. */
+const keepSpaces = (t: string) =>
+  t.replace(/^ +| {2,}/g, (m) => '&nbsp;'.repeat(m.length))
+
+/**
+ * Mesma cópia em HTML com fonte de largura fixa (Word, PowerPoint, Docs mantêm
+ * o alinhamento). Um parágrafo por linha, com a fonte em cada um: o Word ignora
+ * o estilo do `<pre>` e colava em Calibri, com os acordes fora do lugar.
+ */
 export function sheetToHtml(sections: SheetSection[], lyricsOnly = false): string {
   const body = sheetToLines(sections, lyricsOnly)
     .map((l) => {
-      const t = escapeHtml(l.text)
-      return l.kind === 'chords' || l.kind === 'label' ? `<b>${t}</b>` : t
+      const t = keepSpaces(escapeHtml(l.text)) || '&nbsp;'
+      const inner = l.kind === 'chords' || l.kind === 'label' ? `<b>${t}</b>` : t
+      return `<p style="margin:0;${MONO};white-space:pre"><span style="${MONO}">${inner}</span></p>`
     })
-    .join('\n')
-  return `<pre style="font-family: Consolas, 'Courier New', monospace; white-space: pre">${body}</pre>`
+    .join('')
+  return `<div style="${MONO}">${body}</div>`
 }
 
 /**
