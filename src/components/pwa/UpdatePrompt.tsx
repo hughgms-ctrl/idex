@@ -2,7 +2,9 @@ import { useEffect } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { toast } from 'sonner'
 
-const CHECK_EVERY_MS = 60 * 60 * 1000
+const CHECK_EVERY_MS = 15 * 60 * 1000
+// ao voltar para o app (que fica aberto em segundo plano no celular)
+const MIN_GAP_ON_RESUME_MS = 60 * 1000
 
 // Registra o service worker e avisa quando há nova versão publicada.
 export function UpdatePrompt() {
@@ -12,7 +14,15 @@ export function UpdatePrompt() {
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
       if (!registration) return
-      setInterval(() => void registration.update(), CHECK_EVERY_MS)
+      let lastCheck = Date.now()
+      const check = () => {
+        lastCheck = Date.now()
+        void registration.update()
+      }
+      setInterval(check, CHECK_EVERY_MS)
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && Date.now() - lastCheck > MIN_GAP_ON_RESUME_MS) check()
+      })
     },
   })
 
