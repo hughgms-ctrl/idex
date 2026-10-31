@@ -2357,6 +2357,7 @@ export type Database = {
         }
         Returns: string
       }
+      remove_ministry_member: { Args: { p_member_id: string }; Returns: undefined }
       remove_supporter: { Args: { p_supporter_id: string }; Returns: undefined }
       requeue_stuck_notifications: { Args: Record<PropertyKey, never>; Returns: number }
       review_justification: {
