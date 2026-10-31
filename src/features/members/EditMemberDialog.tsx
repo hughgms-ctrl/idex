@@ -102,6 +102,7 @@ function EditMemberForm({
     can_send_announcements: member.can_send_announcements,
   })
   const isSelf = member.user_id === user.id
+  const [confirmRemove, setConfirmRemove] = useState(false)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: memberKeys.list(ministryId) })
 
@@ -139,6 +140,19 @@ function EditMemberForm({
     onSuccess: async () => {
       await invalidate()
       toast.success('Integrante atualizado')
+      onDone()
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.rpc('remove_ministry_member', { p_member_id: member.id })
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await invalidate()
+      toast.success(`${member.name} foi excluído do ministério`)
       onDone()
     },
     onError: (err) => toast.error(errorMessage(err)),
@@ -230,7 +244,7 @@ function EditMemberForm({
         <FormField
           id="member-status"
           label="Situação"
-          hint="Para tirar alguém da equipe, deixe como inativo: o histórico de pontos é mantido."
+          hint="Inativo tira da equipe e guarda o histórico de pontos. Para quem entrou por engano, use “Excluir do ministério” abaixo."
         >
           <NativeSelect
             id="member-status"
@@ -242,6 +256,44 @@ function EditMemberForm({
             <option value="inactive">Inativo</option>
           </NativeSelect>
         </FormField>
+        {!isSelf &&
+          (confirmRemove ? (
+            <div className="border-destructive/40 flex flex-col gap-2 rounded-xl border p-3 text-sm">
+              <p>
+                Excluir {member.name} apaga tudo dele neste ministério: escalas, presenças, pontos e
+                disponibilidade. Não dá para desfazer. Se não estiver em outro ministério, sai
+                também da igreja no app e pode entrar de novo por outro convite (ex.: como apoio).
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate()}
+                >
+                  {remove.isPending ? 'Excluindo…' : 'Excluir de vez'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmRemove(false)}
+                >
+                  Voltar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-destructive hover:text-destructive self-start"
+              onClick={() => setConfirmRemove(true)}
+            >
+              Excluir do ministério
+            </Button>
+          ))}
       </div>
       <DialogFooter>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
