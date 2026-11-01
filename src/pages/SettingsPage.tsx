@@ -57,6 +57,9 @@ export function SettingsPage() {
         />
       )}
       {ministry && settings.data && (
+        <RulesTrial settings={settings.data} canEdit={isLeader(ministry.id)} />
+      )}
+      {ministry && settings.data && (
         <ServiceTimes
           key={`horarios-${settings.data.updated_at}`}
           settings={settings.data}
@@ -137,6 +140,45 @@ function useSaveSettings(ministryId: string, message: string) {
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
+}
+
+// Período de teste: ninguém fica de fora da escala (o botão de registrar
+// presença não some); os pontos continuam valendo.
+function RulesTrial({
+  settings,
+  canEdit,
+}: {
+  settings: Tables<'ministry_settings'>
+  canEdit: boolean
+}) {
+  const on = settings.rules_trial
+  const save = useSaveSettings(
+    settings.ministry_id,
+    on
+      ? 'Período de teste desligado: as regras de quem fica de fora voltam a valer.'
+      : 'Período de teste ligado: ninguém fica de fora e quem estava de fora voltou para a escala.',
+  )
+  return (
+    <section className="flex flex-col gap-2.5">
+      <SectionTitle title="Período de teste" />
+      <Panel className={cn('gap-3', on && 'border-warning/60 bg-warning/10')}>
+        <Label className="min-h-11 cursor-pointer font-normal">
+          <Checkbox
+            checked={on}
+            disabled={!canEdit || save.isPending}
+            onCheckedChange={(x) => save.mutate({ rules_trial: x === true })}
+          />
+          <span className="font-semibold">Regras em período de teste</span>
+        </Label>
+        <p className="text-muted-foreground text-[13px]">
+          Ligado: ninguém fica de fora da escala por atraso ou falta no ensaio ou no culto, e o
+          botão de registrar presença continua aparecendo para todos. Os pontos continuam valendo
+          normalmente. Ao ligar, quem já tinha ficado de fora dos próximos eventos volta para a
+          escala.
+        </p>
+      </Panel>
+    </section>
+  )
 }
 
 // Regras de horário do culto e do ensaio (chegada, tolerância, passagem de

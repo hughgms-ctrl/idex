@@ -1213,6 +1213,7 @@ export type Database = {
           rehearsal_time: string
           rehearsal_tolerance_min: number
           rehearsal_weekday: number | null
+          rules_trial: boolean
           service_arrival_minutes: number
           service_late_consequence: string
           service_soundcheck_minutes: number | null
@@ -1253,6 +1254,7 @@ export type Database = {
           rehearsal_time?: string
           rehearsal_tolerance_min?: number
           rehearsal_weekday?: number | null
+          rules_trial?: boolean
           service_arrival_minutes?: number
           service_late_consequence?: string
           service_soundcheck_minutes?: number | null
@@ -1292,6 +1294,7 @@ export type Database = {
           rehearsal_time?: string
           rehearsal_tolerance_min?: number
           rehearsal_weekday?: number | null
+          rules_trial?: boolean
           service_arrival_minutes?: number
           service_late_consequence?: string
           service_soundcheck_minutes?: number | null
@@ -2117,6 +2120,15 @@ export type Database = {
         }
         Returns: number
       }
+      apply_late_consequence_rule: {
+        Args: {
+          p_event_id: string
+          p_ministry_member_id: string
+          p_reason?: string
+          p_scope: string
+        }
+        Returns: number
+      }
       can_access_chat_topic: { Args: { p_topic: string }; Returns: boolean }
       can_access_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
       can_edit_setlist: { Args: { p_setlist_id: string }; Returns: boolean }
@@ -2215,6 +2227,7 @@ export type Database = {
       is_leader_of_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_ministry_leader: { Args: { p_ministry_id: string }; Returns: boolean }
       is_ministry_member: { Args: { p_ministry_id: string }; Returns: boolean }
+      is_rules_trial: { Args: { p_ministry_id: string }; Returns: boolean }
       is_self_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_setlist_leader: { Args: { p_setlist_id: string }; Returns: boolean }
       log_checkin_attempt: {
