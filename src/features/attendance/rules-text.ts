@@ -22,6 +22,8 @@ export type RulesSettings = {
   recovery_enabled: boolean
   recovery_every: number
   recovery_points: number
+  /** período de teste: ninguém fica de fora (pontos continuam valendo) */
+  rules_trial?: boolean
 }
 
 export type RuleGroup = { title: string; lines: string[] }
@@ -41,6 +43,16 @@ export function describeRules(s: RulesSettings): RuleGroup[] {
   const tiers = normalizeTiers(s.late_penalty_tiers)
   const groups: RuleGroup[] = []
 
+  if (s.rules_trial) {
+    groups.push({
+      title: 'Período de teste',
+      lines: [
+        'Por enquanto ninguém fica de fora da escala por atraso ou falta: registre sua presença sempre.',
+        'Os pontos continuam valendo normalmente.',
+      ],
+    })
+  }
+
   groups.push({
     title: 'Ciclo',
     lines: [
@@ -54,7 +66,7 @@ export function describeRules(s: RulesSettings): RuleGroup[] {
     `A chegada da equipe é ${s.service_arrival_minutes} min antes do início. O atraso conta a partir da chegada, não do início do culto.`,
     `Tolerância: ${s.service_tolerance_min} min. Passou disso, conta o atraso inteiro: ${tiersText(tiers, s.service_tolerance_min)}.`,
   ]
-  if (s.service_late_consequence === 'no_play')
+  if (s.service_late_consequence === 'no_play' && !s.rules_trial)
     service.push('Quem chega depois da tolerância não toca naquele culto.')
   groups.push({ title: 'Culto', lines: service })
 
@@ -62,9 +74,11 @@ export function describeRules(s: RulesSettings): RuleGroup[] {
     const rehearsal = [
       `A chegada é ${s.rehearsal_arrival_minutes} min antes do início do ensaio. Tolerância: ${s.rehearsal_tolerance_min} min.`,
     ]
-    if (s.rehearsal_late_consequence === 'out_rehearsal')
+    // no período de teste ninguém sai da escala
+    const consequence = s.rules_trial ? 'points' : s.rehearsal_late_consequence
+    if (consequence === 'out_rehearsal')
       rehearsal.push('Quem chega depois da tolerância fica fora do ensaio.')
-    if (s.rehearsal_late_consequence === 'out_rehearsal_and_service') {
+    if (consequence === 'out_rehearsal_and_service') {
       rehearsal.push(
         'Quem chega depois da tolerância, ou falta, fica fora do ensaio e do culto daquele ensaio.',
       )

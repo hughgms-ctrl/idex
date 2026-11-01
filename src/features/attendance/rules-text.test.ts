@@ -57,4 +57,11 @@ describe('describeRules', () => {
       'A cada 5 presenças seguidas no horário depois de um desconto, você recupera +5',
     )
   })
+
+  it('período de teste: avisa e não fala em ficar de fora', () => {
+    const t = text({ ...base, rules_trial: true })
+    expect(t).toContain('ninguém fica de fora')
+    expect(t).toContain('Os pontos continuam valendo')
+    expect(t).not.toContain('fica fora do ensaio e do culto')
+  })
 })
