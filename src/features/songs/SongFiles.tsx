@@ -20,10 +20,13 @@ export function SongFiles({
   songId,
   churchId,
   canEdit,
+  showAudioLink = true,
 }: {
   songId: string
   churchId: string
   canEdit: boolean
+  /** Na tela da música o player fica no topo; o atalho só aparece sem áudios. */
+  showAudioLink?: boolean
 }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -59,15 +62,17 @@ export function SongFiles({
 
   return (
     <section aria-label="Áudios e arquivos" className="flex flex-col gap-2.5">
-      <Button asChild variant="outline" className="min-h-12 justify-between rounded-2xl">
-        <Link to={`/repertorio/${songId}/audios`}>
-          <span className="flex items-center gap-2">
-            <Headphones className="text-primary size-4" aria-hidden="true" />
-            Áudios {audios.length > 0 && `(${audios.length})`}
-          </span>
-          <span className="text-muted-foreground text-xs">tom, andamento e metrônomo ›</span>
-        </Link>
-      </Button>
+      {showAudioLink && (
+        <Button asChild variant="outline" className="min-h-12 justify-between rounded-2xl">
+          <Link to={`/repertorio/${songId}/audios`}>
+            <span className="flex items-center gap-2">
+              <Headphones className="text-primary size-4" aria-hidden="true" />
+              Áudios {audios.length > 0 && `(${audios.length})`}
+            </span>
+            <span className="text-muted-foreground text-xs">tom, andamento e metrônomo ›</span>
+          </Link>
+        </Button>
+      )}
 
       {(canEdit || list.length > 0) && (
         <div className="flex items-center justify-between gap-2">

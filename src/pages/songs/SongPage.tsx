@@ -1,12 +1,27 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
-import { ArrowDown, ChevronLeft, ExternalLink, Pause, Pencil } from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  ArrowDown,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  ExternalLink,
+  Pause,
+  Pencil,
+} from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FullScreenLoader } from '@/components/FullScreenLoader'
 import { Button } from '@/components/ui/button'
 import { useChurch } from '@/features/church/church-context'
+import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
 import { ChordSheet } from '@/features/songs/ChordSheet'
+import { beatsPerBar } from '@/features/songs/audio-math'
+import { readChordPro, sheetToHtml, sheetToText } from '@/features/songs/chordpro'
+import { NOTE_COLORS, setNoteColor, useNoteColor } from '@/features/songs/note-color'
+import { defaultAudio, useSongFiles } from '@/features/songs/song-files'
+import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { SongFiles } from '@/features/songs/SongFiles'
 import { songLinks } from '@/features/songs/links'
 import { useSetlist, useSong } from '@/features/songs/queries'
@@ -30,14 +45,29 @@ export function SongPage() {
   const [scrolling, setScrolling] = useState(false)
   const [speedIdx, setSpeedIdx] = useState(1)
   useAutoScroll(scrolling, SPEEDS[speedIdx] ?? 20, () => setScrolling(false))
+  const files = useSongFiles(songId)
+  const engine = useAudioEngine()
+  const [audioId, setAudioId] = useState<string | null>(null)
+  const canEditSong = !!song.data && can(song.data.ministry_id, 'songs')
+  const doubleTap = useDoubleTap(() => {
+    if (!canEditSong) return
+    window.getSelection()?.removeAllRanges()
+    navigate(`/repertorio/${songId}/editar`)
+  })
 
   if (song.error) return <ErrorState error={song.error} onRetry={() => void song.refetch()} />
   if (song.isPending) return <FullScreenLoader />
   if (!song.data) return <ErrorState error="Música não encontrada." />
 
   const s = song.data
-  const baseSemi = semitonesBetween(s.original_key, targetKey)
-  const semitones = semi ?? baseSemi
+  const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
+  // abre no áudio padrão; trocar vale só para esta pessoa, agora
+  const audio = audios.find((a) => a.id === audioId) ?? defaultAudio(audios)
+  // a cifra parte do tom do culto; sem ele, do tom cadastrado no áudio (que
+  // pode não ser o original da música); e acompanha o tom mudado no player
+  const audioKey = targetKey ? null : (audio?.musical_key ?? null)
+  const baseSemi = semitonesBetween(s.original_key, targetKey ?? audioKey)
+  const semitones = (semi ?? baseSemi) + engine.semitones
   const links = songLinks(s.links)
   const currentKey = s.original_key ? transposeKey(s.original_key, semitones) : null
   const items = setlist.data?.setlist_items ?? []
@@ -64,7 +94,7 @@ export function SongPage() {
           <h1 className="truncate text-[17px] font-semibold">{s.title}</h1>
           {subtitle && <p className="text-muted-foreground truncate text-xs">{subtitle}</p>}
         </div>
-        {can(s.ministry_id, 'songs') && (
+        {canEditSong && (
           <Button asChild variant="ghost" size="icon" aria-label="Editar música">
             <Link to={`/repertorio/${s.id}/editar`}>
               <Pencil className="size-4" />
@@ -74,25 +104,55 @@ export function SongPage() {
       </header>
 
       <div className="bg-background sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b px-5 pt-2 pb-3">
+        {audio && (
+          <div className="mb-1 w-full">
+            <AudioPlayer
+              key={audio.id}
+              compact
+              file={audio}
+              files={audios}
+              onSelect={(next) => {
+                const wasPlaying = engine.playing
+                engine.pause()
+                setAudioId(next.id)
+                if (next.url) {
+                  void engine
+                    .load(next.url, next.id)
+                    .then((ok) => (ok && wasPlaying ? engine.play() : undefined))
+                }
+              }}
+              songBpm={s.bpm}
+              songKey={s.original_key}
+              beats={beatsPerBar(s.time_signature)}
+              engine={engine}
+              manageHref={
+                can(s.ministry_id, 'song_files') ? `/repertorio/${s.id}/audios` : undefined
+              }
+            />
+          </div>
+        )}
         <Button
           variant="outline"
           size="icon"
           className="font-mono text-lg"
           aria-label="Baixar meio tom"
-          onClick={() => setSemi(semitones - 1)}
+          onClick={() => setSemi((semi ?? baseSemi) - 1)}
         >
           −
         </Button>
         <div className="flex min-w-16 flex-col items-center">
           <span className="text-muted-foreground text-[11px]">TOM</span>
           <span className="text-primary font-mono text-xl font-semibold">{currentKey ?? '—'}</span>
+          {engine.semitones !== 0 && (
+            <span className="text-muted-foreground text-[10px]">com o áudio</span>
+          )}
         </div>
         <Button
           variant="outline"
           size="icon"
           className="font-mono text-lg"
           aria-label="Subir meio tom"
-          onClick={() => setSemi(semitones + 1)}
+          onClick={() => setSemi((semi ?? baseSemi) + 1)}
         >
           +
         </Button>
@@ -116,7 +176,7 @@ export function SongPage() {
           {scrolling ? <Pause aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}
           Rolagem
         </Button>
-        <div className="text-muted-foreground flex w-full items-center justify-between gap-2 text-xs">
+        <div className="text-muted-foreground flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
           <span className="flex items-center gap-1">
             Letra
             <Button
@@ -135,7 +195,17 @@ export function SongPage() {
             >
               A+
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Copia no formato da tela (com “Só letra”, só a letra)"
+              onClick={() => void copySheet(s.chordpro, semitones, lyricsOnly)}
+            >
+              <Copy aria-hidden="true" />
+              {lyricsOnly ? 'Copiar letra' : 'Copiar cifra'}
+            </Button>
           </span>
+          <NoteColorPicker />
           {scrolling && (
             <span className="flex items-center gap-1">
               Velocidade
@@ -152,9 +222,9 @@ export function SongPage() {
               ))}
             </span>
           )}
-          {semitones !== baseSemi && (
+          {semi !== null && semi !== baseSemi && (
             <Button variant="ghost" size="sm" onClick={() => setSemi(null)}>
-              Voltar ao tom {targetKey ? 'do culto' : 'original'}
+              Voltar ao tom {targetKey ? 'do culto' : audioKey ? 'do áudio' : 'original'}
             </Button>
           )}
         </div>
@@ -177,16 +247,28 @@ export function SongPage() {
           songId={s.id}
           churchId={s.church_id}
           canEdit={can(s.ministry_id, 'song_files')}
+          showAudioLink={audios.length === 0}
         />
       </div>
 
       <article className="px-5 pt-4 pb-8">
-        <ChordSheet
-          chordpro={s.chordpro}
-          semitones={semitones}
-          lyricsOnly={lyricsOnly}
-          fontScale={fontScale}
-        />
+        <div
+          {...(canEditSong ? doubleTap : {})}
+          className={cn(canEditSong && 'touch-manipulation')}
+          title={canEditSong ? 'Clique duas vezes para editar' : undefined}
+        >
+          <ChordSheet
+            chordpro={s.chordpro}
+            semitones={semitones}
+            lyricsOnly={lyricsOnly}
+            fontScale={fontScale}
+          />
+        </div>
+        {canEditSong && (
+          <p className="text-muted-foreground mt-6 text-xs">
+            Toque duas vezes na cifra para editar.
+          </p>
+        )}
         {targetKey && s.original_key && targetKey !== s.original_key && (
           <p className="text-muted-foreground mt-6 border-t pt-3 text-xs">
             Tom original: {s.original_key}. O tom do culto foi definido pelo ministro e vale para
@@ -212,6 +294,106 @@ export function SongPage() {
       </article>
     </div>
   )
+}
+
+/** Cor das anotações ("[Crescendo]"): gosto de cada um, salvo no aparelho. */
+function NoteColorPicker() {
+  const current = useNoteColor()
+  const [open, setOpen] = useState(false)
+  const chosen = NOTE_COLORS.find((c) => c.id === current) ?? NOTE_COLORS[0]
+  return (
+    <span className="flex items-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        aria-label={open ? 'Fechar cores' : 'Escolher cor das anotações'}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="size-3.5 rounded-full" style={{ backgroundColor: chosen.value }} />
+        Cor
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('transition-transform', open && 'rotate-180')}
+        />
+      </Button>
+      {open && (
+        <span role="radiogroup" aria-label="Cor das anotações da cifra" className="flex">
+          {NOTE_COLORS.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={current === c.id}
+              aria-label={c.label}
+              title={`Anotações em ${c.label.toLowerCase()}`}
+              onClick={() => {
+                setNoteColor(c.id)
+                setOpen(false)
+              }}
+              className="flex size-9 items-center justify-center"
+            >
+              <span
+                className={cn(
+                  'size-5 rounded-full transition-transform',
+                  current === c.id &&
+                    'ring-foreground ring-offset-background scale-110 ring-2 ring-offset-2',
+                )}
+                style={{ backgroundColor: c.value }}
+              />
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
+async function copySheet(chordpro: string, semitones: number, lyricsOnly: boolean) {
+  try {
+    const sections = readChordPro(chordpro, semitones)
+    const text = sheetToText(sections, lyricsOnly)
+    // em HTML vai em fonte de largura fixa: Word/PowerPoint/Docs mantêm os acordes no lugar
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          'text/html': new Blob([sheetToHtml(sections, lyricsOnly)], { type: 'text/html' }),
+        }),
+      ])
+    } catch {
+      await navigator.clipboard.writeText(text) // navegador sem cópia em HTML
+    }
+    toast.success(lyricsOnly ? 'Letra copiada' : 'Cifra copiada')
+  } catch {
+    toast.error('Não foi possível copiar. Selecione o texto e copie.')
+  }
+}
+
+/** Clique duplo (mouse) ou dois toques rápidos (celular) fora de botões e links. */
+function useDoubleTap(onDouble: () => void) {
+  const last = useRef({ t: 0, x: 0, y: 0 })
+  const fired = useRef(0)
+  const fire = (target: EventTarget) => {
+    if (target instanceof Element && target.closest('a,button,input,select,textarea')) return
+    const now = Date.now()
+    if (now - fired.current < 700) return // o celular também manda o "dblclick"
+    fired.current = now
+    onDouble()
+  }
+  return {
+    onDoubleClick: (e: { target: EventTarget }) => fire(e.target),
+    onPointerUp: (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return
+      const l = last.current
+      if (e.timeStamp - l.t < 350 && Math.hypot(e.clientX - l.x, e.clientY - l.y) < 40) {
+        last.current = { t: 0, x: 0, y: 0 }
+        fire(e.target)
+      } else {
+        last.current = { t: e.timeStamp, x: e.clientX, y: e.clientY }
+      }
+    },
+  }
 }
 
 /** Rolagem automática suave; mantém a tela acesa enquanto rola. */

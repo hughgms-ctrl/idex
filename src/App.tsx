@@ -22,6 +22,7 @@ import { RepertoirePage } from '@/pages/RepertoirePage'
 import { SchedulePage } from '@/pages/SchedulePage'
 import { SetlistPage } from '@/pages/SetlistPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { SupportAgendaPage } from '@/pages/support/SupportAgendaPage'
 
 const router = createBrowserRouter([
   {
@@ -137,6 +138,15 @@ const router = createBrowserRouter([
               import('@/pages/ConversationPage').then((m) => ({ Component: m.ConversationPage })),
           },
           { path: 'cadastro-igreja', element: <CreateChurchPage /> },
+          // apoio do ministério (som, data show…): só consulta
+          { path: 'apoio', element: <SupportAgendaPage /> },
+          {
+            path: 'apoio/:eventId',
+            lazy: () =>
+              import('@/pages/support/SupportEventPage').then((m) => ({
+                Component: m.SupportEventPage,
+              })),
+          },
         ],
       },
     ],

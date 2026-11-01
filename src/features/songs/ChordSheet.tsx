@@ -1,6 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, type ClipboardEvent, type CSSProperties } from 'react'
 
-import { readChordPro } from '@/features/songs/chordpro'
+import {
+  readChordPro,
+  sheetToHtml,
+  sheetToText,
+  type SheetSection,
+} from '@/features/songs/chordpro'
+import { noteColorValue, useNoteColor } from '@/features/songs/note-color'
+import { sectionColor } from '@/features/songs/section-color'
 import { cn } from '@/lib/utils'
 
 // Cifra no estilo dos protótipos: acorde (verde, mono) sobre a sílaba.
@@ -15,6 +22,7 @@ export function ChordSheet({
   lyricsOnly?: boolean
   fontScale?: number
 }) {
+  const noteColor = useNoteColor()
   const sections = useMemo(() => {
     try {
       return readChordPro(chordpro, semitones)
@@ -35,16 +43,30 @@ export function ChordSheet({
   }
 
   return (
-    <div className="flex flex-col gap-5" style={{ fontSize: `${17 * fontScale}px` }}>
+    <div
+      className="flex flex-col gap-5"
+      style={
+        { fontSize: `${17 * fontScale}px`, '--note': noteColorValue(noteColor) } as CSSProperties
+      }
+      onCopy={(e) => copySelection(e, sections, lyricsOnly)}
+    >
       {sections.map((section, si) => (
         <section key={si} className="flex flex-col gap-2.5">
           {section.label && (
-            <span className="bg-muted-foreground text-background self-start rounded-md px-2 py-0.5 text-[11px] font-semibold tracking-wider uppercase">
+            <span
+              data-sheet-label={si}
+              className="self-start rounded-lg border px-2.5 py-1 text-[0.72em] leading-none font-bold tracking-[0.1em] uppercase"
+              style={labelStyle(section.label)}
+            >
               {section.label}
             </span>
           )}
           {section.lines.map((line, li) => (
-            <div key={li} className={cn('flex flex-wrap', !lyricsOnly && 'gap-y-1')}>
+            <div
+              key={li}
+              data-sheet-line={`${si}:${li}`}
+              className={cn('flex flex-wrap', !lyricsOnly && 'gap-y-1')}
+            >
               {line.segments.map((seg, gi) => (
                 <span key={gi} className="flex flex-col">
                   {!lyricsOnly && (
@@ -52,10 +74,17 @@ export function ChordSheet({
                       className="text-primary h-[1.6em] pr-1.5 font-mono leading-[1.6em] font-semibold"
                       style={{ fontSize: '0.88em' }}
                     >
-                      {seg.chord}
+                      {seg.chord ||
+                        (seg.note && (
+                          <span className="text-note font-sans font-semibold italic">
+                            {seg.note}
+                          </span>
+                        ))}
                     </span>
                   )}
-                  <span className="leading-snug whitespace-pre">{seg.lyrics}</span>
+                  <span data-sheet-lyrics className="leading-snug whitespace-pre">
+                    {seg.lyrics}
+                  </span>
                 </span>
               ))}
             </div>
@@ -64,4 +93,47 @@ export function ChordSheet({
       ))}
     </div>
   )
+}
+
+// Pílula na cor do tipo da parte (verso, refrão…): texto cheio, fundo e contorno leves.
+function labelStyle(label: string): CSSProperties {
+  const color = sectionColor(label)
+  return {
+    color,
+    backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+    borderColor: `color-mix(in srgb, ${color} 45%, transparent)`,
+  }
+}
+
+/**
+ * Copiar: o navegador juntaria acorde e sílaba em linhas soltas. Copiamos as
+ * linhas selecionadas inteiras no formato da tela (acordes em cima da letra).
+ * Seleção dentro de um pedaço só da letra fica como o navegador faz.
+ */
+function copySelection(
+  e: ClipboardEvent<HTMLDivElement>,
+  sections: SheetSection[],
+  lyricsOnly: boolean,
+) {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return
+  const common = selection.getRangeAt(0).commonAncestorContainer
+  const commonEl = common instanceof Element ? common : common.parentElement
+  if (commonEl?.closest('[data-sheet-lyrics]')) return
+
+  const root = e.currentTarget
+  const picked: SheetSection[] = []
+  sections.forEach((section, si) => {
+    const label = root.querySelector(`[data-sheet-label="${si}"]`)
+    const lines = section.lines.filter((_, li) => {
+      const el = root.querySelector(`[data-sheet-line="${si}:${li}"]`)
+      return !!el && selection.containsNode(el, true)
+    })
+    const withLabel = !!label && selection.containsNode(label, true)
+    if (lines.length || withLabel) picked.push({ label: withLabel ? section.label : null, lines })
+  })
+  if (picked.length === 0) return
+  e.preventDefault()
+  e.clipboardData.setData('text/plain', sheetToText(picked, lyricsOnly))
+  e.clipboardData.setData('text/html', sheetToHtml(picked, lyricsOnly))
 }

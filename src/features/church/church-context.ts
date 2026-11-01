@@ -24,12 +24,19 @@ export type MyMinistryMembership = Pick<
 /** Permissões que o líder liga em cada integrante (o líder tem todas). */
 export type MinistryPermission = 'songs' | 'song_files' | 'setlists' | 'announcements'
 
+/** Apoio: só consulta o ministério (ex.: som, data show); não é integrante. */
+export type MySupport = { id: string; ministry_id: string; label: string }
+
 export type ChurchState = {
   churches: MyChurch[]
   church: MyChurch
   ministries: Tables<'ministries'>[]
   ministry: Tables<'ministries'> | null
   memberships: MyMinistryMembership[]
+  /** ministérios que a pessoa acompanha como apoio (nesta igreja) */
+  supports: MySupport[]
+  /** só apoio: sem ministério e não é dono — o app mostra só a agenda do apoio */
+  supportOnly: boolean
   isOwner: boolean
   isLeader: (ministryId: string) => boolean
   can: (ministryId: string, permission: MinistryPermission) => boolean

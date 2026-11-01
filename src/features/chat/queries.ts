@@ -40,13 +40,23 @@ export function useChurchPeople(churchId: string) {
     queryKey: chatKeys.people(churchId),
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('church_members')
-        .select('user_id, profiles(full_name)')
-        .eq('church_id', churchId)
-      if (error) throw error
-      return data
-        .map((m) => ({ id: m.user_id, name: m.profiles?.full_name?.trim() || 'Sem nome' }))
+      const [people, inMinistry] = await Promise.all([
+        supabase
+          .from('church_members')
+          .select('user_id, role, profiles(full_name)')
+          .eq('church_id', churchId),
+        supabase.from('ministry_members').select('user_id').eq('church_id', churchId),
+      ])
+      if (people.error) throw people.error
+      if (inMinistry.error) throw inMinistry.error
+      const members = new Set(inMinistry.data.map((m) => m.user_id))
+      return people.data
+        .map((m) => ({
+          id: m.user_id,
+          name: m.profiles?.full_name?.trim() || 'Sem nome',
+          // sem ministério (ex.: apoio do som/data show): não usa as conversas
+          chat: m.role === 'owner' || members.has(m.user_id),
+        }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
     },
   })

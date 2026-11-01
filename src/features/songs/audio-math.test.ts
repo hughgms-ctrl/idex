@@ -5,16 +5,16 @@ import {
   clampRate,
   effectiveBpm,
   formatClock,
-  pitchShiftFor,
+  isOriginal,
   positionAt,
   rateForBpm,
 } from '@/features/songs/audio-math'
 
 describe('player de áudio', () => {
-  it('mudar o andamento não muda o tom (compensa o pitch)', () => {
-    expect(pitchShiftFor(0, 1)).toBe(0)
-    expect(pitchShiftFor(0, 2)).toBeCloseTo(-12)
-    expect(pitchShiftFor(2, 0.8)).toBeCloseTo(2 + 3.863, 2)
+  it('sem mudar tom nem andamento toca o arquivo original', () => {
+    expect(isOriginal(0, 1)).toBe(true)
+    expect(isOriginal(1, 1)).toBe(false)
+    expect(isOriginal(0, 0.9)).toBe(false)
   })
 
   it('andamento em BPM e limites', () => {

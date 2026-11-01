@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Music2, Pause, Pencil, Play, Timer, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Music2, Pencil, Star, Trash2, Upload } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FormField } from '@/components/FormField'
@@ -12,11 +12,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { useChurch } from '@/features/church/church-context'
-import { beatsPerBar, effectiveBpm, formatClock, rateForBpm } from '@/features/songs/audio-math'
+import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
+import { beatsPerBar } from '@/features/songs/audio-math'
 import {
+  defaultAudio,
   deleteSongFile,
   fileInfo,
   isR2Enabled,
+  setDefaultAudio,
   songFileKeys,
   uploadSongFile,
   useSongFiles,
@@ -24,19 +27,9 @@ import {
 import { useSong } from '@/features/songs/queries'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { errorMessage } from '@/lib/errors'
-import { KEY_OPTIONS, transposeKey } from '@/lib/music'
+import { KEY_OPTIONS } from '@/lib/music'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
-
-type AudioFile = {
-  id: string
-  name: string
-  storage_path: string
-  storage_backend: string
-  url: string | null
-  bpm: number | null
-  musical_key: string | null
-}
 
 // Áudios de referência da música: cada um com nome, BPM e tom. O player muda
 // o tom e o andamento e toca o metrônomo junto.
@@ -55,7 +48,9 @@ export function AudiosPage() {
   const s = song.data
   const canEdit = can(s.ministry_id, 'song_files')
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
-  const current = selected ? (audios.find((a) => a.id === selected.id) ?? selected) : null
+  const current = selected
+    ? (audios.find((a) => a.id === selected.id) ?? selected)
+    : (defaultAudio(audios) ?? null)
 
   return (
     <>
@@ -69,11 +64,22 @@ export function AudiosPage() {
         title={s.title}
         description="Ouça sua parte no tom que precisar, mude o andamento e ligue o metrônomo."
       />
+      {canEdit && audios.length > 1 && (
+        <p className="text-muted-foreground text-xs">
+          A estrela marca o áudio padrão: é o que abre no player para todos. Cada integrante pode
+          trocar para ouvir a própria voz; a troca vale só para ele, naquele momento.
+        </p>
+      )}
 
       {current && (
-        <Player
+        <AudioPlayer
           key={current.id}
           file={current}
+          files={audios}
+          onSelect={(a) => {
+            setSelected(a)
+            if (a.url) void engine.load(a.url, a.id)
+          }}
           songBpm={s.bpm}
           songKey={s.original_key}
           beats={beatsPerBar(s.time_signature)}
@@ -97,9 +103,10 @@ export function AudiosPage() {
                 songId={s.id}
                 active={current?.id === a.id}
                 canEdit={canEdit}
+                multiple={audios.length > 1}
                 onSelect={() => {
                   setSelected(a)
-                  if (a.url && engine.url !== a.url) void engine.load(a.url)
+                  if (a.url && engine.loadedKey !== a.id) void engine.load(a.url, a.id)
                 }}
               />
             ))}
@@ -113,193 +120,10 @@ export function AudiosPage() {
           songId={s.id}
           defaultBpm={s.bpm}
           defaultKey={s.original_key}
+          firstAudio={audios.length === 0}
         />
       )}
     </>
-  )
-}
-
-function Player({
-  file,
-  songBpm,
-  songKey,
-  beats,
-  engine,
-}: {
-  file: AudioFile
-  songBpm: number | null
-  songKey: string | null
-  beats: number
-  engine: ReturnType<typeof useAudioEngine>
-}) {
-  const baseBpm = file.bpm ?? songBpm ?? null
-  const baseKey = file.musical_key ?? songKey ?? null
-  const [manualBpm, setManualBpm] = useState(baseBpm ?? 80)
-  const bpm = baseBpm ?? manualBpm
-  const { setTempo } = engine
-
-  useEffect(() => {
-    setTempo(bpm, beats)
-  }, [bpm, beats, setTempo])
-
-  const shownKey = baseKey ? transposeKey(baseKey, engine.semitones) : null
-  const semisLabel =
-    engine.semitones === 0 ? 'original' : `${engine.semitones > 0 ? '+' : ''}${engine.semitones}`
-
-  return (
-    <section
-      aria-label="Player"
-      className="bg-card sticky top-2 z-20 flex flex-col gap-4 rounded-[20px] border p-4"
-    >
-      <div className="flex items-center gap-3">
-        <Button
-          size="icon"
-          className="size-14 shrink-0 rounded-full"
-          aria-label={engine.playing ? 'Pausar' : 'Tocar'}
-          disabled={engine.loading || !engine.url}
-          onClick={() => (engine.playing ? engine.pause() : void engine.play())}
-        >
-          {engine.playing ? <Pause className="size-6" /> : <Play className="size-6" />}
-        </Button>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate text-[15px] font-semibold">{file.name}</span>
-          {engine.loading ? (
-            <span className="text-muted-foreground text-xs">Carregando áudio…</span>
-          ) : engine.error ? (
-            <span className="text-destructive text-xs">{engine.error}</span>
-          ) : (
-            <>
-              <input
-                type="range"
-                aria-label="Posição"
-                min={0}
-                max={Math.max(1, engine.duration)}
-                step={0.5}
-                value={engine.position}
-                onChange={(e) => engine.seek(Number(e.target.value))}
-                className="accent-primary w-full"
-              />
-              <span className="text-muted-foreground font-mono text-xs">
-                {formatClock(engine.position)} / {formatClock(engine.duration)}
-              </span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {engine.error && file.url && (
-        <div className="flex flex-col gap-2 rounded-xl border p-3">
-          <span className="text-muted-foreground text-xs">
-            Ouça sem mudar tom e andamento enquanto isso:
-          </span>
-          <audio controls preload="metadata" src={file.url} className="w-full" />
-          <Button variant="outline" size="sm" onClick={() => void engine.load(file.url ?? '')}>
-            Tentar abrir no player de novo
-          </Button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col items-center gap-1 rounded-xl border p-2">
-          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider">
-            TOM
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Baixar meio tom"
-              onClick={() => engine.setSemitones(engine.semitones - 1)}
-            >
-              −
-            </Button>
-            <span className="text-primary min-w-10 text-center font-mono text-xl font-semibold">
-              {shownKey ?? semisLabel}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Subir meio tom"
-              onClick={() => engine.setSemitones(engine.semitones + 1)}
-            >
-              +
-            </Button>
-          </div>
-          <span className="text-muted-foreground text-[11px]">
-            {shownKey ? semisLabel : 'meio tons'}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-center gap-1 rounded-xl border p-2">
-          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider">
-            ANDAMENTO
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Mais devagar"
-              onClick={() => engine.setRate(rateForBpm(bpm, effectiveBpm(bpm, engine.rate) - 2))}
-            >
-              −
-            </Button>
-            <span className="min-w-10 text-center font-mono text-xl font-semibold">
-              {effectiveBpm(bpm, engine.rate)}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              aria-label="Mais rápido"
-              onClick={() => engine.setRate(rateForBpm(bpm, effectiveBpm(bpm, engine.rate) + 2))}
-            >
-              +
-            </Button>
-          </div>
-          <span className="text-muted-foreground text-[11px]">
-            BPM · {Math.round(engine.rate * 100)}%
-          </span>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant={engine.metronome ? 'default' : 'outline'}
-          aria-pressed={engine.metronome}
-          onClick={() => void engine.setMetronome(!engine.metronome)}
-        >
-          <Timer aria-hidden="true" /> Metrônomo {engine.metronome ? 'ligado' : 'desligado'}
-        </Button>
-        {!baseBpm && (
-          <label className="text-muted-foreground flex items-center gap-2 text-xs">
-            BPM
-            <Input
-              type="number"
-              min={20}
-              max={300}
-              className="h-11 w-20"
-              value={manualBpm}
-              onChange={(e) =>
-                setManualBpm(Math.max(20, Math.min(300, Number(e.target.value) || 80)))
-              }
-            />
-          </label>
-        )}
-        {(engine.semitones !== 0 || engine.rate !== 1) && (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              engine.setSemitones(0)
-              engine.setRate(1)
-            }}
-          >
-            Voltar ao original
-          </Button>
-        )}
-      </div>
-      <p className="text-muted-foreground text-[11px]">
-        Use fone de ouvido. Mudanças grandes de tom deixam o som um pouco “metálico”.
-      </p>
-    </section>
   )
 }
 
@@ -308,12 +132,14 @@ function AudioRow({
   songId,
   active,
   canEdit,
+  multiple,
   onSelect,
 }: {
   file: AudioFile
   songId: string
   active: boolean
   canEdit: boolean
+  multiple: boolean
   onSelect: () => void
 }) {
   const queryClient = useQueryClient()
@@ -341,6 +167,15 @@ function AudioRow({
       setEditing(false)
       await invalidate()
       toast.success('Áudio atualizado')
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  const makeDefault = useMutation({
+    mutationFn: () => setDefaultAudio(file.id, !file.is_default),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success(file.is_default ? 'Áudio padrão desmarcado' : 'Agora este é o áudio padrão')
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
@@ -406,7 +241,14 @@ function AudioRow({
       >
         <Music2 className="text-primary size-5 shrink-0" aria-hidden="true" />
         <span className="flex min-w-0 flex-col">
-          <span className="truncate text-[15px] font-medium">{file.name}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[15px] font-medium">{file.name}</span>
+            {file.is_default && multiple && (
+              <span className="bg-primary text-primary-foreground shrink-0 rounded-md px-1.5 py-px text-[10px] font-semibold tracking-wider">
+                PADRÃO
+              </span>
+            )}
+          </span>
           <span className="text-muted-foreground text-xs">
             {[file.musical_key && `Tom ${file.musical_key}`, file.bpm && `${file.bpm} BPM`]
               .filter(Boolean)
@@ -416,6 +258,23 @@ function AudioRow({
       </button>
       {canEdit && (
         <>
+          {multiple && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={
+                file.is_default
+                  ? `Desmarcar ${file.name} como padrão`
+                  : `Tornar ${file.name} o padrão`
+              }
+              aria-pressed={!!file.is_default}
+              title="Áudio padrão: abre no player para todos"
+              disabled={makeDefault.isPending}
+              onClick={() => makeDefault.mutate()}
+            >
+              <Star className={cn('size-4', file.is_default && 'fill-primary text-primary')} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -446,11 +305,13 @@ function UploadAudio({
   songId,
   defaultBpm,
   defaultKey,
+  firstAudio,
 }: {
   churchId: string
   songId: string
   defaultBpm: number | null
   defaultKey: string | null
+  firstAudio: boolean
 }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -458,6 +319,7 @@ function UploadAudio({
   const [name, setName] = useState('')
   const [bpm, setBpm] = useState(defaultBpm ? String(defaultBpm) : '')
   const [key, setKey] = useState(defaultKey ?? '')
+  const [isDefault, setIsDefault] = useState(false)
   const r2 = useQuery({ queryKey: ['song-storage-r2'], queryFn: isR2Enabled, staleTime: Infinity })
   const maxMb = r2.data ? 100 : 50
 
@@ -471,11 +333,20 @@ function UploadAudio({
       if (b !== null && (!Number.isInteger(b) || b < 20 || b > 300)) {
         throw new Error('BPM entre 20 e 300')
       }
-      await uploadSongFile({ churchId, songId, file, name, bpm: b, musicalKey: key || null })
+      await uploadSongFile({
+        churchId,
+        songId,
+        file,
+        name,
+        bpm: b,
+        musicalKey: key || null,
+        isDefault: firstAudio || isDefault,
+      })
     },
     onSuccess: async () => {
       setFile(null)
       setName('')
+      setIsDefault(false)
       await queryClient.invalidateQueries({ queryKey: songFileKeys.list(songId) })
       toast.success('Áudio enviado')
     },
@@ -528,6 +399,22 @@ function UploadAudio({
           </NativeSelect>
         </FormField>
       </div>
+      {!firstAudio && (
+        <label className="flex min-h-11 items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="accent-primary size-5"
+            checked={isDefault}
+            onChange={(e) => setIsDefault(e.target.checked)}
+          />
+          <span>
+            Áudio padrão
+            <span className="text-muted-foreground block text-xs">
+              Abre no player para todos (ex.: voz principal). Cada um pode trocar para ouvir outro.
+            </span>
+          </span>
+        </label>
+      )}
       <Button
         className="self-start"
         disabled={upload.isPending || !file}

@@ -18,6 +18,8 @@ export const queryClient = new QueryClient({
 const OFFLINE_ROOTS = new Set([
   'my-churches',
   'my-memberships',
+  'my-supports',
+  'support',
   'ministries',
   'profile',
   'ministry-members',

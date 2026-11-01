@@ -34,7 +34,21 @@ import { supabase } from '@/lib/supabase'
 export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
   const user = useUser()
   const profile = useMyProfile()
-  const { churches, church, ministries, ministry, selectChurch, selectMinistry, can } = useChurch()
+  const {
+    churches,
+    church,
+    ministries: allMinistries,
+    ministry,
+    supports,
+    supportOnly,
+    selectChurch,
+    selectMinistry,
+    can,
+  } = useChurch()
+  // quem é só apoio escolhe entre os ministérios que acompanha
+  const ministries = supportOnly
+    ? allMinistries.filter((m) => supports.some((s) => s.ministry_id === m.id))
+    : allMinistries
   const [open, setOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const name = profile.data?.full_name || user.email || ''
@@ -114,26 +128,30 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
               >
                 <UserRound aria-hidden="true" /> Meu perfil
               </Button>
-              <Button
-                asChild
-                variant="ghost"
-                className="justify-start"
-                onClick={() => setOpen(false)}
-              >
-                <Link to="/minhas-funcoes">
-                  <Guitar aria-hidden="true" /> Meus instrumentos e vozes
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                className="justify-start"
-                onClick={() => setOpen(false)}
-              >
-                <Link to="/disponibilidade">
-                  <CalendarCheck aria-hidden="true" /> Minha disponibilidade
-                </Link>
-              </Button>
+              {!supportOnly && (
+                <>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setOpen(false)}
+                  >
+                    <Link to="/minhas-funcoes">
+                      <Guitar aria-hidden="true" /> Meus instrumentos e vozes
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setOpen(false)}
+                  >
+                    <Link to="/disponibilidade">
+                      <CalendarCheck aria-hidden="true" /> Minha disponibilidade
+                    </Link>
+                  </Button>
+                </>
+              )}
               <Button
                 asChild
                 variant="ghost"
@@ -144,48 +162,52 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
                   <Smartphone aria-hidden="true" /> Instalar app e avisos
                 </Link>
               </Button>
-              {ministry && can(ministry.id, 'announcements') && (
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="justify-start"
-                  onClick={() => setOpen(false)}
-                >
-                  <Link to="/avisos">
-                    <BellRing aria-hidden="true" /> Central de avisos
-                  </Link>
-                </Button>
+              {!supportOnly && (
+                <>
+                  {ministry && can(ministry.id, 'announcements') && (
+                    <Button
+                      asChild
+                      variant="ghost"
+                      className="justify-start"
+                      onClick={() => setOpen(false)}
+                    >
+                      <Link to="/avisos">
+                        <BellRing aria-hidden="true" /> Central de avisos
+                      </Link>
+                    </Button>
+                  )}
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setOpen(false)}
+                  >
+                    <Link to="/ministerios">
+                      <Layers aria-hidden="true" /> Ministérios, instrumentos e vozes
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setOpen(false)}
+                  >
+                    <Link to="/configuracoes">
+                      <Settings2 aria-hidden="true" /> Configurações
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="ghost"
+                    className="justify-start"
+                    onClick={() => setOpen(false)}
+                  >
+                    <Link to="/cadastro-igreja">
+                      <Church aria-hidden="true" /> Cadastrar outra igreja
+                    </Link>
+                  </Button>
+                </>
               )}
-              <Button
-                asChild
-                variant="ghost"
-                className="justify-start"
-                onClick={() => setOpen(false)}
-              >
-                <Link to="/ministerios">
-                  <Layers aria-hidden="true" /> Ministérios, instrumentos e vozes
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                className="justify-start"
-                onClick={() => setOpen(false)}
-              >
-                <Link to="/configuracoes">
-                  <Settings2 aria-hidden="true" /> Configurações
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="ghost"
-                className="justify-start"
-                onClick={() => setOpen(false)}
-              >
-                <Link to="/cadastro-igreja">
-                  <Church aria-hidden="true" /> Cadastrar outra igreja
-                </Link>
-              </Button>
               <Button
                 variant="ghost"
                 className="text-destructive hover:text-destructive justify-start"

@@ -25,13 +25,26 @@ export const churchSchema = z.object({
   ministryName: z.string().trim().min(2, { message: 'Informe o nome do ministério' }).max(80),
 })
 
-export const inviteSchema = z.object({
-  role: z.enum(['member', 'leader']),
-  ministryRoleIds: z.array(z.uuid()),
-  multiUse: z.boolean(),
-  expiresInDays: z.number().int().min(1).max(30),
-  email: z.union([z.literal(''), email]),
-})
+export const inviteSchema = z
+  .object({
+    // support = apoio (só consulta: som, data show…), não entra na equipe
+    role: z.enum(['member', 'leader', 'support']),
+    ministryRoleIds: z.array(z.uuid()),
+    multiUse: z.boolean(),
+    expiresInDays: z.number().int().min(1).max(30),
+    email: z.union([z.literal(''), email]),
+    supportLabel: z.string().trim().max(40, { message: 'No máximo 40 caracteres' }),
+  })
+  .refine((v) => v.role !== 'support' || v.supportLabel.length > 0, {
+    message: 'Escreva o que essa pessoa faz',
+    path: ['supportLabel'],
+  })
+
+export const supportLabelSchema = z
+  .string()
+  .trim()
+  .min(1, { message: 'Escreva o que essa pessoa faz' })
+  .max(40, { message: 'No máximo 40 caracteres' })
 
 export const ministrySchema = z.object({
   name: z

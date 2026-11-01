@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fileInfo, sizeLabel } from '@/features/songs/song-files'
+import { defaultAudio, fileInfo, sizeLabel } from '@/features/songs/song-files'
 
 describe('arquivos da música', () => {
   it('reconhece áudio, PDF e imagem, mesmo sem tipo informado pelo celular', () => {
@@ -26,5 +26,13 @@ describe('arquivos da música', () => {
     expect(sizeLabel(3_500_000)).toBe('3,3 MB')
     expect(sizeLabel(2048)).toBe('2 KB')
     expect(sizeLabel(null)).toBe('')
+  })
+
+  it('áudio padrão: o marcado ou o primeiro', () => {
+    const a = { id: 'a', is_default: false }
+    const b = { id: 'b', is_default: true }
+    expect(defaultAudio([a, b])?.id).toBe('b')
+    expect(defaultAudio([a, { ...b, is_default: false }])?.id).toBe('a')
+    expect(defaultAudio([])).toBeUndefined()
   })
 })

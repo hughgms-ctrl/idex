@@ -4,7 +4,11 @@ import {
   chordsOverWordsToChordPro,
   isChordLine,
   looksLikeChordPro,
+  markNotes,
   readChordPro,
+  sheetToHtml,
+  sheetToText,
+  songsToText,
 } from '@/features/songs/chordpro'
 
 const COLADO = `Intro: G D
@@ -102,5 +106,82 @@ describe('cifra copiada do Cifra Club', () => {
     expect(isChordLine('   C (C4) C  C9')).toBe(true)
     expect(isChordLine('F7M  G/B  Am7(9)  Bb°')).toBe(true)
     expect(isChordLine('E eu canto')).toBe(false)
+  })
+})
+
+describe('copiar a cifra', () => {
+  const pro = `{comment: Verso}
+Eu o louva[F]rei
+Suas maravilhas cantarei
+Não me calar[Dm7]ei
+
+{comment: Interlúdio}
+[F] [F] [F] [F]`
+
+  it('acordes em cima, letra inteira embaixo, como na tela', () => {
+    expect(sheetToText(readChordPro(pro))).toBe(
+      [
+        'Verso',
+        '          F',
+        'Eu o louvarei',
+        'Suas maravilhas cantarei',
+        '            Dm7',
+        'Não me calarei',
+        '',
+        'Interlúdio',
+        'F F F F',
+      ].join('\n'),
+    )
+  })
+
+  it('transposta e só a letra', () => {
+    expect(sheetToText(readChordPro(pro, 2)).split('\n')[1]).toBe('          G')
+    expect(sheetToText(readChordPro(pro), true)).toBe(
+      'Verso\nEu o louvarei\nSuas maravilhas cantarei\nNão me calarei\n\nInterlúdio',
+    )
+  })
+
+  it('acordes encostados não quebram a palavra', () => {
+    const text = sheetToText(readChordPro('Lou[Bb9]va[C]i'))
+    expect(text).toBe('   Bb9 C\nLouvai')
+  })
+
+  it('em HTML vai em fonte fixa', () => {
+    const html = sheetToHtml(readChordPro('Eu o louva[F]rei'))
+    expect(html).toContain('monospace')
+    expect(html).toContain('<b>' + '&nbsp;'.repeat(10) + 'F</b>')
+    expect(html).toContain('>Eu o louvarei<')
+    expect(html).not.toContain('<pre')
+  })
+})
+
+describe('texto entre colchetes que não é acorde', () => {
+  it('vira anotação e não muda de tom', () => {
+    expect(markNotes('[Crescendo]Tes[F9]tifico [pausa] [E7/9]')).toBe(
+      '[*Crescendo]Tes[F9]tifico [*pausa] [E7/9]',
+    )
+    const line = readChordPro('[Crescendo]Testifico [F]que', 4)[0]!.lines[0]!.segments
+    expect(line[0]).toMatchObject({ chord: '', note: 'Crescendo', lyrics: 'Testifico ' })
+    expect(line[1]).toMatchObject({ chord: 'A', lyrics: 'que' })
+  })
+
+  it('aparece na cópia no lugar do acorde', () => {
+    expect(sheetToText(readChordPro('Deu[pausa]s', 2))).toBe('   pausa\nDeus')
+  })
+})
+
+describe('songsToText', () => {
+  it('junta as músicas com cabeçalho, cada uma no seu tom', () => {
+    const text = songsToText([
+      { heading: '1. Primeira — Tom: A', chordpro: '[G]Santo [D]és', semitones: 2 },
+      { heading: '2. Segunda', chordpro: '', semitones: 0 },
+    ])
+    expect(text).toBe('1. Primeira — Tom: A\n\nA     E\nSanto és\n\n\n2. Segunda')
+  })
+
+  it('só letra', () => {
+    expect(songsToText([{ heading: '1. X', chordpro: '[G]Santo [D]és', semitones: 2 }], true)).toBe(
+      '1. X\n\nSanto és',
+    )
   })
 })
