@@ -33,6 +33,7 @@ import {
 } from '@/lib/schemas'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
+import { Switch } from '@/components/ui/switch'
 
 export function MinistriesPage() {
   const { church, ministries, ministry, isOwner, isLeader, selectMinistry } = useChurch()
@@ -203,6 +204,18 @@ function RolesSection({ ministry, canEdit }: { ministry: Tables<'ministries'>; c
     onError: (err) => toast.error(errorMessage(err)),
   })
 
+  const combine = useMutation({
+    mutationFn: async ({ id, value }: { id: string; value: boolean }) => {
+      const { error: err } = await supabase
+        .from('ministry_roles')
+        .update({ can_combine: value })
+        .eq('id', id)
+      if (err) throw err
+    },
+    onSuccess: invalidate,
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error: err } = await supabase.from('ministry_roles').delete().eq('id', id)
@@ -286,6 +299,32 @@ function RolesSection({ ministry, canEdit }: { ministry: Tables<'ministries'>; c
             <li className="text-muted-foreground text-sm">Nenhuma função cadastrada.</li>
           )}
         </ul>
+        {(roles.data?.length ?? 0) > 0 && (canEdit || roles.data?.some((r) => r.can_combine)) && (
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <div className="flex flex-col gap-0.5">
+              <h3 className="text-sm font-semibold">Pode ser escalado com outra função</h3>
+              <p className="text-muted-foreground text-[13px]">
+                Ligado: a pessoa pode estar nesta função e em outra no mesmo culto (ex.: ministro
+                que também toca violão). Instrumento fica desligado: é um por vez.
+              </p>
+            </div>
+            <ul className="flex flex-col">
+              {(roles.data ?? []).map((r) => (
+                <li key={r.id} className="flex min-h-11 items-center justify-between gap-3">
+                  <label htmlFor={`acumula-${r.id}`} className="text-sm">
+                    {r.name}
+                  </label>
+                  <Switch
+                    id={`acumula-${r.id}`}
+                    checked={r.can_combine}
+                    disabled={!canEdit || combine.isPending}
+                    onCheckedChange={(value) => combine.mutate({ id: r.id, value })}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {canEdit && (
           <NewRoleInput
             churchId={ministry.church_id}

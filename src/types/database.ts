@@ -735,6 +735,7 @@ export type Database = {
           radius_m: number | null
           recurrence_parent_id: string | null
           recurrence_rule: string | null
+          rescheduled_at: string | null
           rehearsal_group_id: string | null
           service_event_id: string | null
           soundcheck_at: string | null
@@ -759,6 +760,7 @@ export type Database = {
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
+          rescheduled_at?: string | null
           rehearsal_group_id?: string | null
           service_event_id?: string | null
           soundcheck_at?: string | null
@@ -782,6 +784,7 @@ export type Database = {
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
+          rescheduled_at?: string | null
           rehearsal_group_id?: string | null
           service_event_id?: string | null
           soundcheck_at?: string | null
@@ -1153,6 +1156,7 @@ export type Database = {
       }
       ministry_roles: {
         Row: {
+          can_combine: boolean
           church_id: string
           created_at: string
           id: string
@@ -1162,6 +1166,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          can_combine?: boolean
           church_id: string
           created_at?: string
           id?: string
@@ -1170,6 +1175,7 @@ export type Database = {
           sort_order?: number
         }
         Update: {
+          can_combine?: boolean
           church_id?: string
           created_at?: string
           id?: string

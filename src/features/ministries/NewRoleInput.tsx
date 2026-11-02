@@ -9,6 +9,7 @@ import { ministryKeys } from '@/features/ministries/queries'
 import { errorMessage } from '@/lib/errors'
 import { roleNameSchema } from '@/lib/schemas'
 import { supabase } from '@/lib/supabase'
+import { isVoiceRole } from '@/features/schedule/rehearsal-groups'
 
 // Líder cadastra um instrumento/voz novo na hora (a lista não é fixa).
 export function NewRoleInput({
@@ -37,6 +38,8 @@ export function NewRoleInput({
           ministry_id: ministryId,
           name: value,
           sort_order: nextOrder,
+          // vozes podem ser escaladas junto com outra função (o líder muda depois)
+          can_combine: isVoiceRole(value),
         })
         .select('id')
         .single()

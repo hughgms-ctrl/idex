@@ -74,3 +74,20 @@ export function formatDayMonth(value: string | Date): string {
     month: '2-digit',
   }).format(new Date(value))
 }
+
+/** "28/10 às 14:32" no fuso de São Paulo (quando alguém escreveu/respondeu) */
+export function formatShortDateTime(value: string | Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('pt-BR', {
+      timeZone: APP_TIMEZONE,
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(value))
+      .map((p) => [p.type, p.value]),
+  )
+  return `${parts.day}/${parts.month} às ${parts.hour}:${parts.minute}`
+}

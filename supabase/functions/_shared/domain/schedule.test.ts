@@ -7,6 +7,7 @@ import {
   defaultArrival,
   defaultRehearsal,
   buildWeeklyRule,
+  canTakeRole,
   isEligible,
   isUnavailable,
   presenceState,
@@ -381,5 +382,78 @@ describe('presenceState', () => {
     expect(presenceState([late], '2026-10-29T15:00:00Z').kind).toBe('later_today')
     // 28/10 em SP → amanhã
     expect(presenceState([late], '2026-10-28T15:00:00Z').kind).toBe('upcoming')
+  })
+})
+
+describe('funções que acumulam (cantar e tocar no mesmo culto)', () => {
+  const GUITARRA = 'role-guitarra'
+  const combinable = [VOCAL]
+  const base = { memberId: 'm1', eventId: 'e1', combinableRoleIds: combinable }
+
+  it('quem não está no evento pode qualquer função', () => {
+    expect(canTakeRole({ ...base, roleId: VIOLAO, assignments: [] })).toBe(true)
+  })
+
+  it('vocal + instrumento pode; dois instrumentos não', () => {
+    const noViolao = [{ event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: VIOLAO }]
+    expect(canTakeRole({ ...base, roleId: VOCAL, assignments: noViolao })).toBe(true)
+    expect(canTakeRole({ ...base, roleId: GUITARRA, assignments: noViolao })).toBe(false)
+    const noVocal = [{ event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: VOCAL }]
+    expect(canTakeRole({ ...base, roleId: VIOLAO, assignments: noVocal })).toBe(true)
+  })
+
+  it('não repete a mesma função e outro evento não conta', () => {
+    const noVocal = [{ event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: VOCAL }]
+    expect(canTakeRole({ ...base, roleId: VOCAL, assignments: noVocal })).toBe(false)
+    const outro = [{ event_id: 'e2', ministry_member_id: 'm1', ministry_role_id: VIOLAO }]
+    expect(canTakeRole({ ...base, roleId: GUITARRA, assignments: outro })).toBe(true)
+  })
+
+  it('sem a lista de funções que acumulam, ninguém acumula (como antes)', () => {
+    const noVocal = [{ event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: VOCAL }]
+    expect(
+      canTakeRole({ memberId: 'm1', eventId: 'e1', roleId: VIOLAO, assignments: noVocal }),
+    ).toBe(false)
+  })
+
+  it('sugere quem já canta no culto para o violão e conta o culto uma vez só', () => {
+    const members = [member('m1', 'Júlia', [VOCAL, VIOLAO]), member('m2', 'Marcos', [VIOLAO])]
+    const assignments = [
+      { event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: VOCAL },
+      { event_id: 'e3', ministry_member_id: 'm2', ministry_role_id: VIOLAO },
+      { event_id: 'e3', ministry_member_id: 'm2', ministry_role_id: VOCAL },
+    ]
+    const result = suggestSubstitutes({
+      roleId: VIOLAO,
+      event: culto,
+      members,
+      events: [culto, cultoSemanaSeguinte],
+      assignments,
+      unavailability: [],
+      eligibility: allEligible,
+      combinableRoleIds: combinable,
+    })
+    expect(result.map((s) => [s.member.name, s.assignmentsInMonth])).toEqual([
+      ['Júlia', 1],
+      ['Marcos', 1],
+    ])
+  })
+
+  it('aponta duas funções que não acumulam no mesmo evento', () => {
+    const m = member('m1', 'Júlia', [VIOLAO, GUITARRA])
+    const conflicts = assignmentConflicts({
+      member: m,
+      roleId: VIOLAO,
+      event: culto,
+      events: [culto],
+      assignments: [
+        { event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: VIOLAO },
+        { event_id: 'e1', ministry_member_id: 'm1', ministry_role_id: GUITARRA },
+      ],
+      unavailability: [],
+      eligibility: allEligible,
+      combinableRoleIds: combinable,
+    })
+    expect(conflicts.map((c) => c.kind)).toEqual(['double_role'])
   })
 })
