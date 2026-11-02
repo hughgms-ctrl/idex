@@ -174,7 +174,7 @@ export function usePendingReviews(ministryId: string | undefined, enabled: boole
         supabase
           .from('justifications')
           .select(
-            '*, events!inner(id, title, starts_at, ministry_id), ministry_members(profiles(full_name))',
+            '*, events!inner(id, title, starts_at, ministry_id, rescheduled_at, previous_starts_at), ministry_members(profiles(full_name))',
           )
           .eq('status', 'pending')
           .eq('events.ministry_id', ministryId ?? '')

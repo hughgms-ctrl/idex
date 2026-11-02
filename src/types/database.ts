@@ -732,6 +732,7 @@ export type Database = {
           location_name: string | null
           ministry_id: string
           notes: string | null
+          previous_starts_at: string | null
           radius_m: number | null
           recurrence_parent_id: string | null
           recurrence_rule: string | null
@@ -757,6 +758,7 @@ export type Database = {
           location_name?: string | null
           ministry_id: string
           notes?: string | null
+          previous_starts_at?: string | null
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
@@ -781,6 +783,7 @@ export type Database = {
           location_name?: string | null
           ministry_id?: string
           notes?: string | null
+          previous_starts_at?: string | null
           radius_m?: number | null
           recurrence_parent_id?: string | null
           recurrence_rule?: string | null
@@ -909,6 +912,7 @@ export type Database = {
           kind: Database['public']['Enums']['justification_kind']
           ministry_member_id: string
           reason: string
+          reconfirmed_at: string | null
           review_note: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -923,6 +927,7 @@ export type Database = {
           kind: Database['public']['Enums']['justification_kind']
           ministry_member_id: string
           reason: string
+          reconfirmed_at?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -936,6 +941,7 @@ export type Database = {
           kind?: Database['public']['Enums']['justification_kind']
           ministry_member_id?: string
           reason?: string
+          reconfirmed_at?: string | null
           review_note?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -2375,6 +2381,10 @@ export type Database = {
           p_weekday: number
         }
         Returns: string
+      }
+      reconfirm_justification: {
+        Args: { p_justification_id: string }
+        Returns: undefined
       }
       remove_ministry_member: { Args: { p_member_id: string }; Returns: undefined }
       remove_supporter: { Args: { p_supporter_id: string }; Returns: undefined }

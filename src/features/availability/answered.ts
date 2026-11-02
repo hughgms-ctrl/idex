@@ -20,3 +20,16 @@ export function latestChange(changes: (string | null | undefined)[]): string | n
   }
   return best
 }
+
+/**
+ * Aviso de falta/atraso pendente que foi enviado (ou confirmado pela última
+ * vez) antes de o evento mudar de dia/horário: pode não valer mais.
+ */
+export function noticeOutdated(
+  notice: { created_at: string; reconfirmed_at?: string | null; status?: string },
+  event: { rescheduled_at?: string | null },
+): boolean {
+  if (notice.status && notice.status !== 'pending') return false
+  const last = latestChange([notice.created_at, notice.reconfirmed_at])
+  return writtenBeforeChange(last, [event.rescheduled_at])
+}

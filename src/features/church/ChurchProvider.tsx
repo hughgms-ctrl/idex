@@ -11,9 +11,11 @@ import {
   useMySupports,
 } from '@/features/church/queries'
 import { ErrorState } from '@/components/ErrorState'
+import { canSwitchView, effectiveAccess, type ViewMode } from '@/features/church/view-mode'
 
 const CHURCH_KEY = 'idex.churchId'
 const MINISTRY_KEY = 'idex.ministryId'
+const VIEW_KEY = 'idex.viewMode'
 
 function readPref(key: string): string | null {
   try {
@@ -38,6 +40,13 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
   const supportsQuery = useMySupports(user.id)
   const [churchId, setChurchId] = useState(() => readPref(CHURCH_KEY))
   const [ministryId, setMinistryId] = useState(() => readPref(MINISTRY_KEY))
+  const [viewMode, setViewModeState] = useState<ViewMode>(() =>
+    readPref(VIEW_KEY) === 'team' ? 'team' : 'manage',
+  )
+  const setViewMode = useCallback((mode: ViewMode) => {
+    writePref(VIEW_KEY, mode)
+    setViewModeState(mode)
+  }, [])
 
   const churches = useMemo(() => churchesQuery.data ?? [], [churchesQuery.data])
   const church = churches.find((c) => c.id === churchId) ?? churches[0]
@@ -73,11 +82,9 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
       ministries.find((m) => memberships.some((mm) => mm.ministry_id === m.id)) ??
       ministries[0] ??
       null
-    const isLeader = (id: string) =>
-      isOwner ||
-      memberships.some(
-        (mm) => mm.ministry_id === id && mm.role === 'leader' && mm.status === 'active',
-      )
+    const canSwitch = canSwitchView(isOwner, memberships)
+    const mode: ViewMode = canSwitch ? viewMode : 'manage'
+    const access = effectiveAccess({ isOwner, memberships, mode })
     return {
       churches,
       church,
@@ -86,21 +93,10 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
       memberships,
       supports,
       supportOnly,
-      isOwner,
-      isLeader,
-      can: (id, permission) =>
-        isLeader(id) ||
-        memberships.some(
-          (mm) =>
-            mm.ministry_id === id &&
-            mm.status === 'active' &&
-            {
-              songs: mm.can_edit_songs,
-              song_files: mm.can_manage_song_files,
-              setlists: mm.can_edit_setlists,
-              announcements: mm.can_send_announcements,
-            }[permission],
-        ),
+      ...access,
+      canSwitchView: canSwitch,
+      viewMode: mode,
+      setViewMode,
       selectChurch,
       selectMinistry,
     }
@@ -111,6 +107,8 @@ export function ChurchProvider({ children }: { children: ReactNode }) {
     membershipsQuery.data,
     supportsQuery.data,
     ministryId,
+    viewMode,
+    setViewMode,
     selectChurch,
     selectMinistry,
   ])

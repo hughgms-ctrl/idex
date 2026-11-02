@@ -11,6 +11,7 @@ import { Panel } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import { JustifyDialog } from '@/features/attendance/MemberDialogs'
 import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
+import { noticeOutdated } from '@/features/availability/answered'
 import { useMyRehearsalAvailability } from '@/features/availability/queries'
 import { useChurch } from '@/features/church/church-context'
 import { useEventConversation } from '@/features/chat/queries'
@@ -55,6 +56,22 @@ export function ConfirmPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
       toast.success('Presença confirmada. Obrigado!')
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
+  // aviso pendente depois de remarcar: confirma que ainda vale ou cancela
+  const notice = useMutation({
+    mutationFn: async ({ id, keep }: { id: string; keep: boolean }) => {
+      const { error } = keep
+        ? await supabase.rpc('reconfirm_justification', { p_justification_id: id })
+        : await supabase.from('justifications').delete().eq('id', id)
+      if (error) throw error
+      return keep
+    },
+    onSuccess: async (keep) => {
+      await queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
+      toast.success(keep ? 'Aviso mantido para o novo horário' : 'Aviso cancelado')
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
@@ -152,12 +169,62 @@ export function ConfirmPage() {
                   Você ficou de fora{a.benched_reason ? `: ${a.benched_reason}` : ''}.
                 </p>
               )}
-              {notes.map((j) => (
-                <p key={j.id} className="text-muted-foreground text-sm">
-                  Aviso de {j.kind === 'late' ? 'atraso' : 'falta'} enviado ·{' '}
-                  {JUSTIFICATION_STATUS[j.status] ?? j.status}
-                </p>
-              ))}
+              {notes.map((j) =>
+                !started && noticeOutdated(j, event) ? (
+                  <div
+                    key={j.id}
+                    className="border-warning/60 bg-warning/10 flex flex-col gap-2 rounded-xl border px-3 py-2.5"
+                  >
+                    <p className="text-warning text-sm font-semibold">
+                      Você avisou {j.kind === 'late' ? 'atraso' : 'falta'} quando era{' '}
+                      {event.previous_starts_at
+                        ? formatEventDate(event.previous_starts_at)
+                        : 'outro dia/horário'}
+                      . Mudou para {formatEventDate(event.starts_at)}: o aviso ainda vale?
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="min-h-11"
+                        disabled={notice.isPending}
+                        onClick={() => notice.mutate({ id: j.id, keep: true })}
+                      >
+                        Ainda vale
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="min-h-11"
+                        disabled={notice.isPending}
+                        onClick={() => notice.mutate({ id: j.id, keep: false })}
+                      >
+                        Agora posso ir
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={j.id} className="flex items-center justify-between gap-2">
+                    <p className="text-muted-foreground text-sm">
+                      Aviso de {j.kind === 'late' ? 'atraso' : 'falta'} enviado ·{' '}
+                      {JUSTIFICATION_STATUS[j.status] ?? j.status}
+                    </p>
+                    {j.status === 'pending' && !started && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        disabled={notice.isPending}
+                        onClick={() => {
+                          if (window.confirm('Cancelar este aviso?'))
+                            notice.mutate({ id: j.id, keep: false })
+                        }}
+                      >
+                        Cancelar aviso
+                      </Button>
+                    )}
+                  </div>
+                ),
+              )}
               {a &&
                 !started &&
                 a.status !== 'benched' &&

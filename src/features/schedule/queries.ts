@@ -217,6 +217,8 @@ export type ConfirmEvent = {
   arrive_at: string | null
   soundcheck_at: string | null
   service_event_id: string | null
+  rescheduled_at?: string | null
+  previous_starts_at?: string | null
 }
 
 /** Culto (e o ensaio dele) com as minhas escalas e avisos — tela "Confirmar presença". */
@@ -225,7 +227,8 @@ export function useConfirmation(eventId: string | undefined, memberIds: string[]
     queryKey: [...scheduleKeys.all, 'confirm', eventId ?? '', memberIds.join(',')],
     enabled: Boolean(eventId) && memberIds.length > 0,
     queryFn: async () => {
-      const cols = 'id, title, kind, starts_at, ends_at, arrive_at, soundcheck_at, service_event_id'
+      const cols =
+        'id, title, kind, starts_at, ends_at, arrive_at, soundcheck_at, service_event_id, rescheduled_at, previous_starts_at'
       const first = await supabase
         .from('events')
         .select(cols)
@@ -248,7 +251,7 @@ export function useConfirmation(eventId: string | undefined, memberIds: string[]
           .in('ministry_member_id', memberIds),
         supabase
           .from('justifications')
-          .select('id, event_id, kind, status')
+          .select('id, event_id, kind, status, created_at, reconfirmed_at')
           .in('event_id', ids)
           .in('ministry_member_id', memberIds),
       ])
