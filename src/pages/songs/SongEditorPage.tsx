@@ -20,6 +20,8 @@ import { NativeSelect } from '@/components/ui/native-select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useChurch } from '@/features/church/church-context'
 import { ChordSheet } from '@/features/songs/ChordSheet'
+import { CategoryChips } from '@/features/songs/CategoryChips'
+import { useSongCategories } from '@/features/songs/categories'
 import { CifraClubImport } from '@/features/songs/CifraClubImport'
 import { chordsOverWordsToChordPro, looksLikeChordPro } from '@/features/songs/chordpro'
 import { songKeys, useSong } from '@/features/songs/queries'
@@ -77,6 +79,8 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
   const queryClient = useQueryClient()
   const { ministry, isLeader, can } = useChurch()
   const [view, setView] = useState<'texto' | 'previa'>('texto')
+  const categories = useSongCategories(ministry?.id).data ?? []
+  const [categoryIds, setCategoryIds] = useState<string[]>(song?.category_ids ?? [])
   const form = useForm<Values>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -132,6 +136,8 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
           .filter(Boolean),
         links: textToLinks(v.links),
         chordpro: text,
+        // só tipos que ainda existem
+        category_ids: categoryIds.filter((id) => categories.some((c) => c.id === id)),
       }
       if (song) {
         const { error } = await supabase.from('songs').update(row).eq('id', song.id)
@@ -246,6 +252,18 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
             </Label>
           )}
         />
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Tipo</span>
+          {categories.length > 0 ? (
+            <CategoryChips categories={categories} value={categoryIds} onChange={setCategoryIds} />
+          ) : (
+            <p className="text-muted-foreground text-[13px]">
+              {isLeader(ministry?.id ?? '')
+                ? 'Cadastre os tipos (celebração, adoração…) em Planejamento → Ajustar regras.'
+                : 'O líder ainda não cadastrou os tipos de música.'}
+            </p>
+          )}
+        </div>
         <FormField
           id="song-tags"
           label="Etiquetas (separadas por vírgula)"

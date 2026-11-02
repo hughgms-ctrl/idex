@@ -52,7 +52,7 @@ export function usePlanData(ministryId: string | undefined, start: Date, end: Da
           .lt('starts_at', start.toISOString()),
         supabase
           .from('songs')
-          .select('id, title, original_key, is_new')
+          .select('id, title, original_key, is_new, category_ids')
           .eq('ministry_id', ministryId ?? '')
           .order('title'),
       ])

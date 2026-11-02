@@ -237,8 +237,7 @@ const escapeHtml = (t: string) =>
 const MONO = "font-family:'Courier New',Courier,monospace"
 
 /** Espaços que o HTML juntaria (no começo da linha ou em sequência) viram `&nbsp;`. */
-const keepSpaces = (t: string) =>
-  t.replace(/^ +| {2,}/g, (m) => '&nbsp;'.repeat(m.length))
+const keepSpaces = (t: string) => t.replace(/^ +| {2,}/g, (m) => '&nbsp;'.repeat(m.length))
 
 /**
  * Mesma cópia em HTML com fonte de largura fixa (Word, PowerPoint, Docs mantêm
