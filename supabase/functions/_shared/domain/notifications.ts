@@ -172,7 +172,7 @@ export function renderPush(
               ? 'Culto remarcado'
               : 'Evento remarcado',
         body: plain,
-        url: '/escalas',
+        url: p.path ?? '/escalas',
         tag,
       }
     case 'event_reminder': {
