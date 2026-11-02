@@ -40,6 +40,11 @@ export type ChurchState = {
   isOwner: boolean
   isLeader: (ministryId: string) => boolean
   can: (ministryId: string, permission: MinistryPermission) => boolean
+  /** dono ou líder: pode alternar entre a visão de gestão e a da equipe */
+  canSwitchView: boolean
+  /** 'team' = vendo o app como um integrante comum (só a interface muda) */
+  viewMode: 'manage' | 'team'
+  setViewMode: (mode: 'manage' | 'team') => void
   selectChurch: (churchId: string) => void
   selectMinistry: (ministryId: string) => void
 }

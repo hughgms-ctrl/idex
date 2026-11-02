@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertCircle, MonitorUp } from 'lucide-react'
+import { AlertCircle, AlertTriangle, MonitorUp } from 'lucide-react'
 
 import { Panel } from '@/components/Section'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,7 @@ import {
   usePendingReviews,
 } from '@/features/attendance/queries'
 import { liveStatus, type LiveTone } from '@/features/attendance/status'
+import { noticeOutdated } from '@/features/availability/answered'
 import type { MinistryMemberRow } from '@/features/members/queries'
 import { fromLocalInputs, toLocalInputs } from '@/features/schedule/datetime'
 import { errorMessage } from '@/lib/errors'
@@ -371,6 +372,23 @@ export function PendingReviews({ ministryId, limit }: { ministryId: string; limi
             </span>
           </div>
           <p className="text-sm">“{j.reason}”</p>
+          {noticeOutdated(j, j.events) && (
+            <p className="border-warning/60 bg-warning/10 text-warning flex items-start gap-2 rounded-xl border px-3 py-2 text-[13px]">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>
+                Enviado antes da remarcação
+                {j.events.previous_starts_at &&
+                  ` (era ${formatEventDate(j.events.previous_starts_at)})`}
+                . {firstName(j.ministry_members?.profiles?.full_name)} recebe o aviso da mudança e
+                pode confirmar no app se ainda vale ou cancelar. Se preferir, espere a resposta.
+              </span>
+            </p>
+          )}
+          {j.reconfirmed_at && !noticeOutdated(j, j.events) && j.events.rescheduled_at && (
+            <p className="text-muted-foreground text-xs">
+              Confirmou que ainda vale para o novo horário em {formatDateTime(j.reconfirmed_at)}.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Button
               size="sm"
@@ -434,4 +452,8 @@ export function TeamBalances({
       })}
     </ul>
   )
+}
+
+function firstName(name: string | null | undefined): string {
+  return name?.trim().split(/\s+/)[0] || 'A pessoa'
 }

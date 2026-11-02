@@ -2,6 +2,7 @@ import { Navigate, NavLink, Outlet, useLocation, useMatch } from 'react-router'
 import { BellRing, CalendarCheck, CalendarRange } from 'lucide-react'
 
 import { AccountMenu } from '@/components/layout/AccountMenu'
+import { TeamViewBanner, ViewSwitch } from '@/components/layout/ViewSwitch'
 import { NAV_ITEMS, SUPPORT_NAV_ITEMS, supportCanOpen } from '@/components/layout/nav-items'
 import { Logo } from '@/components/Logo'
 import { InstallBanner } from '@/components/pwa/InstallBanner'
@@ -45,6 +46,7 @@ export function AppLayout() {
           <span className="text-muted-foreground truncate text-[13px]">
             {ministry?.name ?? 'Ministério'} · {church.name}
           </span>
+          <ViewSwitch className="mt-3" />
         </div>
         <nav aria-label="Navegação principal" className="flex flex-col gap-1">
           {navItems.map(({ to, label, icon: Icon, end }) => (
@@ -134,7 +136,10 @@ export function AppLayout() {
               {ministry?.name ?? 'Ministério'} · {church.name}
             </span>
           </div>
-          <AccountMenu variant="header" />
+          <div className="flex items-center gap-2">
+            <ViewSwitch />
+            <AccountMenu variant="header" />
+          </div>
         </header>
 
         <main
@@ -148,6 +153,7 @@ export function AppLayout() {
             !thread && (wide ? 'max-w-6xl' : 'max-w-3xl'),
           )}
         >
+          {!thread && <TeamViewBanner />}
           {!thread && <InstallBanner />}
           {!thread && !supportOnly && <SetupPrompt />}
           <Outlet />
