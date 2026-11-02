@@ -6,7 +6,8 @@ import { localParts } from '@domain/time.ts'
 import { EVENT_KIND_LABEL } from '@/features/schedule/datetime'
 import type { LinkedRehearsal, ScheduleEvent } from '@/features/schedule/queries'
 import type { ScheduleData } from '@/features/schedule/useScheduleData'
-import { formatEventDate } from '@/lib/format'
+import { writtenBeforeChange } from '@/features/availability/answered'
+import { formatEventDate, formatShortDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -21,6 +22,7 @@ export function EventCard({
   myMemberId,
   leader,
   rehearsals = [],
+  past = false,
 }: {
   event: ScheduleEvent
   data: ScheduleData
@@ -28,6 +30,8 @@ export function EventCard({
   leader: boolean
   /** ensaios ligados a este culto (banda, vozes…; aparecem dentro do cartão) */
   rehearsals?: LinkedRehearsal[]
+  /** já passou: fica no arquivo, sem alertas nem "Remarcar" */
+  past?: boolean
 }) {
   const navigate = useNavigate()
   const p = localParts(event.starts_at)
@@ -40,52 +44,67 @@ export function EventCard({
   )
 
   // Alertas (só o líder vê): conflitos com sugestão de substituto
-  const alerts = leader
-    ? assignments.flatMap((a) => {
-        const member = data.memberById.get(a.ministry_member_id)
-        if (!member) return []
-        const conflicts = assignmentConflicts({
-          member,
-          roleId: a.ministry_role_id,
-          event,
-          events: data.domainEvents,
-          assignments: data.assignments,
-          unavailability: data.unavailability,
-          answers: data.answers,
-          eligibility: data.eligibility,
-        }).filter((c) => c.kind !== 'missing_role')
-        if (a.status === 'benched') {
-          conflicts.unshift({
-            kind: 'unavailable',
-            message: `${member.name} ficou de fora (${a.benched_reason ?? 'regra de horário'}).`,
+  const alerts =
+    leader && !past
+      ? assignments.flatMap((a) => {
+          const member = data.memberById.get(a.ministry_member_id)
+          if (!member) return []
+          const conflicts = assignmentConflicts({
+            member,
+            roleId: a.ministry_role_id,
+            event,
+            events: data.domainEvents,
+            assignments: data.assignments,
+            unavailability: data.unavailability,
+            answers: data.answers,
+            eligibility: data.eligibility,
+            combinableRoleIds: data.combinableRoleIds,
+          }).filter((c) => c.kind !== 'missing_role')
+          if (a.status === 'benched') {
+            conflicts.unshift({
+              kind: 'unavailable',
+              message: `${member.name} ficou de fora (${a.benched_reason ?? 'regra de horário'}).`,
+            })
+          }
+          const first = conflicts[0]
+          if (!first) return []
+          const [suggestion] = suggestSubstitutes({
+            roleId: a.ministry_role_id,
+            event,
+            members: data.members,
+            events: data.domainEvents,
+            assignments: data.assignments,
+            unavailability: data.unavailability,
+            answers: data.answers,
+            eligibility: data.eligibility,
+            combinableRoleIds: data.combinableRoleIds,
+            exclude: [member.id],
+            limit: 1,
           })
-        }
-        const first = conflicts[0]
-        if (!first) return []
-        const [suggestion] = suggestSubstitutes({
-          roleId: a.ministry_role_id,
-          event,
-          members: data.members,
-          events: data.domainEvents,
-          assignments: data.assignments,
-          unavailability: data.unavailability,
-          answers: data.answers,
-          eligibility: data.eligibility,
-          exclude: [member.id],
-          limit: 1,
+          // quando disse "não posso" (e se foi antes de mudar o horário)
+          const at =
+            first.kind === 'unavailable' && a.status !== 'benched'
+              ? data.answeredAt[`${event.id}:${member.id}`]
+              : undefined
+          const when = at
+            ? ` (respondeu em ${formatShortDateTime(at)}${
+                writtenBeforeChange(at, [event.rescheduled_at])
+                  ? ', antes da mudança de horário'
+                  : ''
+              })`
+            : ''
+          return [
+            {
+              id: a.id,
+              text: `${first.message.replace(/\.$/, '')}${when}.${
+                suggestion
+                  ? ` Sugestão: ${suggestion.member.name} (disponível, ${suggestion.assignmentsInMonth} ${suggestion.assignmentsInMonth === 1 ? 'escala' : 'escalas'} no mês).`
+                  : ' Nenhum substituto disponível.'
+              }`,
+            },
+          ]
         })
-        return [
-          {
-            id: a.id,
-            text: `${first.message}${
-              suggestion
-                ? ` Sugestão: ${suggestion.member.name} (disponível, ${suggestion.assignmentsInMonth} ${suggestion.assignmentsInMonth === 1 ? 'escala' : 'escalas'} no mês).`
-                : ' Nenhum substituto disponível.'
-            }`,
-          },
-        ]
-      })
-    : []
+      : []
 
   const content = (
     <>
@@ -123,7 +142,7 @@ export function EventCard({
             {formatEventDate(rehearsal.starts_at)}
             {rehearsal.arrive_at && ` · chegada ${hour(rehearsal.arrive_at)}`}
           </span>
-          {leader && (
+          {leader && !past && (
             <Link
               to={`/escalas/${rehearsal.id}?remarcar=1`}
               onClick={(e) => e.stopPropagation()}
@@ -186,14 +205,16 @@ export function EventCard({
 
   const className = cn(
     'flex flex-col gap-2.5 rounded-[18px] border border-l-4 bg-card p-3.5 text-left',
+    past && 'opacity-75',
     event.kind === 'rehearsal'
       ? 'border-l-info'
       : event.kind === 'service'
         ? 'border-l-primary'
         : 'border-l-border',
   )
-  // cartão clicável (líder abre a escala); o "Remarcar" do ensaio é outro link
-  return leader ? (
+  // cartão clicável (líder abre a escala; no arquivo, todos consultam); o
+  // "Remarcar" do ensaio é outro link
+  return leader || past ? (
     <div
       role="link"
       tabIndex={0}

@@ -232,7 +232,49 @@ export function isEligible(memberId: string, info: EligibilityInfo): boolean {
 // ---------------------------------------------------------------------------
 
 export type ConflictKind =
-  'unavailable' | 'double_booked' | 'ineligible' | 'inactive' | 'missing_role'
+  'unavailable' | 'double_booked' | 'ineligible' | 'inactive' | 'missing_role' | 'double_role'
+
+/**
+ * Pode escalar a pessoa nesta função do evento? Quem ainda não está no evento,
+ * sim. Quem já está: só se não for a mesma função e se, somando a nova, ficar
+ * no máximo UMA função que não acumula (instrumento). Funções que acumulam
+ * (ministro, vocal, backing…) vêm em `combinableRoleIds`; sem função (null)
+ * não conta como instrumento.
+ */
+export function canTakeRole(params: {
+  memberId: string
+  roleId: string | null
+  eventId: string
+  assignments: Assignment[]
+  combinableRoleIds?: readonly string[]
+}): boolean {
+  const { memberId, roleId, eventId, assignments, combinableRoleIds = [] } = params
+  const mine = assignments.filter(
+    (a) => a.event_id === eventId && a.ministry_member_id === memberId,
+  )
+  if (mine.length === 0) return true
+  if (mine.some((a) => a.ministry_role_id === roleId)) return false
+  const exclusive = (id: string | null) => id !== null && !combinableRoleIds.includes(id)
+  const count = mine.filter((a) => exclusive(a.ministry_role_id)).length + Number(exclusive(roleId))
+  return count <= 1
+}
+
+/** Outras funções da pessoa no mesmo evento (para mostrar "também em Vocal"). */
+export function otherRolesInEvent(
+  memberId: string,
+  eventId: string,
+  assignments: Assignment[],
+  exceptRoleId?: string | null,
+): (string | null)[] {
+  return assignments
+    .filter(
+      (a) =>
+        a.event_id === eventId &&
+        a.ministry_member_id === memberId &&
+        a.ministry_role_id !== exceptRoleId,
+    )
+    .map((a) => a.ministry_role_id)
+}
 
 export type Conflict = { kind: ConflictKind; message: string; otherEventId?: string }
 
@@ -246,6 +288,8 @@ export function assignmentConflicts(params: {
   eligibility: EligibilityInfo
   /** respostas "posso / não posso" (sem resposta = pode ser escalado) */
   answers?: AvailabilityAnswer[]
+  /** funções que podem ser somadas a outra no mesmo evento (vozes) */
+  combinableRoleIds?: readonly string[]
   tz?: string
 }): Conflict[] {
   const {
@@ -274,6 +318,16 @@ export function assignmentConflicts(params: {
   }
   if (roleId && !member.roleIds.includes(roleId)) {
     out.push({ kind: 'missing_role', message: `${member.name} não tem essa função cadastrada.` })
+  }
+  // duas funções que não acumulam (ex.: dois instrumentos) no mesmo evento
+  if (params.combinableRoleIds && roleId && !params.combinableRoleIds.includes(roleId)) {
+    const others = otherRolesInEvent(member.id, event.id, assignments, roleId)
+    if (others.some((id) => id !== null && !params.combinableRoleIds?.includes(id))) {
+      out.push({
+        kind: 'double_role',
+        message: `${member.name} já está em outra função que não acumula neste evento.`,
+      })
+    }
   }
   const byId = new Map(events.map((e) => [e.id, e]))
   const start = new Date(event.starts_at)
@@ -318,22 +372,36 @@ export function suggestSubstitutes(params: {
   unavailability: Unavailability[]
   eligibility: EligibilityInfo
   answers?: AvailabilityAnswer[]
+  /** funções que podem ser somadas a outra no mesmo evento (vozes) */
+  combinableRoleIds?: readonly string[]
   exclude?: string[]
   limit?: number
   tz?: string
 }): Suggestion[] {
   const { roleId, event, members, events, assignments, exclude = [], limit = 3 } = params
-  const alreadyInEvent = new Set(
-    assignments.filter((a) => a.event_id === event.id).map((a) => a.ministry_member_id),
-  )
   const monthEventIds = new Set(events.map((e) => e.id))
+  // eventos (não escalas) no mês: quem canta e toca no mesmo culto conta 1
+  const seen = new Set<string>()
   const counts = new Map<string, number>()
   for (const a of assignments) {
     if (!monthEventIds.has(a.event_id)) continue
+    const key = `${a.ministry_member_id}:${a.event_id}`
+    if (seen.has(key)) continue
+    seen.add(key)
     counts.set(a.ministry_member_id, (counts.get(a.ministry_member_id) ?? 0) + 1)
   }
   return members
-    .filter((m) => !exclude.includes(m.id) && !alreadyInEvent.has(m.id))
+    .filter(
+      (m) =>
+        !exclude.includes(m.id) &&
+        canTakeRole({
+          memberId: m.id,
+          roleId,
+          eventId: event.id,
+          assignments,
+          combinableRoleIds: params.combinableRoleIds,
+        }),
+    )
     .filter((m) => (roleId ? m.roleIds.includes(roleId) : true))
     .filter((m) => assignmentConflicts({ ...params, member: m }).length === 0)
     .map((m) => ({

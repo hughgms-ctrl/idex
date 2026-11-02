@@ -1,9 +1,17 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarCheck, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import {
+  Archive,
+  CalendarCheck,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
-import { parseWeeklyRule } from '@domain/schedule.ts'
+import { eventEnd, parseWeeklyRule } from '@domain/schedule.ts'
 import { addDaysToKey, addMonths, localDateKey, localParts } from '@domain/time.ts'
 
 import { ErrorState } from '@/components/ErrorState'
@@ -31,6 +39,9 @@ export function SchedulePage() {
   const [base, setBase] = useState({ year: now.year, month: now.month })
   const [selected, setSelected] = useState({ year: now.year, month: now.month })
   const [onlyMine, setOnlyMine] = useState(false)
+  // null = automático (aberto quando o mês já passou inteiro)
+  const [showPast, setShowPast] = useState<boolean | null>(null)
+  const [nowMs] = useState(() => Date.now())
   const [unavOpen, setUnavOpen] = useState(false)
   const [eventDialog, setEventDialog] = useState<{ date?: string } | null>(null)
   const leader = ministry ? isLeader(ministry.id) : false
@@ -50,6 +61,11 @@ export function SchedulePage() {
         e.schedule_assignments.some((a) => a.ministry_member_id === myMember?.id),
       )
     : listed
+  // eventos que já terminaram vão para o arquivo (no fim, recolhido)
+  const isPast = (e: (typeof events)[number]) => eventEnd(e).getTime() < nowMs
+  const upcoming = events.filter((e) => !isPast(e))
+  const past = events.filter(isPast).reverse()
+  const pastOpen = showPast ?? upcoming.length === 0
 
   return (
     <>
@@ -137,9 +153,13 @@ export function SchedulePage() {
         events={data.events}
         onSelectDay={(key, hasEvents) => {
           if (hasEvents) {
-            document
-              .getElementById(`dia-${key}`)
-              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            // dia arquivado: abre "Já passaram" antes de rolar até ele
+            if (!document.getElementById(`dia-${key}`)) setShowPast(true)
+            window.setTimeout(() =>
+              document
+                .getElementById(`dia-${key}`)
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+            )
           } else if (leader) {
             setEventDialog({ date: key })
           }
@@ -185,7 +205,7 @@ export function SchedulePage() {
         </Panel>
       ) : (
         <div className="flex flex-col gap-4">
-          {events.map((event) => (
+          {upcoming.map((event) => (
             <div key={event.id} id={`dia-${localDateKey(event.starts_at)}`} className="scroll-mt-4">
               <EventCard
                 event={event}
@@ -196,6 +216,40 @@ export function SchedulePage() {
               />
             </div>
           ))}
+          {past.length > 0 && (
+            <section className="flex flex-col gap-3" aria-label="Eventos que já passaram">
+              <button
+                type="button"
+                aria-expanded={pastOpen}
+                onClick={() => setShowPast(!pastOpen)}
+                className="text-muted-foreground hover:text-foreground flex min-h-11 items-center gap-2 rounded-xl border border-dashed px-3.5 text-sm"
+              >
+                <Archive className="size-4" aria-hidden="true" />
+                <span className="flex-1 text-left">Já passaram ({past.length}) · arquivados</span>
+                <ChevronDown
+                  className={cn('size-4 transition-transform', pastOpen && 'rotate-180')}
+                  aria-hidden="true"
+                />
+              </button>
+              {pastOpen &&
+                past.map((event) => (
+                  <div
+                    key={event.id}
+                    id={`dia-${localDateKey(event.starts_at)}`}
+                    className="scroll-mt-4"
+                  >
+                    <EventCard
+                      event={event}
+                      data={data}
+                      myMemberId={myMember?.id}
+                      leader={leader}
+                      rehearsals={rehearsals?.[event.id]}
+                      past
+                    />
+                  </div>
+                ))}
+            </section>
+          )}
         </div>
       )}
 

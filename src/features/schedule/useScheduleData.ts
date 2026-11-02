@@ -51,9 +51,17 @@ export function useScheduleData(ministryId: string | undefined, year: number, mo
       ministry_member_id: a.ministry_member_id,
       available: a.available,
     }))
+    // quando cada um respondeu (para mostrar "respondeu em 28/10")
+    const answeredAt: Record<string, string> = {}
+    for (const a of availability.data ?? []) {
+      answeredAt[`${a.event_id}:${a.ministry_member_id}`] = a.updated_at
+    }
     return {
       events: eventList,
       answers,
+      answeredAt,
+      /** funções que podem ser somadas a outra no mesmo evento (vozes) */
+      combinableRoleIds: (roles.data ?? []).filter((r) => r.can_combine).map((r) => r.id),
       domainEvents,
       assignments,
       members: memberList,

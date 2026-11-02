@@ -9,7 +9,10 @@ import {
   type RehearsalAnswer,
   type RehearsalStatus,
 } from '@/features/availability/queries'
+import { writtenBeforeChange } from '@/features/availability/answered'
+import { useEvent, useLinkedRehearsals } from '@/features/schedule/queries'
 import { errorMessage } from '@/lib/errors'
+import { formatShortDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const OPTIONS: RehearsalStatus[] = ['any', 'some', 'none']
@@ -34,6 +37,14 @@ export function RehearsalAvailabilityField({
   const status = answer?.status ?? null
   const id = `ensaio-${serviceId}`
   const noteChanged = note.trim() !== (answer?.note ?? '')
+  // só busca as remarcações quando há resposta para comparar
+  const watch = answer?.updated_at ? serviceId : undefined
+  const rehearsals = useLinkedRehearsals(watch).data ?? []
+  const service = useEvent(watch).data
+  const stale = writtenBeforeChange(answer?.updated_at, [
+    service?.rescheduled_at,
+    ...rehearsals.map((r) => r.rescheduled_at),
+  ])
 
   const send = (next: RehearsalStatus | null, nextNote: string) =>
     save.mutate(
@@ -98,6 +109,35 @@ export function RehearsalAvailabilityField({
             </Button>
           )}
         </div>
+      )}
+      {status && answer?.updated_at && (
+        <p
+          className={cn('text-xs', stale ? 'text-warning font-semibold' : 'text-muted-foreground')}
+        >
+          {answer.note ? 'Você escreveu' : 'Você respondeu'} em{' '}
+          {formatShortDateTime(answer.updated_at)}.
+          {stale &&
+            ' O ensaio ou o culto mudou de dia/horário depois disso: confira se ainda vale.'}
+        </p>
+      )}
+      {status && stale && !noteChanged && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="min-h-10 self-start"
+          disabled={save.isPending}
+          onClick={() =>
+            save.mutate(
+              { serviceId, status, note },
+              {
+                onSuccess: () => toast.success('Resposta confirmada'),
+                onError: (err) => toast.error(errorMessage(err)),
+              },
+            )
+          }
+        >
+          Continua valendo
+        </Button>
       )}
     </div>
   )

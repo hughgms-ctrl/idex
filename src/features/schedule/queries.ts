@@ -14,7 +14,7 @@ export const scheduleKeys = {
 }
 
 const EVENT_SELECT =
-  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, soundcheck_at, ends_at, service_event_id, rehearsal_group_id, location_name, notes, recurrence_parent_id, recurrence_rule, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status, benched_reason)'
+  'id, church_id, ministry_id, kind, title, starts_at, arrive_at, soundcheck_at, ends_at, service_event_id, rehearsal_group_id, location_name, notes, recurrence_parent_id, recurrence_rule, rescheduled_at, schedule_assignments(id, event_id, ministry_member_id, ministry_role_id, status, benched_reason)'
 
 export function useMonthEvents(ministryId: string | undefined, year: number, month: number) {
   return useQuery({
@@ -129,7 +129,7 @@ export function useMyUpcomingAssignments(memberId: string | undefined, limit = 3
 }
 
 const LINKED_COLS =
-  'id, title, starts_at, arrive_at, ends_at, service_event_id, rehearsal_group_id, rehearsal_groups(name)'
+  'id, title, starts_at, arrive_at, ends_at, rescheduled_at, service_event_id, rehearsal_group_id, rehearsal_groups(name)'
 
 type LinkedRow = {
   id: string
@@ -137,6 +137,7 @@ type LinkedRow = {
   starts_at: string
   arrive_at: string | null
   ends_at: string | null
+  rescheduled_at?: string | null
   service_event_id: string | null
   rehearsal_group_id: string | null
   rehearsal_groups: { name: string } | null
@@ -148,6 +149,7 @@ const toLinked = (r: LinkedRow): LinkedRehearsal => ({
   starts_at: r.starts_at,
   arrive_at: r.arrive_at,
   ends_at: r.ends_at,
+  rescheduled_at: r.rescheduled_at ?? null,
   group_id: r.rehearsal_group_id,
   group_name: r.rehearsal_groups?.name ?? null,
 })
@@ -199,6 +201,8 @@ export type LinkedRehearsal = {
   starts_at: string
   arrive_at: string | null
   ends_at: string | null
+  /** última remarcação (dia/horário mudou) */
+  rescheduled_at: string | null
   group_id: string | null
   /** "Ensaio de vozes"; null = ensaio da equipe toda */
   group_name: string | null

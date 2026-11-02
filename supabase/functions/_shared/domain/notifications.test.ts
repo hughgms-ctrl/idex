@@ -175,6 +175,8 @@ describe('ensaio remarcado', () => {
     expect(renderPush('event_rescheduled', { kind: 'rehearsal' }, 't').title).toBe(
       'Ensaio remarcado',
     )
+    expect(text).toContain('atualize no app')
+    expect(renderPush('event_rescheduled', { kind: 'service' }, 't').title).toBe('Culto remarcado')
   })
 })
 

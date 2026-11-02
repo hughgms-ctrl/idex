@@ -97,8 +97,9 @@ export function renderMessage(
       return `${hi} ${head}${role}${arrival}${of}${ask}${link}`
     }
     case 'event_rescheduled': {
-      const what = p.kind === 'rehearsal' ? 'O ensaio' : 'O evento'
-      return `${hi} ${what} *${p.eventTitle ?? ''}* foi remarcado para *${when(p.eventStartsAt, tz)}*${p.oldStartsAt ? ` (era ${when(p.oldStartsAt, tz)})` : ''}.${arrival} Se não puder ir, avise o líder pelo app.${link}`
+      const what =
+        p.kind === 'rehearsal' ? 'O ensaio' : p.kind === 'service' ? 'O culto' : 'O evento'
+      return `${hi} ${what} *${p.eventTitle ?? ''}* foi remarcado para *${when(p.eventStartsAt, tz)}*${p.oldStartsAt ? ` (era ${when(p.oldStartsAt, tz)})` : ''}.${arrival} Se o que você respondeu na disponibilidade mudou, atualize no app; se não puder ir, avise o líder.${link}`
     }
     case 'member_benched': {
       const where =
@@ -164,9 +165,14 @@ export function renderPush(
       return { title: 'Seu pedido foi analisado', body: plain, url: '/presenca', tag }
     case 'event_rescheduled':
       return {
-        title: p.kind === 'rehearsal' ? 'Ensaio remarcado' : 'Evento remarcado',
+        title:
+          p.kind === 'rehearsal'
+            ? 'Ensaio remarcado'
+            : p.kind === 'service'
+              ? 'Culto remarcado'
+              : 'Evento remarcado',
         body: plain,
-        url: '/escalas',
+        url: p.path ?? '/escalas',
         tag,
       }
     case 'event_reminder': {

@@ -4,18 +4,27 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   AlertCircle,
+  Archive,
   ArrowLeft,
   CalendarClock,
   Check,
   Copy,
   ListMusic,
+  MessageCircle,
   Plus,
   Pencil,
   Trash2,
   UserPlus,
   X,
 } from 'lucide-react'
-import { answerFor, assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
+import {
+  answerFor,
+  assignmentConflicts,
+  canTakeRole,
+  eventEnd,
+  otherRolesInEvent,
+  suggestSubstitutes,
+} from '@domain/schedule.ts'
 import { localParts } from '@domain/time.ts'
 
 import { ErrorState } from '@/components/ErrorState'
@@ -44,8 +53,10 @@ import {
 } from '@/features/availability/queries'
 import { RehearsalAvailabilityField } from '@/features/availability/RehearsalAvailability'
 import { answerKind } from '@/features/availability/availability-filter'
+import { useEventConversation } from '@/features/chat/queries'
 import { errorMessage } from '@/lib/errors'
-import { formatEventDate } from '@/lib/format'
+import { writtenBeforeChange } from '@/features/availability/answered'
+import { formatEventDate, formatShortDateTime } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -88,6 +99,7 @@ function Editor({
   const { ministry } = useChurch()
   const [params] = useSearchParams()
   const [editOpen, setEditOpen] = useState(() => params.get('remarcar') === '1')
+  const [nowMs] = useState(() => Date.now())
   const invalidate = () => queryClient.invalidateQueries({ queryKey: scheduleKeys.all })
   // ensaio de um grupo (ex.: vozes): só as funções dele (e as que já têm gente)
   const group = useRehearsalGroups(
@@ -206,6 +218,9 @@ function Editor({
   })
 
   const isSeries = Boolean(event.recurrence_parent_id || event.recurrence_rule)
+  const past = eventEnd(event).getTime() < nowMs
+  // conversa da equipe (o ensaio usa a do culto); fica arquivada depois do culto
+  const teamChat = useEventConversation(event.service_event_id ?? event.id).data
   const otherEvents = data.events.filter(
     (e) => e.id !== event.id && e.schedule_assignments.length > 0,
   )
@@ -237,8 +252,14 @@ function Editor({
         }
       />
 
+      {past && (
+        <p className="text-muted-foreground flex items-center gap-2 rounded-xl border border-dashed px-3.5 py-2.5 text-[13px]">
+          <Archive className="size-4 shrink-0" aria-hidden="true" />
+          Este evento já passou e está arquivado: a escala fica aqui para consulta.
+        </p>
+      )}
       <EventTimes event={event} ministryId={event.ministry_id} />
-      {canEdit && event.service_event_id && (
+      {canEdit && event.service_event_id && !past && (
         <Button variant="outline" className="self-start" onClick={() => setEditOpen(true)}>
           <CalendarClock aria-hidden="true" /> Remarcar ensaio
         </Button>
@@ -253,12 +274,24 @@ function Editor({
         />
       )}
 
-      {event.kind === 'service' && (
-        <Button asChild variant="outline" className="self-start">
-          <Link to={`/repertorio/culto/${event.id}`}>
-            <ListMusic aria-hidden="true" /> Setlist do culto
-          </Link>
-        </Button>
+      {(event.kind === 'service' || teamChat) && (
+        <div className="flex flex-wrap gap-2">
+          {event.kind === 'service' && (
+            <Button asChild variant="outline">
+              <Link to={`/repertorio/culto/${event.id}`}>
+                <ListMusic aria-hidden="true" /> Setlist do culto
+              </Link>
+            </Button>
+          )}
+          {teamChat && (
+            <Button asChild variant="outline">
+              <Link to={`/conversas/${teamChat}`}>
+                <MessageCircle aria-hidden="true" />
+                {past ? 'Conversa da equipe (arquivada)' : 'Conversa da equipe'}
+              </Link>
+            </Button>
+          )}
+        </div>
       )}
 
       {canEdit && <AnswersSummary event={event} data={data} />}
@@ -389,10 +422,26 @@ function RoleSlot({
     unavailability: data.unavailability,
     eligibility: data.eligibility,
     answers: data.answers,
+    combinableRoleIds: data.combinableRoleIds,
   }
   const suggestions = suggestSubstitutes({ ...common, roleId, members: data.members, limit: 50 })
   const suggestedIds = new Set(suggestions.map((s) => s.member.id))
-  const inEvent = new Set(event.schedule_assignments.map((a) => a.ministry_member_id))
+  // quem já está neste evento só entra de novo se a função acumular (vozes)
+  const canTake = (memberId: string) =>
+    canTakeRole({
+      memberId,
+      roleId,
+      eventId: event.id,
+      assignments: event.schedule_assignments,
+      combinableRoleIds: data.combinableRoleIds,
+    })
+  /** "também em Vocal" para quem já está no evento em outra função */
+  const alsoIn = (memberId: string) => {
+    const names = otherRolesInEvent(memberId, event.id, event.schedule_assignments, roleId).map(
+      (id) => (id && data.roleName.get(id)) || 'Equipe',
+    )
+    return names.length ? `também em ${names.join(', ')}` : undefined
+  }
   const [picking, setPicking] = useState(false)
   // A disponibilidade é perguntada pelo culto (vale para o ensaio dele)
   const answerEventId = event.service_event_id ?? event.id
@@ -403,7 +452,7 @@ function RoleSlot({
     (m) =>
       (roleId === null || m.roleIds.includes(roleId)) &&
       !suggestedIds.has(m.id) &&
-      !inEvent.has(m.id) &&
+      canTake(m.id) &&
       m.status === 'active',
   )
   // Equipe sem esta função (o líder pode escalar mesmo assim)
@@ -411,7 +460,7 @@ function RoleSlot({
     roleId === null
       ? []
       : data.members.filter(
-          (m) => m.status === 'active' && !m.roleIds.includes(roleId) && !inEvent.has(m.id),
+          (m) => m.status === 'active' && !m.roleIds.includes(roleId) && canTake(m.id),
         )
 
   return (
@@ -457,6 +506,11 @@ function RoleSlot({
                   )}
                 >
                   {member.name}
+                  {alsoIn(member.id) && (
+                    <span className="text-muted-foreground block text-xs font-normal">
+                      {alsoIn(member.id)}
+                    </span>
+                  )}
                 </span>
                 {a.status === 'confirmed' && (
                   <span className="text-primary flex items-center gap-1 text-xs font-semibold">
@@ -561,7 +615,9 @@ function RoleSlot({
                 name: sg.member.name,
                 tone: sg.confirmed ? 'yes' : 'neutral',
                 badge: sg.confirmed ? 'pode' : 'sem resposta',
-                detail: `${sg.assignmentsInMonth} no mês`,
+                detail: [alsoIn(sg.member.id), `${sg.assignmentsInMonth} no mês`]
+                  .filter(Boolean)
+                  .join(' · '),
                 answer: answerOf(sg.member.id),
               })),
             },
@@ -582,7 +638,7 @@ function RoleSlot({
                         : c
                           ? 'em outro evento'
                           : 'restrição',
-                  detail: c?.message,
+                  detail: [alsoIn(m.id), c?.message].filter(Boolean).join(' · ') || undefined,
                   answer: answerOf(m.id),
                 }
               }),
@@ -595,6 +651,7 @@ function RoleSlot({
                 name: m.name,
                 tone: 'neutral',
                 badge: 'outra função',
+                detail: alsoIn(m.id),
                 answer: answerOf(m.id),
               })),
             },
@@ -695,8 +752,27 @@ function AnswersSummary({ event, data }: { event: ScheduleEvent; data: ScheduleD
       </p>
       <p className="text-sm">
         <span className="text-destructive font-semibold">{no.length} não podem</span>
-        {no.length > 0 && <span className="text-muted-foreground"> · {names(no)}</span>}
       </p>
+      {no.length > 0 && (
+        <ul className="flex flex-col gap-0.5 text-[13px]">
+          {no.map((m) => {
+            const at = data.answeredAt[`${event.id}:${m.id}`]
+            const stale = writtenBeforeChange(at, [event.rescheduled_at])
+            return (
+              <li key={m.id} className="text-muted-foreground">
+                <span className="text-foreground">{m.name.split(' ')[0]}</span>
+                {at && ` · respondeu em ${formatShortDateTime(at)}`}
+                {stale && (
+                  <strong className="text-warning font-semibold">
+                    {' '}
+                    · antes da mudança de horário
+                  </strong>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
       <p className="text-muted-foreground text-sm">{none} sem resposta (podem ser escalados)</p>
     </Panel>
   )
@@ -714,6 +790,10 @@ function RehearsalAnswers({
   data: ScheduleData
 }) {
   const answers = useServiceRehearsalAvailability(serviceId).data ?? []
+  const rehearsals = useLinkedRehearsals(serviceId).data ?? []
+  const service = useEvent(serviceId).data
+  // remarcações do culto e dos ensaios: observação mais antiga pode não valer
+  const changes = [service?.rescheduled_at, ...rehearsals.map((r) => r.rescheduled_at)]
   const team = new Set(memberIds)
   const shown = answers.filter((a) => team.has(a.ministry_member_id) || a.status !== 'any')
   const missing = [...team].filter((id) => !answers.some((a) => a.ministry_member_id === id))
@@ -740,6 +820,17 @@ function RehearsalAnswers({
                 {REHEARSAL_STATUS_LABEL[a.status].toLowerCase()}
               </span>
               {a.note && <span className="text-muted-foreground"> — {a.note}</span>}
+              {a.updated_at && (
+                <span className="text-muted-foreground block text-xs">
+                  {a.note ? 'Escreveu' : 'Respondeu'} em {formatShortDateTime(a.updated_at)}
+                  {writtenBeforeChange(a.updated_at, changes) && (
+                    <strong className="text-warning font-semibold">
+                      {' '}
+                      · antes da remarcação, confirme com {firstName(data, a.ministry_member_id)}
+                    </strong>
+                  )}
+                </span>
+              )}
             </li>
           ))}
       </ul>
@@ -751,6 +842,10 @@ function RehearsalAnswers({
       )}
     </section>
   )
+}
+
+function firstName(data: ScheduleData, memberId: string): string {
+  return data.memberById.get(memberId)?.name.split(' ')[0] ?? 'a pessoa'
 }
 
 function LinkedEvent({ event }: { event: ScheduleEvent }) {

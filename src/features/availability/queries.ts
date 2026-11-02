@@ -89,15 +89,18 @@ export function useMinistryAvailability(ministryId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('event_availability')
-        .select('event_id, ministry_member_id, available, note, events!inner(ministry_id)')
+        .select(
+          'event_id, ministry_member_id, available, note, updated_at, events!inner(ministry_id)',
+        )
         .eq('events.ministry_id', ministryId ?? '')
         .gte('events.starts_at', new Date(Date.now() - 31 * 86_400_000).toISOString())
       if (error) throw error
-      return data.map(({ event_id, ministry_member_id, available, note }) => ({
+      return data.map(({ event_id, ministry_member_id, available, note, updated_at }) => ({
         event_id,
         ministry_member_id,
         available,
         note,
+        updated_at,
       }))
     },
   })
@@ -158,6 +161,8 @@ export type RehearsalAnswer = {
   ministry_member_id: string
   status: RehearsalStatus
   note: string | null
+  /** quando a pessoa respondeu/escreveu */
+  updated_at?: string
 }
 
 /** Disponibilidade para o ensaio (por culto) do membro logado. */
@@ -168,7 +173,7 @@ export function useMyRehearsalAvailability(memberId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rehearsal_availability')
-        .select('event_id, ministry_member_id, status, note')
+        .select('event_id, ministry_member_id, status, note, updated_at')
         .eq('ministry_member_id', memberId ?? '')
       if (error) throw error
       return Object.fromEntries((data as RehearsalAnswer[]).map((r) => [r.event_id, r])) as Record<
@@ -187,7 +192,7 @@ export function useServiceRehearsalAvailability(serviceId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('rehearsal_availability')
-        .select('event_id, ministry_member_id, status, note')
+        .select('event_id, ministry_member_id, status, note, updated_at')
         .eq('event_id', serviceId ?? '')
       if (error) throw error
       return data as RehearsalAnswer[]
