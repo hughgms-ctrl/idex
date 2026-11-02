@@ -2,8 +2,16 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronLeft, ChevronRight, Plus, Sparkles } from 'lucide-react'
-import { analyzePlan, suggestFill, type PlannedService, type PlanRules } from '@domain/planning.ts'
+import { ChevronLeft, ChevronRight, Plus, Sparkles, Tags } from 'lucide-react'
+import {
+  analyzePlan,
+  suggestFill,
+  totalPerService,
+  type CategorySlot,
+  type PlannedService,
+  type PlanRules,
+  type SongCategories,
+} from '@domain/planning.ts'
 import { addMonths, localDateKey, localParts, monthRange } from '@domain/time.ts'
 
 import { ErrorState } from '@/components/ErrorState'
@@ -28,6 +36,14 @@ import { EventDialog } from '@/features/schedule/EventDialog'
 import { ContinueSeries } from '@/features/schedule/ContinueSeries'
 import { MissingRehearsals } from '@/features/schedule/MissingRehearsals'
 import { songKeys } from '@/features/songs/queries'
+import { CategoryList, SlotsEditor } from '@/features/planning/CategoryRules'
+import { CategorizeSongsDialog } from '@/features/songs/CategorizeSongsDialog'
+import {
+  describeSlots,
+  parseSlots,
+  useSongCategories,
+  type SongCategory,
+} from '@/features/songs/categories'
 import { errorMessage } from '@/lib/errors'
 import { formatDayMonth } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
@@ -41,6 +57,7 @@ export function PlanningPage() {
   const [base, setBase] = useState({ year: now.year, month: now.month })
   const [suggested, setSuggested] = useState<Map<string, string[]> | null>(null)
   const [rulesOpen, setRulesOpen] = useState(false)
+  const [classifyOpen, setClassifyOpen] = useState(false)
   const [newService, setNewService] = useState(false)
   const queryClient = useQueryClient()
   const leader = ministry ? isLeader(ministry.id) : false
@@ -52,12 +69,23 @@ export function PlanningPage() {
   const rulesRow = usePlanRules(ministry?.id)
   const members = useMinistryMembers(ministry?.id)
   const roles = useMinistryRoles(ministry?.id)
+  const categoryList = useSongCategories(ministry?.id).data ?? []
+  const categoryName = new Map(categoryList.map((c) => [c.id, c.name]))
 
   const rules: PlanRules = {
     minWeeksBetweenRepeats: rulesRow.data?.min_weeks_between_repeats ?? 4,
     maxNewSongsPerMonth: rulesRow.data?.max_new_songs_per_month ?? 2,
     songsPerService: rulesRow.data?.songs_per_service ?? 5,
+    slots: parseSlots(
+      rulesRow.data?.category_slots,
+      categoryList.map((c) => c.id),
+    ),
   }
+  const total = totalPerService(rules)
+  // tipos de cada música (objeto simples)
+  const songCategories: SongCategories = Object.fromEntries(
+    (data.data?.songs ?? []).map((s) => [s.id, s.category_ids ?? []]),
+  )
 
   const planned: PlannedService[] = useMemo(
     () =>
@@ -80,6 +108,7 @@ export function PlanningPage() {
     history: data.data?.history ?? [],
     rules,
     newSongIds,
+    categories: songCategories,
   })
   const songById = new Map((data.data?.songs ?? []).map((s) => [s.id, s]))
   const ministerRoleIds = new Set(
@@ -87,10 +116,30 @@ export function PlanningPage() {
   )
   const memberName = new Map((members.data ?? []).map((m) => [m.id, m.name.split(' ')[0]]))
 
+  // desfaz um "Salvar sugestões" (tira as músicas e os setlists criados)
+  const undo = useMutation({
+    mutationFn: async (saved: { itemIds: string[]; setlistIds: string[] }) => {
+      if (saved.itemIds.length) {
+        const { error } = await supabase.from('setlist_items').delete().in('id', saved.itemIds)
+        if (error) throw error
+      }
+      if (saved.setlistIds.length) {
+        const { error } = await supabase.from('setlists').delete().in('id', saved.setlistIds)
+        if (error) throw error
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['planning'] })
+      await queryClient.invalidateQueries({ queryKey: songKeys.all })
+      toast.success('Sugestões desfeitas')
+    },
+    onError: (err) => toast.error(errorMessage(err)),
+  })
+
   const save = useMutation({
     mutationFn: async () => {
-      if (!suggested || !data.data) return 0
-      let count = 0
+      const saved = { count: 0, services: 0, itemIds: [] as string[], setlistIds: [] as string[] }
+      if (!suggested || !data.data) return saved
       for (const service of data.data.services) {
         const add = suggested.get(service.id)
         if (!add?.length) continue
@@ -103,28 +152,37 @@ export function PlanningPage() {
             .single()
           if (error) throw error
           setlistId = created.id
+          saved.setlistIds.push(created.id)
         }
         const startPos =
           Math.max(-1, ...(setlistOf(service)?.setlist_items ?? []).map((i) => i.position)) + 1
-        const { error } = await supabase.from('setlist_items').insert(
-          add.map((songId, i) => ({
-            church_id: ministry!.church_id,
-            setlist_id: setlistId!,
-            song_id: songId,
-            position: startPos + i,
-            key: songById.get(songId)?.original_key ?? null,
-          })),
-        )
+        const { data: inserted, error } = await supabase
+          .from('setlist_items')
+          .insert(
+            add.map((songId, i) => ({
+              church_id: ministry!.church_id,
+              setlist_id: setlistId!,
+              song_id: songId,
+              position: startPos + i,
+              key: songById.get(songId)?.original_key ?? null,
+            })),
+          )
+          .select('id')
         if (error) throw error
-        count += add.length
+        saved.itemIds.push(...inserted.map((i) => i.id))
+        saved.count += add.length
+        saved.services += 1
       }
-      return count
+      return saved
     },
-    onSuccess: async (count) => {
+    onSuccess: async (saved) => {
       setSuggested(null)
       await queryClient.invalidateQueries({ queryKey: ['planning'] })
       await queryClient.invalidateQueries({ queryKey: songKeys.all })
-      toast.success(`${count} músicas incluídas nos setlists`)
+      toast.success(`${saved.count} músicas incluídas em ${saved.services} cultos`, {
+        duration: 15_000,
+        action: { label: 'Desfazer', onClick: () => undo.mutate(saved) },
+      })
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
@@ -188,12 +246,27 @@ export function PlanningPage() {
             <Button variant="outline" onClick={() => setNewService(true)}>
               <Plus aria-hidden="true" /> Novo culto
             </Button>
+            <Button variant="outline" onClick={() => setClassifyOpen(true)}>
+              <Tags aria-hidden="true" /> Classificar músicas
+            </Button>
             {suggested ? (
               <>
                 <Button variant="outline" onClick={() => setSuggested(null)}>
                   Descartar
                 </Button>
-                <Button onClick={() => save.mutate()} disabled={save.isPending}>
+                <Button
+                  onClick={() => {
+                    const n = [...suggested.values()].reduce((k, l) => k + l.length, 0)
+                    const cultos = [...suggested.values()].filter((l) => l.length).length
+                    if (
+                      window.confirm(
+                        `Incluir ${n} ${n === 1 ? 'música' : 'músicas'} em ${cultos} ${cultos === 1 ? 'culto' : 'cultos'}?`,
+                      )
+                    )
+                      save.mutate()
+                  }}
+                  disabled={save.isPending}
+                >
                   {save.isPending ? 'Salvando…' : 'Salvar sugestões'}
                 </Button>
               </>
@@ -208,13 +281,14 @@ export function PlanningPage() {
                     catalog: (data.data?.songs ?? []).map((s) => ({ id: s.id, title: s.title })),
                     rules,
                     newSongIds,
+                    categories: songCategories,
                   })
-                  const total = [...fill.values()].reduce((n, l) => n + l.length, 0)
-                  if (total === 0)
+                  const added = [...fill.values()].reduce((n, l) => n + l.length, 0)
+                  if (added === 0)
                     toast(
                       'Nada a sugerir: os cultos já estão completos ou faltam músicas no repertório.',
                     )
-                  setSuggested(total ? fill : null)
+                  setSuggested(added ? fill : null)
                 }}
               >
                 <Sparkles aria-hidden="true" /> Sugerir com regras
@@ -228,7 +302,10 @@ export function PlanningPage() {
         {[
           `Não repetir em menos de ${rules.minWeeksBetweenRepeats} semanas`,
           `Máx. ${rules.maxNewSongsPerMonth} ${rules.maxNewSongsPerMonth === 1 ? 'música nova' : 'músicas novas'} por mês`,
-          `${rules.songsPerService} músicas por culto`,
+          `${total} músicas por culto`,
+          ...(rules.slots?.length
+            ? [`Ordem: ${describeSlots(rules.slots, (id) => categoryName.get(id))}`]
+            : []),
           'Tom conforme ministro escalado',
         ].map((label) => (
           <span key={label} className="bg-card rounded-2xl border px-3 py-1.5 text-[13px]">
@@ -297,7 +374,12 @@ export function PlanningPage() {
                   const flags = new Map(
                     (analysis.flags.get(service.id) ?? []).map((f) => [f.songId, f]),
                   )
-                  const missing = rules.songsPerService - items.length - extra.length
+                  const missing = total - items.length - extra.length
+                  const missingTypes = analysis.alerts.flatMap((a) =>
+                    a.kind === 'missing_category' && a.eventId === service.id
+                      ? [`${a.missing} ${categoryName.get(a.categoryId) ?? 'tipo'}`]
+                      : [],
+                  )
                   const rows = [
                     ...items.map((i) => ({ songId: i.song_id, key: i.key, suggestedRow: false })),
                     ...extra.map((id) => ({
@@ -338,6 +420,11 @@ export function PlanningPage() {
                               <span className="min-w-0 flex-1 truncate">
                                 {songById.get(r.songId)?.title ?? 'Música'}
                               </span>
+                              {(songCategories[r.songId] ?? [])[0] && (
+                                <span className="text-muted-foreground max-w-[84px] shrink-0 truncate text-[11px]">
+                                  {categoryName.get((songCategories[r.songId] ?? [])[0]!)}
+                                </span>
+                              )}
                               {f?.isNew && (
                                 <span className="bg-info text-primary-foreground rounded-[5px] px-1.5 py-0.5 text-[10px] font-semibold">
                                   NOVA
@@ -356,6 +443,11 @@ export function PlanningPage() {
                       {missing > 0 && (
                         <span className="text-muted-foreground text-xs">
                           {missing} {missing === 1 ? 'lugar vazio' : 'lugares vazios'}
+                        </span>
+                      )}
+                      {missingTypes.length > 0 && (rows.length > 0 || missing <= 0) && (
+                        <span className="text-warning text-xs">
+                          Falta: {missingTypes.join(', ')}
                         </span>
                       )}
                     </Link>
@@ -391,11 +483,25 @@ export function PlanningPage() {
 
       {leader && rulesRow.data && (
         <RulesDialog
-          key={rulesRow.data.updated_at}
+          key={`${rulesRow.data.updated_at}:${categoryList.length}`}
           open={rulesOpen}
           onOpenChange={setRulesOpen}
+          churchId={ministry.church_id}
           ministryId={ministry.id}
           initial={rules}
+          categories={categoryList}
+        />
+      )}
+      {leader && (
+        <CategorizeSongsDialog
+          open={classifyOpen}
+          onOpenChange={setClassifyOpen}
+          songs={(data.data?.songs ?? []).map((s) => ({
+            id: s.id,
+            title: s.title,
+            category_ids: s.category_ids ?? [],
+          }))}
+          categories={categoryList}
         />
       )}
     </>
@@ -405,13 +511,17 @@ export function PlanningPage() {
 function RulesDialog({
   open,
   onOpenChange,
+  churchId,
   ministryId,
   initial,
+  categories,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
+  churchId: string
   ministryId: string
   initial: PlanRules
+  categories: SongCategory[]
 }) {
   const queryClient = useQueryClient()
   const [v, setV] = useState({
@@ -419,6 +529,9 @@ function RulesDialog({
     news: String(initial.maxNewSongsPerMonth),
     perService: String(initial.songsPerService),
   })
+  const [slots, setSlots] = useState<CategorySlot[]>(initial.slots ?? [])
+  const validSlots = slots.filter((s) => categories.some((c) => c.id === s.categoryId))
+  const slotsTotal = validSlots.reduce((n, s) => n + s.count, 0)
   const save = useMutation({
     mutationFn: async () => {
       const weeks = Number(v.weeks)
@@ -436,7 +549,9 @@ function RulesDialog({
         .update({
           min_weeks_between_repeats: weeks,
           max_new_songs_per_month: news,
-          songs_per_service: perService,
+          // a estrutura do culto manda no total, se for maior
+          songs_per_service: Math.min(20, Math.max(perService, slotsTotal)),
+          category_slots: validSlots,
         })
         .eq('ministry_id', ministryId)
       if (error) throw error
@@ -450,7 +565,7 @@ function RulesDialog({
   })
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Regras do repertório</DialogTitle>
           <DialogDescription>Usadas nos alertas e no “Sugerir com regras”.</DialogDescription>
@@ -485,6 +600,27 @@ function RulesDialog({
             />
           </FormField>
         </div>
+        <section className="flex flex-col gap-2 border-t pt-3">
+          <h3 className="text-sm font-semibold">Tipos de música</h3>
+          <p className="text-muted-foreground text-[13px]">
+            Ex.: celebração, louvor, adoração. Cada música pode ter mais de um tipo (marque em
+            “Classificar músicas” ou no cadastro da música).
+          </p>
+          <CategoryList churchId={churchId} ministryId={ministryId} categories={categories} />
+        </section>
+        <section className="flex flex-col gap-2 border-t pt-3">
+          <h3 className="text-sm font-semibold">Ordem do culto</h3>
+          <p className="text-muted-foreground text-[13px]">
+            Quantas músicas de cada tipo, na ordem em que entram. O “Sugerir com regras” preenche
+            cada parte com músicas daquele tipo.
+          </p>
+          <SlotsEditor categories={categories} value={slots} onChange={setSlots} />
+          {slotsTotal > Number(v.perService) && (
+            <p className="text-info text-[13px]">
+              A ordem soma {slotsTotal} músicas: o culto passa a ter {Math.min(20, slotsTotal)}.
+            </p>
+          )}
+        </section>
         <DialogFooter>
           <Button onClick={() => save.mutate()} disabled={save.isPending}>
             {save.isPending ? 'Salvando…' : 'Salvar'}

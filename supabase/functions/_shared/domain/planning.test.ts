@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { analyzePlan, suggestFill, type CatalogSong, type PlannedService } from './planning.ts'
+import {
+  analyzePlan,
+  slotNeeds,
+  suggestFill,
+  totalPerService,
+  type CatalogSong,
+  type PlannedService,
+} from './planning.ts'
 
 const rules = { minWeeksBetweenRepeats: 3, maxNewSongsPerMonth: 1, songsPerService: 3 }
 // domingos de novembro/dezembro 2026, 19h SP (22h UTC)
@@ -103,5 +110,80 @@ describe('sugerir', () => {
       rules,
     })
     expect(added.get('a')).toEqual(['A', 'B'])
+  })
+})
+
+describe('estrutura do culto por tipo', () => {
+  const CEL = 'cat-celebracao'
+  const ADO = 'cat-adoracao'
+  const slots = [
+    { categoryId: CEL, count: 2 },
+    { categoryId: ADO, count: 2 },
+  ]
+  const typed = { ...rules, maxNewSongsPerMonth: 10, songsPerService: 3, slots }
+  const categories: Record<string, string[]> = {
+    c1: [CEL],
+    c2: [CEL],
+    c3: [CEL],
+    a1: [ADO],
+    a2: [ADO, CEL],
+    a3: [ADO],
+    x1: [],
+  }
+  const catalog: CatalogSong[] = Object.keys(categories).map((id) => ({ id, title: id }))
+
+  it('o total é o maior entre músicas por culto e a soma das partes', () => {
+    expect(totalPerService(typed)).toBe(4)
+    expect(totalPerService({ ...typed, songsPerService: 6 })).toBe(6)
+  })
+
+  it('conta o que falta em cada parte (cada música ocupa uma parte só)', () => {
+    expect(slotNeeds(['c1', 'a2'], slots, categories)).toEqual([0, 2])
+    expect(slotNeeds(['c1', 'c2', 'a2'], slots, categories)).toEqual([0, 1])
+    expect(slotNeeds(['x1'], slots, categories)).toEqual([2, 2])
+  })
+
+  it('preenche cada parte com o tipo certo, na ordem', () => {
+    const fill = suggestFill({
+      services: [svc('a', '2026-11-01')],
+      history: [],
+      catalog,
+      rules: typed,
+      categories,
+    })
+    const added = fill.get('a') ?? []
+    expect(added).toHaveLength(4)
+    expect(added.slice(0, 2).every((id) => (categories[id] ?? []).includes(CEL))).toBe(true)
+    expect(added.slice(2).every((id) => (categories[id] ?? []).includes(ADO))).toBe(true)
+  })
+
+  it('completa só o que falta e avisa o tipo que ficou sem música', () => {
+    const services = [svc('a', '2026-11-01', ['c1', 'c2'])]
+    const fill = suggestFill({ services, history: [], catalog, rules: typed, categories })
+    expect(fill.get('a')).toHaveLength(2)
+    expect((fill.get('a') ?? []).every((id) => (categories[id] ?? []).includes(ADO))).toBe(true)
+
+    const r = analyzePlan({ services, history: [], rules: typed, categories })
+    expect(r.alerts).toContainEqual({
+      kind: 'missing_category',
+      eventId: 'a',
+      categoryId: ADO,
+      missing: 2,
+    })
+    expect(r.stats.ruleBreaks).toBe(0)
+  })
+
+  it('sem músicas do tipo, completa o total com qualquer música', () => {
+    const fill = suggestFill({
+      services: [svc('a', '2026-11-01')],
+      history: [],
+      catalog: [
+        { id: 'x1', title: 'x1' },
+        { id: 'c1', title: 'c1' },
+      ],
+      rules: typed,
+      categories,
+    })
+    expect(fill.get('a')).toEqual(['c1', 'x1'])
   })
 })

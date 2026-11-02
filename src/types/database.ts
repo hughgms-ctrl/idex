@@ -1616,6 +1616,7 @@ export type Database = {
       quarter_plan_rules: {
         Row: {
           church_id: string
+          category_slots: Json
           max_new_songs_per_month: number
           min_weeks_between_repeats: number
           ministry_id: string
@@ -1625,6 +1626,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           church_id: string
+          category_slots?: Json
           max_new_songs_per_month?: number
           min_weeks_between_repeats?: number
           ministry_id: string
@@ -1633,6 +1635,7 @@ export type Database = {
         }
         Update: {
           church_id?: string
+          category_slots?: Json
           max_new_songs_per_month?: number
           min_weeks_between_repeats?: number
           ministry_id?: string
@@ -2021,10 +2024,39 @@ export type Database = {
           },
         ]
       }
+      song_categories: {
+        Row: {
+          church_id: string
+          created_at: string
+          id: string
+          ministry_id: string
+          name: string
+          sort_order: number
+        }
+        ComputedFields: never
+        Insert: {
+          church_id: string
+          created_at?: string
+          id?: string
+          ministry_id: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          church_id?: string
+          created_at?: string
+          id?: string
+          ministry_id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       songs: {
         Row: {
           artist: string | null
           bpm: number | null
+          category_ids: string[]
           chordpro: string
           church_id: string
           created_at: string
@@ -2043,6 +2075,7 @@ export type Database = {
         Insert: {
           artist?: string | null
           bpm?: number | null
+          category_ids?: string[]
           chordpro?: string
           church_id: string
           created_at?: string
@@ -2060,6 +2093,7 @@ export type Database = {
         Update: {
           artist?: string | null
           bpm?: number | null
+          category_ids?: string[]
           chordpro?: string
           church_id?: string
           created_at?: string
