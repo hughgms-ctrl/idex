@@ -12,7 +12,7 @@ const r2 = {
 
 function setup(over: Partial<SongStorageDeps> = {}) {
   const deleted: string[] = []
-  const s3Calls: { method: string; url: string; body?: string }[] = []
+  const s3Calls: { method: string; url: string; body?: string | Uint8Array }[] = []
   const deps: SongStorageDeps = {
     r2,
     getUserId: async (a) => (a ? 'u1' : null),
@@ -176,5 +176,40 @@ describe('envio em partes (arquivo grande)', () => {
       parts: [{ partNumber: 1, etag: 'a' }],
     })
     expect(r.status).toBe(502)
+  })
+})
+
+describe('parte repassada pelo servidor', () => {
+  const relay = (deps: SongStorageDeps, qs: string, bytes = new Uint8Array(10)) =>
+    handleSongStorage(
+      new Request(`http://x/song-storage?action=part&${qs}`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer t' },
+        body: bytes,
+      }),
+      deps,
+    )
+  const qs = `songId=${SONG}&key=${encodeURIComponent(`igreja-1/${SONG}/abc.wav`)}&uploadId=up-1&partNumber=3`
+
+  it('manda a parte ao R2 e devolve o ETag', async () => {
+    const { deps, s3Calls } = setup({
+      s3: async (p) => {
+        s3Calls.push(p)
+        return new Response('', { headers: { ETag: '"e3"' } })
+      },
+    })
+    const res = await relay(deps, qs)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ etag: '"e3"' })
+    expect(s3Calls[0]?.method).toBe('PUT')
+    expect(s3Calls[0]?.url).toContain('partNumber=3&uploadId=up-1')
+    expect((s3Calls[0]?.body as Uint8Array).length).toBe(10)
+  })
+
+  it('recusa chave de outra música e quem não é líder', async () => {
+    expect(
+      (await relay(setup().deps, `songId=${SONG}&key=x%2Fy.wav&uploadId=u&partNumber=1`)).status,
+    ).toBe(400)
+    expect((await relay(setup({ canManageSong: async () => false }).deps, qs)).status).toBe(403)
   })
 })

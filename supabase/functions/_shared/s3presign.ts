@@ -13,8 +13,9 @@ function hex(bytes: ArrayBuffer): string {
   return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-async function sha256Hex(text: string): Promise<string> {
-  return hex(await crypto.subtle.digest('SHA-256', enc.encode(text)))
+async function sha256Hex(data: string | Uint8Array): Promise<string> {
+  const bytes = typeof data === 'string' ? enc.encode(data) : new Uint8Array(data)
+  return hex(await crypto.subtle.digest('SHA-256', bytes))
 }
 
 async function hmac(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
@@ -108,7 +109,8 @@ export async function signedFetch(params: {
   method: string
   url: string
   credentials: S3Credentials
-  body?: string
+  /** Texto ou bytes (parte de arquivo repassada pelo servidor). */
+  body?: string | Uint8Array
   headers?: Record<string, string>
   now?: Date
   fetchImpl?: typeof fetch
@@ -152,7 +154,7 @@ export async function signedFetch(params: {
   const sendHeaders = Object.fromEntries(Object.entries(headers).filter(([k]) => k !== 'host'))
   return (params.fetchImpl ?? fetch)(url.toString(), {
     method,
-    body: body || undefined,
+    body: body.length ? (body as BodyInit) : undefined,
     headers: {
       ...sendHeaders,
       authorization: `AWS4-HMAC-SHA256 Credential=${credentials.accessKeyId}/${scope}, SignedHeaders=${names.join(';')}, Signature=${signature}`,

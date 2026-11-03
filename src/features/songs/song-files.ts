@@ -252,7 +252,21 @@ async function uploadInParts(
   const report = () => onProgress?.(sent.reduce((a, b) => a + b, 0) / file.size)
   const etags: { partNumber: number; etag: string }[] = []
   try {
-    // 3 partes ao mesmo tempo; cada parte tenta até 4 vezes
+    // 3 partes ao mesmo tempo; cada parte tenta até 4 vezes. Se o navegador
+    // não consegue mandar direto para o R2 (CORS, antivírus, firewall…), as
+    // partes passam a ir pelo servidor, que repassa ao R2.
+    let viaServer = false
+    const relay = (i: number, blob: Blob) =>
+      invokeFunction<{ etag: string }>(
+        `song-storage?${new URLSearchParams({
+          action: 'part',
+          songId,
+          key,
+          uploadId,
+          partNumber: String(i + 1),
+        })}`,
+        blob,
+      ).then((r) => r.etag)
     let next = 0
     const worker = async () => {
       while (next < urls.length) {
@@ -261,13 +275,23 @@ async function uploadInParts(
         let etag: string | null = null
         for (let attempt = 1; !etag; attempt++) {
           try {
-            etag = await putPart(urls[i]!, blob, (loaded) => {
-              sent[i] = loaded
+            if (viaServer) {
+              etag = await relay(i, blob)
+              sent[i] = blob.size
               report()
-            })
+            } else {
+              etag = await putPart(urls[i]!, blob, (loaded) => {
+                sent[i] = loaded
+                report()
+              })
+            }
           } catch (err) {
             sent[i] = 0
             report()
+            if (!viaServer && err instanceof PartBlocked) {
+              viaServer = true // tenta de novo já pelo servidor, sem esperar
+              continue
+            }
             if (attempt >= 4) throw err
             await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt))
           }
@@ -296,6 +320,12 @@ async function uploadInParts(
   }
 }
 
+class PartBlocked extends Error {
+  constructor() {
+    super('a conexão com o armazenamento foi bloqueada ou caiu')
+  }
+}
+
 /** Envia uma parte e devolve o ETag (o R2 libera esse cabeçalho pelo CORS). */
 function putPart(url: string, blob: Blob, onLoaded: (bytes: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -316,7 +346,8 @@ function putPart(url: string, blob: Blob, onLoaded: (bytes: number) => void): Pr
         ),
       )
     }
-    xhr.onerror = () => reject(new Error('a conexão caiu várias vezes'))
+    // sem resposta nenhuma: bloqueado antes de chegar (ou a conexão caiu)
+    xhr.onerror = () => reject(new PartBlocked())
     xhr.ontimeout = xhr.onerror
     xhr.send(blob)
   })
