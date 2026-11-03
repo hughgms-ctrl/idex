@@ -353,6 +353,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
                     ? safeConvert(chordpro, originalKey)
                     : chordpro
                 }
+                songKey={originalKey}
               />
             </div>
           )}

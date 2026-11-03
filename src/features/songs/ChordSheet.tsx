@@ -6,6 +6,7 @@ import {
   sheetToText,
   type SheetSection,
 } from '@/features/songs/chordpro'
+import { useAccidentals } from '@/features/songs/accidentals'
 import { noteColorValue, useNoteColor } from '@/features/songs/note-color'
 import { sectionColor } from '@/features/songs/section-color'
 import { cn } from '@/lib/utils'
@@ -16,20 +17,24 @@ export function ChordSheet({
   semitones = 0,
   lyricsOnly = false,
   fontScale = 1,
+  songKey,
 }: {
   chordpro: string
   semitones?: number
   lyricsOnly?: boolean
   fontScale?: number
+  /** Tom mostrado na tela: escolhe A# ou Bb no modo automático. */
+  songKey?: string | null
 }) {
   const noteColor = useNoteColor()
+  const accidentals = useAccidentals(songKey)
   const sections = useMemo(() => {
     try {
-      return readChordPro(chordpro, semitones)
+      return readChordPro(chordpro, semitones, accidentals)
     } catch {
       return null
     }
-  }, [chordpro, semitones])
+  }, [chordpro, semitones, accidentals])
 
   if (!sections) {
     return (

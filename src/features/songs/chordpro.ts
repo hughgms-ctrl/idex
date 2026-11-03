@@ -8,6 +8,8 @@ import {
   Tag,
 } from 'chordsheetjs'
 
+import { spellChord, transposeChord, type Accidentals } from '@/features/songs/accidentals'
+
 const SECTION_RE =
   /^\s*\[?\s*(((primeira|segunda|terceira|quarta|quinta)\s+)?(intro|introdução|verso|estrofe|parte|refr[aã]o|pr[eé][- ]?refr[aã]o|coro|ponte|ponte instrumental|final|outro|solo|interl[uú]dio|tag|vamp)(\s*\d+)?)\s*:?\s*\]?\s*$/i
 
@@ -134,8 +136,33 @@ export function markNotes(chordpro: string): string {
   )
 }
 
-/** ChordPro → seções/linhas prontas para desenhar, já transpostas. */
-export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
+/**
+ * Anotação que é uma sequência de acordes ("Intro: Gm A# F", "Gm D# A#"):
+ * muda de tom e de grafia junto com a cifra. Outras ("Crescendo") ficam iguais.
+ */
+export function transposeNote(note: string, semitones: number, mode: Accidentals | null): string {
+  const m = note.match(/^([^:]*:\s*)?(.+)$/)
+  const chords = m?.[2]?.trim().split(/\s+/) ?? []
+  if (!chords.length || !chords.every(isChordToken)) return note
+  const prefix = m?.[1] ?? ''
+  const rest = note.slice(prefix.length)
+  return (
+    prefix +
+    rest.replace(/\S+/g, (c) =>
+      semitones ? transposeChord(c, semitones, mode) : spellChord(c, mode),
+    )
+  )
+}
+
+/**
+ * ChordPro → seções/linhas prontas para desenhar, já transpostas.
+ * `accidentals`: grafia dos acidentes (A# ou Bb); null mantém a do transpositor.
+ */
+export function readChordPro(
+  chordpro: string,
+  semitones = 0,
+  accidentals: Accidentals | null = null,
+): SheetSection[] {
   let song = new ChordProParser().parse(markNotes(repairChordPro(chordpro || '')))
   if (semitones) song = song.transpose(semitones)
   const sections: SheetSection[] = []
@@ -148,9 +175,10 @@ export function readChordPro(chordpro: string, semitones = 0): SheetSection[] {
       const segments: SheetSegment[] = []
       for (const item of line.items) {
         if (item instanceof ChordLyricsPair) {
-          const note = item.annotation?.trim()
+          const raw = item.annotation?.trim()
+          const note = raw ? transposeNote(raw, semitones, accidentals) : raw
           segments.push({
-            chord: item.chords ?? '',
+            chord: spellChord(item.chords ?? '', accidentals),
             lyrics: item.lyrics ?? '',
             ...(note ? { note } : {}),
           })
@@ -260,14 +288,19 @@ export function sheetToHtml(sections: SheetSection[], lyricsOnly = false): strin
  * cabeçalho e a cifra já no tom pedido.
  */
 export function songsToText(
-  songs: { heading: string; chordpro: string; semitones: number }[],
+  songs: {
+    heading: string
+    chordpro: string
+    semitones: number
+    accidentals?: Accidentals | null
+  }[],
   lyricsOnly = false,
 ): string {
   return songs
     .map((s) => {
       let body: string
       try {
-        body = sheetToText(readChordPro(s.chordpro, s.semitones), lyricsOnly)
+        body = sheetToText(readChordPro(s.chordpro, s.semitones, s.accidentals ?? null), lyricsOnly)
       } catch {
         body = ''
       }

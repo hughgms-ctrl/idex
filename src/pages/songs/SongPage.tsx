@@ -20,6 +20,14 @@ import { ChordSheet } from '@/features/songs/ChordSheet'
 import { beatsPerBar } from '@/features/songs/audio-math'
 import { readChordPro, sheetToHtml, sheetToText } from '@/features/songs/chordpro'
 import { NOTE_COLORS, setNoteColor, useNoteColor } from '@/features/songs/note-color'
+import {
+  ACCIDENTAL_OPTIONS,
+  resolveAccidentals,
+  setAccidentalsPref,
+  spellChord,
+  useAccidentalsPref,
+  type Accidentals,
+} from '@/features/songs/accidentals'
 import { defaultAudio, useSongFiles } from '@/features/songs/song-files'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
 import { SongFiles } from '@/features/songs/SongFiles'
@@ -55,6 +63,7 @@ export function SongPage() {
     navigate(`/repertorio/${songId}/editar`)
   })
 
+  const accidentalsPref = useAccidentalsPref()
   if (song.error) return <ErrorState error={song.error} onRetry={() => void song.refetch()} />
   if (song.isPending) return <FullScreenLoader />
   if (!song.data) return <ErrorState error="Música não encontrada." />
@@ -69,7 +78,13 @@ export function SongPage() {
   const baseSemi = semitonesBetween(s.original_key, targetKey ?? audioKey)
   const semitones = (semi ?? baseSemi) + engine.semitones
   const links = songLinks(s.links)
-  const currentKey = s.original_key ? transposeKey(s.original_key, semitones) : null
+  const transposedKey = s.original_key ? transposeKey(s.original_key, semitones) : null
+  const accidentals = resolveAccidentals(accidentalsPref, transposedKey)
+  // com A#/Bb escolhido à mão, o tom mostrado segue a mesma grafia
+  const currentKey =
+    transposedKey && accidentalsPref !== 'auto'
+      ? spellChord(transposedKey, accidentalsPref)
+      : transposedKey
   const items = setlist.data?.setlist_items ?? []
   const index = items.findIndex((i) => i.song_id === s.id)
   const next = index >= 0 ? items[index + 1] : undefined
@@ -199,13 +214,14 @@ export function SongPage() {
               variant="ghost"
               size="sm"
               title="Copia no formato da tela (com “Só letra”, só a letra)"
-              onClick={() => void copySheet(s.chordpro, semitones, lyricsOnly)}
+              onClick={() => void copySheet(s.chordpro, semitones, lyricsOnly, accidentals)}
             >
               <Copy aria-hidden="true" />
               {lyricsOnly ? 'Copiar letra' : 'Copiar cifra'}
             </Button>
           </span>
           <NoteColorPicker />
+          <AccidentalsPicker />
           {scrolling && (
             <span className="flex items-center gap-1">
               Velocidade
@@ -262,6 +278,7 @@ export function SongPage() {
             semitones={semitones}
             lyricsOnly={lyricsOnly}
             fontScale={fontScale}
+            songKey={transposedKey}
           />
         </div>
         {canEditSong && (
@@ -349,9 +366,60 @@ function NoteColorPicker() {
   )
 }
 
-async function copySheet(chordpro: string, semitones: number, lyricsOnly: boolean) {
+/** Sustenido ou bemol na cifra (A# ou Bb): gosto de cada um, salvo no aparelho. */
+function AccidentalsPicker() {
+  const current = useAccidentalsPref()
+  const [open, setOpen] = useState(false)
+  const short = { auto: 'Auto', sharp: 'A#', flat: 'Bb' } as const
+  return (
+    <span className="flex flex-wrap items-center">
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={open}
+        aria-label={open ? 'Fechar grafia dos acordes' : 'Escolher sustenido ou bemol'}
+        title="Escolher como escrever os acordes: A# ou Bb"
+        onClick={() => setOpen((v) => !v)}
+      >
+        ♯/♭ <span className="text-muted-foreground">{short[current]}</span>
+        <ChevronDown
+          aria-hidden="true"
+          className={cn('transition-transform', open && 'rotate-180')}
+        />
+      </Button>
+      {open && (
+        <span role="radiogroup" aria-label="Sustenido ou bemol" className="flex gap-1">
+          {ACCIDENTAL_OPTIONS.map((o) => (
+            <Button
+              key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={current === o.id}
+              variant={current === o.id ? 'secondary' : 'ghost'}
+              size="sm"
+              title={o.hint}
+              onClick={() => {
+                setAccidentalsPref(o.id)
+                setOpen(false)
+              }}
+            >
+              {o.label}
+            </Button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
+async function copySheet(
+  chordpro: string,
+  semitones: number,
+  lyricsOnly: boolean,
+  accidentals: Accidentals | null,
+) {
   try {
-    const sections = readChordPro(chordpro, semitones)
+    const sections = readChordPro(chordpro, semitones, accidentals)
     const text = sheetToText(sections, lyricsOnly)
     // em HTML vai em fonte de largura fixa: Word/PowerPoint/Docs mantêm os acordes no lugar
     try {
