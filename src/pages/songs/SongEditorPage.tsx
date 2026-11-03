@@ -61,6 +61,15 @@ function linksToText(links: unknown): string {
     .join('\n')
 }
 
+// Link do Cifra Club já salvo na música (preenche a busca ao editar).
+function cifraClubLink(links: unknown): string | undefined {
+  if (!Array.isArray(links)) return undefined
+  const found = links.find((l: { url?: string }) =>
+    /^https:\/\/(www\.|m\.)?cifraclub\.com\.br\//.test(l?.url ?? ''),
+  ) as { url?: string } | undefined
+  return found?.url
+}
+
 function textToLinks(text: string): { label: string; url: string }[] {
   return text
     .split('\n')
@@ -192,24 +201,43 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
         </Link>
       </Button>
       <PageHeader title={song ? 'Editar música' : 'Nova música'} />
-      {!song && ministry && (
+      {ministry && (
         <CifraClubImport
           ministryId={ministry.id}
+          collapsible={!!song}
+          initialArtist={song?.artist ?? undefined}
+          initialTitle={song?.title}
+          initialLink={cifraClubLink(song?.links)}
           onImported={(r) => {
-            if (r.title) form.setValue('title', r.title)
-            if (r.artist) form.setValue('artist', r.artist)
+            // Música já salva: o nome e o artista ficam como o líder deixou.
+            if (!song) {
+              if (r.title) form.setValue('title', r.title)
+              if (r.artist) form.setValue('artist', r.artist)
+            }
+            if (
+              song &&
+              form.getValues('chordpro').trim() &&
+              !window.confirm('Substituir a cifra atual pela do Cifra Club?')
+            ) {
+              return
+            }
             const key = r.key ? normalizeKey(r.key) : null
-            if (key) form.setValue('originalKey', key)
+            if (key) form.setValue('originalKey', key, { shouldDirty: true })
             form.setValue(
               'chordpro',
               safeConvert(r.text, key ?? '', r.title ?? form.getValues('title')),
+              { shouldDirty: true },
             )
             const links = form.getValues('links')
-            form.setValue(
-              'links',
-              [links, `Cifra Club | ${r.sourceUrl}`].filter(Boolean).join('\n'),
-            )
+            if (!links.includes(r.sourceUrl)) {
+              form.setValue(
+                'links',
+                [links, `Cifra Club | ${r.sourceUrl}`].filter(Boolean).join('\n'),
+                { shouldDirty: true },
+              )
+            }
             setView('previa')
+            if (song) toast.success('Cifra trazida. Confira e toque em Salvar.')
           }}
         />
       )}

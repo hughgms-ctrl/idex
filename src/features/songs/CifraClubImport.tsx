@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Download, ExternalLink } from 'lucide-react'
+import { Download, ExternalLink, X } from 'lucide-react'
 
 import { FormField } from '@/components/FormField'
 import { Button } from '@/components/ui/button'
@@ -37,16 +37,22 @@ export function CifraClubImport({
   ministryId,
   initialArtist,
   initialTitle,
+  initialLink,
+  collapsible = false,
   onImported,
 }: {
   ministryId: string
   initialArtist?: string
   initialTitle?: string
+  initialLink?: string
+  // Música já salva: começa fechado (só o botão), para não ocupar a tela.
+  collapsible?: boolean
   onImported: (result: ImportedChords) => void
 }) {
+  const [open, setOpen] = useState(!collapsible)
   const [artist, setArtist] = useState(initialArtist ?? '')
   const [title, setTitle] = useState(initialTitle ?? '')
-  const [link, setLink] = useState('')
+  const [link, setLink] = useState(initialLink ?? '')
   const [error, setError] = useState<string | null>(null)
 
   const pageUrl = cifraClubPageUrl(artist, title, link)
@@ -64,16 +70,44 @@ export function CifraClubImport({
     onSuccess: (data) => {
       setError(null)
       onImported(data)
+      if (collapsible) setOpen(false)
     },
     onError: (err) => setError(err instanceof Error ? err.message : String(err)),
   })
 
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="secondary"
+        className="self-start"
+        onClick={() => setOpen(true)}
+      >
+        <Download aria-hidden="true" />
+        Buscar cifra no Cifra Club
+      </Button>
+    )
+  }
+
   return (
     <section className="bg-card flex flex-col gap-3 rounded-2xl border p-4">
       <div className="flex flex-col gap-1">
-        <span className="text-primary text-xs font-semibold tracking-wider">
-          BUSCAR NO CIFRA CLUB
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-primary text-xs font-semibold tracking-wider">
+            BUSCAR NO CIFRA CLUB
+          </span>
+          {collapsible && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Fechar busca no Cifra Club"
+              onClick={() => setOpen(false)}
+            >
+              <X aria-hidden="true" />
+            </Button>
+          )}
+        </div>
         <p className="text-muted-foreground text-[13px]">
           Trazemos a cifra para você revisar e editar aqui antes de salvar. Se a busca falhar, abra
           a música no Cifra Club, copie a cifra e cole no campo Cifra.

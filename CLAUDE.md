@@ -74,7 +74,7 @@ SaaS multi-tenant para igrejas. Começa pelo ministério de louvor; o modelo já
 - [x] Fase 3 — repertório e cifras
   - `chordsheetjs` só nas telas de cifra (rotas lazy). Conversão "acordes sobre a letra" → ChordPro em `src/features/songs/chordpro.ts` (rótulos de seção viram `{comment: …}`); tons em `src/lib/music.ts`.
   - Setlist por culto: líder ou quem está escalado com função "Ministro…" (`is_event_minister`) edita; tom do item vale para todos.
-  - Importar do Cifra Club: Edge Function `import-cifra` (lógica testável em `handler.ts`, leitor em `_shared/import/cifraclub.ts`). Sem API oficial: lê a página sob demanda, só links https do Cifra Club, só líder; o texto volta para o editor e o link de origem fica salvo. Se o HTML do site mudar, ajustar o leitor.
+  - Importar do Cifra Club: Edge Function `import-cifra` (lógica testável em `handler.ts`, leitor em `_shared/import/cifraclub.ts`). Sem API oficial: lê a página sob demanda, só links https do Cifra Club, só líder; o texto volta para o editor e o link de origem fica salvo. Se o HTML do site mudar, ajustar o leitor. Também aparece ao editar uma música já salva (botão "Buscar cifra no Cifra Club", já com artista/nome/link salvos; não muda nome/artista e pede confirmação antes de trocar a cifra).
   - Offline: `PersistQueryClientProvider` salva no aparelho as consultas listadas em `src/lib/query-client.ts` (igreja, escala, setlist, cifras do próximo culto); limpa ao sair.
 - [x] Fase 4 — presença e pontos
   - Regras puras em `_shared/domain/{points,qr,geo}.ts` (atraso pelo tempo TOTAL: padrão 11–20 min −5, >20 −10; falta −20; justificado 0; prazo e limite do "esqueci"; HMAC 30s janela atual+anterior; raio com folga de até 50 m pela precisão do GPS). Testes com Vitest (rodam também os handlers).
