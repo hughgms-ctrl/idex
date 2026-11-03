@@ -172,16 +172,12 @@ export async function uploadSongFile(params: {
   }
   let path: string
   if (useR2) {
-    // o arquivo vai direto do aparelho para o R2, por um link de 15 minutos
-    const { key, url } = await invokeFunction<{ key: string; url: string }>('song-storage', {
-      action: 'upload',
-      songId,
-      fileName: file.name,
-      contentType: mime,
-      size: file.size,
-    })
-    await putWithProgress(url, file, mime, params.onProgress)
-    path = key
+    // o arquivo vai direto do aparelho para o R2. Grande (WAV): em partes de
+    // 8 MB, cada uma com novas tentativas (um envio só de 80 MB caía no meio).
+    path =
+      file.size > MULTIPART_FROM
+        ? await uploadInParts(songId, file, mime, params.onProgress)
+        : await uploadWhole(songId, file, mime, params.onProgress)
   } else {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
     path = `${churchId}/${songId}/${crypto.randomUUID()}.${ext}`
@@ -211,6 +207,119 @@ export async function uploadSongFile(params: {
     throw err
   }
   if (kind === 'audio' && params.isDefault) await setDefaultAudio(row.id)
+}
+
+/** Acima disso o envio vai em partes. */
+const MULTIPART_FROM = 16 * 1024 * 1024
+
+async function uploadWhole(
+  songId: string,
+  file: File,
+  mime: string,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
+  const { key, url } = await invokeFunction<{ key: string; url: string }>('song-storage', {
+    action: 'upload',
+    songId,
+    fileName: file.name,
+    contentType: mime,
+    size: file.size,
+  })
+  await putWithProgress(url, file, mime, onProgress)
+  return key
+}
+
+async function uploadInParts(
+  songId: string,
+  file: File,
+  mime: string,
+  onProgress?: (fraction: number) => void,
+): Promise<string> {
+  const start = await invokeFunction<{
+    key: string
+    uploadId: string
+    partSize: number
+    urls: string[]
+  }>('song-storage', {
+    action: 'multipart_start',
+    songId,
+    fileName: file.name,
+    contentType: mime,
+    size: file.size,
+  })
+  const { key, uploadId, partSize, urls } = start
+  const sent = new Array<number>(urls.length).fill(0)
+  const report = () => onProgress?.(sent.reduce((a, b) => a + b, 0) / file.size)
+  const etags: { partNumber: number; etag: string }[] = []
+  try {
+    // 3 partes ao mesmo tempo; cada parte tenta até 4 vezes
+    let next = 0
+    const worker = async () => {
+      while (next < urls.length) {
+        const i = next++
+        const blob = file.slice(i * partSize, Math.min(file.size, (i + 1) * partSize))
+        let etag: string | null = null
+        for (let attempt = 1; !etag; attempt++) {
+          try {
+            etag = await putPart(urls[i]!, blob, (loaded) => {
+              sent[i] = loaded
+              report()
+            })
+          } catch (err) {
+            sent[i] = 0
+            report()
+            if (attempt >= 4) throw err
+            await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt))
+          }
+        }
+        etags.push({ partNumber: i + 1, etag })
+      }
+    }
+    await Promise.all([worker(), worker(), worker()])
+    await invokeFunction('song-storage', {
+      action: 'multipart_complete',
+      songId,
+      key,
+      uploadId,
+      parts: etags,
+    })
+    return key
+  } catch (err) {
+    void invokeFunction('song-storage', { action: 'multipart_abort', songId, key, uploadId }).catch(
+      () => undefined,
+    )
+    const mb = (file.size / 1024 / 1024).toFixed(0)
+    throw new Error(
+      `Não foi possível enviar "${file.name}" (${mb} MB): ${err instanceof Error ? err.message : 'erro desconhecido'}`,
+      { cause: err },
+    )
+  }
+}
+
+/** Envia uma parte e devolve o ETag (o R2 libera esse cabeçalho pelo CORS). */
+function putPart(url: string, blob: Blob, onLoaded: (bytes: number) => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.upload.onprogress = (e) => onLoaded(e.loaded)
+    xhr.onload = () => {
+      const etag = xhr.getResponseHeader('ETag')
+      if (xhr.status >= 200 && xhr.status < 300 && etag) {
+        onLoaded(blob.size)
+        return resolve(etag)
+      }
+      reject(
+        new Error(
+          xhr.status >= 200 && xhr.status < 300
+            ? 'o armazenamento não devolveu a confirmação da parte (ETag)'
+            : `o armazenamento recusou uma parte (erro ${xhr.status})`,
+        ),
+      )
+    }
+    xhr.onerror = () => reject(new Error('a conexão caiu várias vezes'))
+    xhr.ontimeout = xhr.onerror
+    xhr.send(blob)
+  })
 }
 
 /**

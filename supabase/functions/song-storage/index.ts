@@ -62,6 +62,10 @@ Deno.serve((req) =>
       })
       if (!res.ok && res.status !== 404) throw new Error(`R2 DELETE ${res.status}`)
     },
+    s3: (params) => {
+      if (!r2) throw new Error('R2 não configurado')
+      return signedFetch({ ...params, credentials: r2.credentials })
+    },
     deleteRows: async (ids) => {
       const { error } = await service.from('song_files').delete().in('id', ids)
       if (error) throw new Error(error.message)

@@ -8,6 +8,8 @@ import { corsHeaders, errorJson, json } from '../_shared/http.ts'
 import { presignUrl, type S3Credentials } from '../_shared/s3presign.ts'
 
 export const R2_MAX_BYTES = 100 * 1024 * 1024
+/** Envio em partes (arquivo grande): o R2 exige partes do mesmo tamanho (menos a última). */
+export const PART_BYTES = 8 * 1024 * 1024
 
 const ALLOWED = /^(audio\/[a-z0-9.+-]+|application\/pdf|image\/(jpeg|png|webp))$/
 
@@ -19,6 +21,31 @@ const bodySchema = z.discriminatedUnion('action', [
     fileName: z.string().min(1).max(300),
     contentType: z.string().max(100),
     size: z.number().int().positive(),
+  }),
+  z.object({
+    action: z.literal('multipart_start'),
+    songId: z.uuid(),
+    fileName: z.string().min(1).max(300),
+    contentType: z.string().max(100),
+    size: z.number().int().positive(),
+  }),
+  z.object({
+    action: z.literal('multipart_complete'),
+    songId: z.uuid(),
+    key: z.string().min(1).max(500),
+    uploadId: z.string().min(1).max(1000),
+    parts: z
+      .array(
+        z.object({ partNumber: z.number().int().min(1).max(10000), etag: z.string().max(200) }),
+      )
+      .min(1)
+      .max(10000),
+  }),
+  z.object({
+    action: z.literal('multipart_abort'),
+    songId: z.uuid(),
+    key: z.string().min(1).max(500),
+    uploadId: z.string().min(1).max(1000),
   }),
   z.object({ action: z.literal('download'), fileIds: z.array(z.uuid()).min(1).max(200) }),
   z.object({ action: z.literal('delete'), fileIds: z.array(z.uuid()).min(1).max(200) }),
@@ -41,6 +68,13 @@ export type SongStorageDeps = {
   /** linhas que o usuário enxerga (RLS: só da igreja dele) */
   visibleFiles: (authorization: string, ids: string[]) => Promise<FileRow[]>
   deleteObject: (key: string) => Promise<void>
+  /** Chamada assinada ao R2 feita pelo servidor (envio em partes). */
+  s3: (params: {
+    method: string
+    url: string
+    body?: string
+    headers?: Record<string, string>
+  }) => Promise<Response>
   deleteRows: (ids: string[]) => Promise<void>
   uuid: () => string
 }
@@ -64,7 +98,7 @@ export async function handleSongStorage(req: Request, deps: SongStorageDeps): Pr
   const r2 = deps.r2
   if (!r2) return errorJson('Armazenamento R2 não configurado', 503)
 
-  if (body.action === 'upload') {
+  if (body.action === 'upload' || body.action === 'multipart_start') {
     if (!(await deps.canManageSong(authorization, body.songId))) {
       return errorJson('Só o líder do ministério envia arquivos', 403)
     }
@@ -74,13 +108,74 @@ export async function handleSongStorage(req: Request, deps: SongStorageDeps): Pr
     if (!churchId) return errorJson('Música não encontrada', 404)
     const ext = (body.fileName.split('.').pop() ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
     const key = `${churchId}/${body.songId}/${deps.uuid()}.${ext || 'bin'}`
-    const url = await presignUrl({
-      method: 'PUT',
-      url: objectUrl(r2, key),
-      credentials: r2.credentials,
-      expiresSeconds: 15 * 60,
+    if (body.action === 'upload') {
+      const url = await presignUrl({
+        method: 'PUT',
+        url: objectUrl(r2, key),
+        credentials: r2.credentials,
+        expiresSeconds: 15 * 60,
+      })
+      return json({ key, url })
+    }
+    const res = await deps.s3({
+      method: 'POST',
+      url: `${objectUrl(r2, key)}?uploads`,
+      headers: { 'content-type': body.contentType },
     })
-    return json({ key, url })
+    const uploadId = /<UploadId>([^<]+)<\/UploadId>/.exec(await res.text())?.[1]
+    if (!res.ok || !uploadId)
+      return errorJson('Não foi possível começar o envio. Tente de novo.', 502)
+    const count = Math.ceil(body.size / PART_BYTES)
+    const urls: string[] = []
+    for (let n = 1; n <= count; n++) {
+      urls.push(
+        await presignUrl({
+          method: 'PUT',
+          url: `${objectUrl(r2, key)}?partNumber=${n}&uploadId=${encodeURIComponent(uploadId)}`,
+          credentials: r2.credentials,
+          expiresSeconds: 60 * 60,
+        }),
+      )
+    }
+    return json({ key, uploadId, partSize: PART_BYTES, urls })
+  }
+
+  if (body.action === 'multipart_complete' || body.action === 'multipart_abort') {
+    if (!(await deps.canManageSong(authorization, body.songId))) {
+      return errorJson('Só o líder do ministério envia arquivos', 403)
+    }
+    const churchId = await deps.songChurch(body.songId)
+    // só a chave que este envio criou (pasta da música)
+    if (
+      !churchId ||
+      !body.key.startsWith(`${churchId}/${body.songId}/`) ||
+      body.key.includes('..')
+    ) {
+      return errorJson('Envio inválido', 400)
+    }
+    const target = `${objectUrl(r2, body.key)}?uploadId=${encodeURIComponent(body.uploadId)}`
+    if (body.action === 'multipart_abort') {
+      await deps.s3({ method: 'DELETE', url: target })
+      return json({ aborted: true })
+    }
+    const xml = `<CompleteMultipartUpload>${[...body.parts]
+      .sort((a, b) => a.partNumber - b.partNumber)
+      .map(
+        (p) =>
+          `<Part><PartNumber>${p.partNumber}</PartNumber><ETag>${escapeXml(p.etag)}</ETag></Part>`,
+      )
+      .join('')}</CompleteMultipartUpload>`
+    const res = await deps.s3({
+      method: 'POST',
+      url: target,
+      body: xml,
+      headers: { 'content-type': 'application/xml' },
+    })
+    const text = await res.text()
+    if (!res.ok || /<Error>/.test(text)) {
+      return errorJson('Não foi possível juntar as partes do arquivo. Tente de novo.', 502)
+    }
+    return json({ key: body.key })
   }
 
   const rows = (await deps.visibleFiles(authorization, body.fileIds)).filter(
@@ -109,4 +204,12 @@ export async function handleSongStorage(req: Request, deps: SongStorageDeps): Pr
   for (const r of allowed) await deps.deleteObject(r.storage_path)
   await deps.deleteRows(allowed.map((r) => r.id))
   return json({ deleted: allowed.length })
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
