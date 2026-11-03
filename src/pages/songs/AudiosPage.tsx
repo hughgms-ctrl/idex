@@ -320,6 +320,7 @@ function UploadAudio({
   const [bpm, setBpm] = useState(defaultBpm ? String(defaultBpm) : '')
   const [key, setKey] = useState(defaultKey ?? '')
   const [isDefault, setIsDefault] = useState(false)
+  const [progress, setProgress] = useState<number | null>(null)
   const r2 = useQuery({ queryKey: ['song-storage-r2'], queryFn: isR2Enabled, staleTime: Infinity })
   const maxMb = r2.data ? 100 : 50
 
@@ -341,8 +342,10 @@ function UploadAudio({
         bpm: b,
         musicalKey: key || null,
         isDefault: firstAudio || isDefault,
+        onProgress: setProgress,
       })
     },
+    onSettled: () => setProgress(null),
     onSuccess: async () => {
       setFile(null)
       setName('')
@@ -420,8 +423,30 @@ function UploadAudio({
         disabled={upload.isPending || !file}
         onClick={() => upload.mutate()}
       >
-        {upload.isPending ? 'Enviando…' : 'Enviar áudio'}
+        {upload.isPending
+          ? progress !== null
+            ? `Enviando… ${Math.round(progress * 100)}%`
+            : 'Enviando…'
+          : 'Enviar áudio'}
       </Button>
+      {upload.isPending && progress !== null && (
+        <div
+          role="progressbar"
+          aria-label="Progresso do envio"
+          aria-valuenow={Math.round(progress * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="bg-secondary h-2 overflow-hidden rounded-full"
+        >
+          <div
+            className="bg-primary h-full transition-[width]"
+            style={{ width: `${progress * 100}%` }}
+          />
+        </div>
+      )}
+      {upload.isPending && (
+        <p className="text-muted-foreground text-xs">Não feche esta tela até terminar.</p>
+      )}
     </section>
   )
 }

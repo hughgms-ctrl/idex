@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   Home,
+  Layers,
   MessageCircle,
   Music,
   UserCheck,
@@ -8,13 +9,21 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean }
+export type NavItem = {
+  to: string
+  label: string
+  icon: LucideIcon
+  end?: boolean
+  /** Só no menu lateral (a barra do celular já está cheia; lá fica em Músicas). */
+  sideOnly?: boolean
+}
 
 // Mesmos itens do protótipo (Início, Escala, Cifras, Presença) + Conversas e Membros.
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Início', icon: Home, end: true },
   { to: '/escalas', label: 'Escala', icon: CalendarDays },
   { to: '/repertorio', label: 'Músicas', icon: Music },
+  { to: '/multitracks', label: 'Multitracks', icon: Layers, sideOnly: true },
   { to: '/presenca', label: 'Presença', icon: UserCheck },
   { to: '/conversas', label: 'Conversas', icon: MessageCircle },
   { to: '/membros', label: 'Membros', icon: Users },

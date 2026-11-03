@@ -97,6 +97,13 @@ const router = createBrowserRouter([
               import('@/pages/songs/SongEditorPage').then((m) => ({ Component: m.SongEditorPage })),
           },
           {
+            path: 'multitracks',
+            lazy: () =>
+              import('@/pages/multitracks/MultitracksPage').then((m) => ({
+                Component: m.MultitracksPage,
+              })),
+          },
+          {
             path: 'repertorio/:songId/audios',
             lazy: () =>
               import('@/pages/songs/AudiosPage').then((m) => ({ Component: m.AudiosPage })),

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { CalendarRange, ListMusic, Plus, Search } from 'lucide-react'
+import { CalendarRange, Layers, ListMusic, Plus, Search } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { PageHeader } from '@/components/PageHeader'
@@ -42,22 +42,27 @@ export function RepertoirePage() {
       <PageHeader
         title="Músicas"
         action={
-          canAddSongs && (
-            <div className="flex gap-2">
-              {leader && (
-                <Button asChild variant="outline">
-                  <Link to="/planejamento">
-                    <CalendarRange aria-hidden="true" /> Trimestre
-                  </Link>
-                </Button>
-              )}
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link to="/multitracks">
+                <Layers aria-hidden="true" /> Multitracks
+              </Link>
+            </Button>
+            {canAddSongs && leader && (
+              <Button asChild variant="outline">
+                <Link to="/planejamento">
+                  <CalendarRange aria-hidden="true" /> Trimestre
+                </Link>
+              </Button>
+            )}
+            {canAddSongs && (
               <Button asChild>
                 <Link to="/repertorio/nova">
                   <Plus aria-hidden="true" /> Nova música
                 </Link>
               </Button>
-            </div>
-          )
+            )}
+          </div>
         }
       />
 

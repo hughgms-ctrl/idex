@@ -167,7 +167,7 @@ export function AppLayout() {
             (thread || supportOnly) && 'hidden',
           )}
         >
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {NAV_ITEMS.filter((i) => !i.sideOnly).map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

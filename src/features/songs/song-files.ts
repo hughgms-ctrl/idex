@@ -154,6 +154,8 @@ export async function uploadSongFile(params: {
   musicalKey?: string | null
   /** Áudio que abre no player para todos. */
   isDefault?: boolean
+  /** Progresso do envio (0 a 1). */
+  onProgress?: (fraction: number) => void
 }): Promise<void> {
   const { churchId, songId, file } = params
   const { mime, kind } = fileInfo(file)
@@ -178,8 +180,7 @@ export async function uploadSongFile(params: {
       contentType: mime,
       size: file.size,
     })
-    const put = await fetch(url, { method: 'PUT', body: file, headers: { 'Content-Type': mime } })
-    if (!put.ok) throw new Error('Não foi possível enviar o arquivo. Tente de novo.')
+    await putWithProgress(url, file, mime, params.onProgress)
     path = key
   } else {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
@@ -210,6 +211,48 @@ export async function uploadSongFile(params: {
     throw err
   }
   if (kind === 'audio' && params.isDefault) await setDefaultAudio(row.id)
+}
+
+/**
+ * Envia o arquivo direto para o armazenamento (R2) mostrando o progresso.
+ * Arquivo grande (WAV) leva minutos: o `fetch` não mostra progresso e, se a
+ * conexão cai no meio, só dizia "sem conexão com o servidor".
+ */
+function putWithProgress(
+  url: string,
+  file: File,
+  mime: string,
+  onProgress?: (fraction: number) => void,
+): Promise<void> {
+  const mb = (file.size / 1024 / 1024).toFixed(0)
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', mime)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total)
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) return resolve()
+      const code = /<Code>([^<]+)<\/Code>/.exec(xhr.responseText ?? '')?.[1]
+      reject(
+        new Error(
+          `O armazenamento recusou "${file.name}" (erro ${xhr.status}${code ? `, ${code}` : ''}). Tente de novo.`,
+        ),
+      )
+    }
+    xhr.onerror = () =>
+      reject(
+        new Error(
+          `A conexão caiu no meio do envio de "${file.name}" (${mb} MB). Tente de novo numa internet estável` +
+            (/\.wav$/i.test(file.name)
+              ? ' ou exporte em MP3 (fica cerca de 10 vezes menor).'
+              : '.'),
+        ),
+      )
+    xhr.ontimeout = xhr.onerror
+    xhr.send(file)
+  })
 }
 
 /** Marca o áudio que abre no player para todos (desmarca o anterior). */
