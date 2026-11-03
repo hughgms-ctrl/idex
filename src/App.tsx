@@ -72,6 +72,12 @@ const router = createBrowserRouter([
           import('@/pages/attendance/QrDisplayPage').then((m) => ({ Component: m.QrDisplayPage })),
       },
       {
+        // Multitracks: mixer em tela cheia (no computador, em outra janela)
+        path: 'multitracks/:songId',
+        lazy: () =>
+          import('@/pages/multitracks/MixerPage').then((m) => ({ Component: m.MixerPage })),
+      },
+      {
         element: <AppLayout />,
         children: [
           { index: true, element: <DashboardPage /> },

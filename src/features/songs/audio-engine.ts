@@ -401,7 +401,7 @@ function fade(g: GainNode, t: number, to: number) {
 }
 
 /** Metrônomo agendado no relógio do áudio (acento no 1º tempo do compasso). */
-class Metronome {
+export class Metronome {
   private timer: number | null = null
   private next = 0
   private beat = 0

@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   Copy,
   ExternalLink,
+  Layers,
   Pause,
   Pencil,
 } from 'lucide-react'
@@ -30,6 +31,10 @@ import {
 } from '@/features/songs/accidentals'
 import { defaultAudio, useSongFiles } from '@/features/songs/song-files'
 import { useAudioEngine } from '@/features/songs/useAudioEngine'
+import { cleanMix, updateMix, useMix } from '@/features/multitracks/mix'
+import { MultitrackBar } from '@/features/multitracks/MultitrackBar'
+import { mixerPath, openMixerWindow, opensInNewWindow } from '@/features/multitracks/open-mixer'
+import { useMultitrack } from '@/features/multitracks/useMultitrack'
 import { SongFiles } from '@/features/songs/SongFiles'
 import { songLinks } from '@/features/songs/links'
 import { useSetlist, useSong } from '@/features/songs/queries'
@@ -55,6 +60,8 @@ export function SongPage() {
   useAutoScroll(scrolling, SPEEDS[speedIdx] ?? 20, () => setScrolling(false))
   const files = useSongFiles(songId)
   const engine = useAudioEngine()
+  const multitrack = useMultitrack()
+  const storedMix = useMix(songId)
   const [audioId, setAudioId] = useState<string | null>(null)
   const canEditSong = !!song.data && can(song.data.ministry_id, 'songs')
   const doubleTap = useDoubleTap(() => {
@@ -72,11 +79,27 @@ export function SongPage() {
   const audios = (files.data ?? []).filter((f) => f.kind === 'audio') as AudioFile[]
   // abre no áudio padrão; trocar vale só para esta pessoa, agora
   const audio = audios.find((a) => a.id === audioId) ?? defaultAudio(audios)
+  // Multitracks: faixas escolhidas no mixer tocando juntas (no lugar do áudio único)
+  const mix = cleanMix(
+    storedMix,
+    audios.map((a) => a.id),
+  )
+  const multitrackOn = !!files.data && mix.active && mix.tracks.length > 0
+  const firstTrack = audios.find((a) => a.id === mix.tracks[0])
+  const player = multitrackOn ? multitrack : engine
   // a cifra parte do tom do culto; sem ele, do tom cadastrado no áudio (que
   // pode não ser o original da música); e acompanha o tom mudado no player
-  const audioKey = targetKey ? null : (audio?.musical_key ?? null)
+  const audioKey = targetKey
+    ? null
+    : ((multitrackOn ? firstTrack?.musical_key : audio?.musical_key) ?? null)
   const baseSemi = semitonesBetween(s.original_key, targetKey ?? audioKey)
-  const semitones = (semi ?? baseSemi) + engine.semitones
+  const semitones = (semi ?? baseSemi) + player.semitones
+  const openMixer = () => {
+    engine.pause()
+    if (opensInNewWindow() && openMixerWindow(s.id)) return
+    multitrack.pause()
+    navigate(mixerPath(s.id))
+  }
   const links = songLinks(s.links)
   const transposedKey = s.original_key ? transposeKey(s.original_key, semitones) : null
   const accidentals = resolveAccidentals(accidentalsPref, transposedKey)
@@ -119,7 +142,21 @@ export function SongPage() {
       </header>
 
       <div className="bg-background sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b px-5 pt-2 pb-3">
-        {audio && (
+        {multitrackOn && (
+          <div className="mb-1 w-full">
+            <MultitrackBar
+              songId={s.id}
+              mix={mix}
+              files={audios}
+              songBpm={s.bpm}
+              songKey={s.original_key}
+              beats={beatsPerBar(s.time_signature)}
+              engine={multitrack}
+              onOpenMixer={openMixer}
+            />
+          </div>
+        )}
+        {audio && !multitrackOn && (
           <div className="mb-1 w-full">
             <AudioPlayer
               key={audio.id}
@@ -146,6 +183,23 @@ export function SongPage() {
             />
           </div>
         )}
+        {!multitrackOn && audios.length >= 2 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mb-1"
+            onClick={() => {
+              if (mix.tracks.length === 0) return openMixer()
+              engine.pause()
+              updateMix(s.id, (m) => ({ ...m, active: true }))
+            }}
+          >
+            <Layers aria-hidden="true" />
+            {mix.tracks.length
+              ? `Multitracks · ${mix.tracks.length} faixas`
+              : 'Multitracks: tocar várias faixas juntas'}
+          </Button>
+        )}
         <Button
           variant="outline"
           size="icon"
@@ -158,7 +212,7 @@ export function SongPage() {
         <div className="flex min-w-16 flex-col items-center">
           <span className="text-muted-foreground text-[11px]">TOM</span>
           <span className="text-primary font-mono text-xl font-semibold">{currentKey ?? '—'}</span>
-          {engine.semitones !== 0 && (
+          {player.semitones !== 0 && (
             <span className="text-muted-foreground text-[10px]">com o áudio</span>
           )}
         </div>
