@@ -70,6 +70,11 @@ export function chordsOverWordsToChordPro(
       }
       return [line]
     })
+    // rótulo logo abaixo de uma linha de acordes: sem a linha em branco, o
+    // leitor punha os acordes "em cima" do rótulo ("§§S[A2]ECAO§§1")
+    .flatMap((line, i, all) =>
+      line.startsWith(PLACEHOLDER) && i > 0 && isChordLine(all[i - 1] ?? '') ? ['', line] : [line],
+    )
     .join('\n')
   const song = new ChordsOverWordsParser().parse(prepared)
   let body = new ChordProFormatter().format(song)
@@ -111,6 +116,22 @@ export function repairChordPro(text: string): string {
   const title = clean.match(/^\{title:\s*(.*?)\}\s*$/m)?.[1]
   const key = clean.match(/^\{key:\s*(.*?)\}\s*$/m)?.[1]
   return chordsOverWordsToChordPro(clean, { title, key })
+}
+
+/**
+ * Cifras salvas com o defeito do rótulo ("[A2]§§SE[B2]CAO§[C#m7]§1"): o nome
+ * da seção se perdeu; fica só a linha de acordes.
+ */
+export function dropBrokenLabels(chordpro: string): string {
+  return chordpro
+    .split('\n')
+    .map((line) => {
+      if (!line.includes('§')) return line
+      const rest = line.replace(/\[[^\]\n]*\]/g, '')
+      if (!/^\s*§§SECAO§§\d+\s*$/.test(rest)) return line
+      return (line.match(/\[[^\]\n]*\]/g) ?? []).join('')
+    })
+    .join('\n')
 }
 
 /** `note`: texto entre colchetes que não é acorde ("[Crescendo]", "[pausa]"): não muda de tom. */
@@ -163,7 +184,7 @@ export function readChordPro(
   semitones = 0,
   accidentals: Accidentals | null = null,
 ): SheetSection[] {
-  let song = new ChordProParser().parse(markNotes(repairChordPro(chordpro || '')))
+  let song = new ChordProParser().parse(markNotes(dropBrokenLabels(repairChordPro(chordpro || ''))))
   if (semitones) song = song.transpose(semitones)
   const sections: SheetSection[] = []
   for (const paragraph of song.paragraphs) {

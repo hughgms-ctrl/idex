@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { cifraClubUrl, isCifraClubUrl, parseCifraClubHtml, slug } from './cifraclub.ts'
+import { cifraClubUrl, isCifraClubUrl, parseCifraClubHtml, shiftKey, slug } from './cifraclub.ts'
 
 // Página de exemplo no formato do site (conteúdo fictício)
 const PAGE = `<!doctype html><html><head>
@@ -32,6 +32,13 @@ describe('Cifra Club', () => {
     expect(cifraClubUrl('Fernandinho', 'Uma Nova História')).toBe(
       'https://www.cifraclub.com.br/fernandinho/uma-nova-historia/',
     )
+  })
+
+  it('desloca o tom', () => {
+    expect(shiftKey('E', 2)).toBe('F#')
+    expect(shiftKey('Em', 3)).toBe('Gm')
+    expect(shiftKey('Bb', 2)).toBe('C')
+    expect(shiftKey('x', 2)).toBeNull()
   })
 
   it('só aceita links do Cifra Club (https)', () => {
@@ -73,6 +80,25 @@ describe('Cifra Club', () => {
     expect(r?.capo).toBe(2)
     expect(r?.shapeKey).toBe('E')
     expect(r?.text).not.toMatch(/capotraste/i)
+  })
+
+  it('tom real pela conta quando o link traz a forma dos acordes', () => {
+    const page = PAGE.replace(
+      '<span id="cifra_tom">tom: <a class="js-modal-trigger" href="#">G</a></span>',
+      '<span id="cifra_tom">tom: <b>F#</b> (forma dos acordes no tom de <a class="js-modal-trigger" href="#">E</a>)</span>' +
+        '<span>Capotraste na 2&ordf; casa</span>',
+    )
+    const r = parseCifraClubHtml(page, 'x')
+    expect(r?.key).toBe('F#')
+    expect(r?.capo).toBe(2)
+    expect(r?.shapeKey).toBe('E')
+  })
+
+  it('sem o h1: título e artista pelo og:title', () => {
+    const page = PAGE.replace(/<h1[\s\S]*?<\/h2>/, '')
+    const r = parseCifraClubHtml(page, 'x')
+    expect(r?.title).toBe('Canção Fictícia')
+    expect(r?.artist).toBe('Banda Exemplo')
   })
 
   it('devolve null quando a página não tem cifra', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   chordsOverWordsToChordPro,
+  dropBrokenLabels,
   isChordLine,
   looksLikeChordPro,
   markNotes,
@@ -183,5 +184,24 @@ describe('songsToText', () => {
     expect(songsToText([{ heading: '1. X', chordpro: '[G]Santo [D]és', semitones: 2 }], true)).toBe(
       '1. X\n\nSanto és',
     )
+  })
+})
+
+describe('rótulo logo abaixo de uma linha de acordes', () => {
+  it('não mistura o rótulo com os acordes', () => {
+    const out = chordsOverWordsToChordPro(
+      'Intro\nA2  B2  C#m7\nA2  B2  C#m7\nPrimeira Parte\n         A2\nEu me deparei\n',
+    )
+    expect(out).not.toContain('§')
+    expect(out).toContain('{comment: Primeira parte}')
+  })
+
+  it('cifra já salva com o defeito: fica só a linha de acordes', () => {
+    expect(dropBrokenLabels('[A2]§§SE[B2]CAO§[C#m7]§1[G#m7(11)]\nEu')).toBe(
+      '[A2][B2][C#m7][G#m7(11)]\nEu',
+    )
+    expect(dropBrokenLabels('Preço: § 1')).toBe('Preço: § 1')
+    const sections = readChordPro('{comment: Intro}\n[A2]§§SE[B2]CAO§§1\n')
+    expect(JSON.stringify(sections)).not.toContain('§')
   })
 })
