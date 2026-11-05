@@ -1,5 +1,6 @@
 // Edge Function `r2-admin`: só com a chave de serviço (uso interno, uma vez).
 //   { "action": "cors" }    → libera o app (navegador) a enviar/baixar no bucket
+//   { "action": "cors_check" } → confere se o navegador tem acesso (preflight)
 //   { "action": "migrate" } → move arquivos do Storage do Supabase para o R2 (lotes de 20)
 //   { "action": "selftest" } → grava, lê e apaga um arquivo de teste
 import { createClient } from '@supabase/supabase-js'
@@ -49,6 +50,28 @@ Deno.serve(async (req) => {
       headers: { 'content-type': 'application/xml' },
     })
     return json({ status: res.status, body: (await res.text()).slice(0, 500), origins })
+  }
+
+  if (action === 'cors_check') {
+    // simula a pergunta que o navegador faz antes de enviar/baixar (preflight)
+    const check = async (method: string) => {
+      const res = await fetch(objectUrl(r2, '_teste/cors.txt'), {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://idex-eight.vercel.app',
+          'Access-Control-Request-Method': method,
+          'Access-Control-Request-Headers': 'content-type',
+        },
+      })
+      await res.body?.cancel()
+      return {
+        status: res.status,
+        allowOrigin: res.headers.get('access-control-allow-origin'),
+        allowMethods: res.headers.get('access-control-allow-methods'),
+        exposeHeaders: res.headers.get('access-control-expose-headers'),
+      }
+    }
+    return json({ get: await check('GET'), put: await check('PUT') })
   }
 
   if (action === 'migrate') {
