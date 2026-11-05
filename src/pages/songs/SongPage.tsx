@@ -70,7 +70,7 @@ export function SongPage() {
     navigate(`/repertorio/${songId}/editar`)
   })
 
-  const accidentalsPref = useAccidentalsPref()
+  const accidentalsPref = useAccidentalsPref(songId)
   if (song.error) return <ErrorState error={song.error} onRetry={() => void song.refetch()} />
   if (song.isPending) return <FullScreenLoader />
   if (!song.data) return <ErrorState error="Música não encontrada." />
@@ -275,7 +275,7 @@ export function SongPage() {
             </Button>
           </span>
           <NoteColorPicker />
-          <AccidentalsPicker />
+          <AccidentalsPicker songId={s.id} />
           {scrolling && (
             <span className="flex items-center gap-1">
               Velocidade
@@ -333,6 +333,7 @@ export function SongPage() {
             lyricsOnly={lyricsOnly}
             fontScale={fontScale}
             songKey={transposedKey}
+            songId={s.id}
           />
         </div>
         {canEditSong && (
@@ -420,9 +421,9 @@ function NoteColorPicker() {
   )
 }
 
-/** Sustenido ou bemol na cifra (A# ou Bb): gosto de cada um, salvo no aparelho. */
-function AccidentalsPicker() {
-  const current = useAccidentalsPref()
+/** Sustenido ou bemol na cifra (A# ou Bb): escolha desta música, salva no aparelho. */
+function AccidentalsPicker({ songId }: { songId: string }) {
+  const current = useAccidentalsPref(songId)
   const [open, setOpen] = useState(false)
   const short = { auto: 'Auto', sharp: 'A#', flat: 'Bb' } as const
   return (
@@ -432,7 +433,7 @@ function AccidentalsPicker() {
         size="sm"
         aria-expanded={open}
         aria-label={open ? 'Fechar grafia dos acordes' : 'Escolher sustenido ou bemol'}
-        title="Escolher como escrever os acordes: A# ou Bb"
+        title="Escolher como escrever os acordes desta música: A# ou Bb"
         onClick={() => setOpen((v) => !v)}
       >
         ♯/♭ <span className="text-muted-foreground">{short[current]}</span>
@@ -453,7 +454,7 @@ function AccidentalsPicker() {
               size="sm"
               title={o.hint}
               onClick={() => {
-                setAccidentalsPref(o.id)
+                setAccidentalsPref(songId, o.id)
                 setOpen(false)
               }}
             >
