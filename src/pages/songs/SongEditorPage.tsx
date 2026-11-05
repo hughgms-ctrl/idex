@@ -22,8 +22,14 @@ import { useChurch } from '@/features/church/church-context'
 import { ChordSheet } from '@/features/songs/ChordSheet'
 import { CategoryChips } from '@/features/songs/CategoryChips'
 import { useSongCategories } from '@/features/songs/categories'
+import { CapoFix } from '@/features/songs/CapoFix'
 import { CifraClubImport } from '@/features/songs/CifraClubImport'
-import { chordsOverWordsToChordPro, looksLikeChordPro } from '@/features/songs/chordpro'
+import { stripCapoLines, transposeChordPro } from '@/features/songs/capo'
+import {
+  chordsOverWordsToChordPro,
+  cleanPastedText,
+  looksLikeChordPro,
+} from '@/features/songs/chordpro'
 import { songKeys, useSong } from '@/features/songs/queries'
 import { errorMessage } from '@/lib/errors'
 import { KEY_OPTIONS, normalizeKey } from '@/lib/music'
@@ -125,6 +131,21 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
     }
   }
 
+  // Capotraste: acordes da forma do violão → tom real (ver `capo.ts`).
+  const applyCapo = (fret: number, realKey: string | null) => {
+    const text = stripCapoLines(cleanPastedText(form.getValues('chordpro')))
+    const chordPro = looksLikeChordPro(text)
+      ? text
+      : safeConvert(text, realKey ?? form.getValues('originalKey'), form.getValues('title'))
+    form.setValue('chordpro', transposeChordPro(chordPro, fret, realKey), { shouldDirty: true })
+    if (realKey) form.setValue('originalKey', realKey, { shouldDirty: true })
+    toast.success(
+      realKey
+        ? `Acordes passados para ${realKey}. Confira a prévia e salve.`
+        : `Acordes subiram ${fret} ${fret === 1 ? 'meio tom' : 'meios tons'}. Confira e salve.`,
+    )
+  }
+
   const save = useMutation({
     mutationFn: async (v: Values) => {
       if (!ministry) throw new Error('Nenhum ministério selecionado')
@@ -223,11 +244,18 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
             }
             const key = r.key ? normalizeKey(r.key) : null
             if (key) form.setValue('originalKey', key, { shouldDirty: true })
-            form.setValue(
-              'chordpro',
-              safeConvert(r.text, key ?? '', r.title ?? form.getValues('title')),
-              { shouldDirty: true },
-            )
+            let text = safeConvert(r.text, key ?? '', r.title ?? form.getValues('title'))
+            // Capotraste: o site dá o tom real (F#) com acordes na forma do
+            // violão (E); a banda toca no tom real, então os acordes sobem.
+            if (r.capo) {
+              text = transposeChordPro(text, r.capo, key)
+              toast.info(
+                `A cifra usava capotraste na ${r.capo}ª casa` +
+                  (r.shapeKey ? ` (forma de ${r.shapeKey})` : '') +
+                  (key ? `: acordes passados para ${key}.` : ': acordes passados para o tom real.'),
+              )
+            }
+            form.setValue('chordpro', text, { shouldDirty: true })
             const links = form.getValues('links')
             if (!links.includes(r.sourceUrl)) {
               form.setValue(
@@ -344,6 +372,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
               <Button type="button" variant="outline" className="self-start" onClick={convert}>
                 <Wand2 aria-hidden="true" /> Converter “acordes sobre a letra”
               </Button>
+              <CapoFix text={chordpro} currentKey={originalKey} onApply={applyCapo} />
             </>
           ) : (
             <div className="bg-card rounded-2xl border p-4">

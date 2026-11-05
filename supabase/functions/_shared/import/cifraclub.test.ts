@@ -56,6 +56,25 @@ describe('Cifra Club', () => {
     expect(r?.text.split('\n').slice(0, 2)).toEqual(['Intro', 'G  D  Em  C'])
   })
 
+  it('sem capotraste: capo e forma vazios', () => {
+    const r = parseCifraClubHtml(PAGE, 'x')
+    expect(r?.capo).toBeNull()
+    expect(r?.shapeKey).toBeNull()
+  })
+
+  it('lê o capotraste e a forma dos acordes', () => {
+    const page = PAGE.replace(
+      '<span id="cifra_tom">tom: <a class="js-modal-trigger" href="#">G</a></span>',
+      '<span id="cifra_tom">tom: <a class="js-modal-trigger" href="#">F#</a> (forma dos acordes no tom de <b>E</b>)</span>' +
+        '<span id="cifra_capo">Capotraste na <a href="#">2&ordf; casa</a></span>',
+    )
+    const r = parseCifraClubHtml(page, 'x')
+    expect(r?.key).toBe('F#')
+    expect(r?.capo).toBe(2)
+    expect(r?.shapeKey).toBe('E')
+    expect(r?.text).not.toMatch(/capotraste/i)
+  })
+
   it('devolve null quando a página não tem cifra', () => {
     expect(parseCifraClubHtml('<html><body>Não encontrado</body></html>', 'x')).toBeNull()
   })
