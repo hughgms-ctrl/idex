@@ -9,13 +9,16 @@ import {
   ArrowLeft,
   Bell,
   BellOff,
+  ImagePlus,
   SendHorizontal,
   Trash2,
+  X,
 } from 'lucide-react'
 
 import { useUser } from '@/auth/auth-context'
 import { ErrorState } from '@/components/ErrorState'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useChurch } from '@/features/church/church-context'
 import {
@@ -26,10 +29,29 @@ import {
   type ChatMessage,
 } from '@/features/chat/chat'
 import {
+  isSupportedImage,
+  prepareImage,
+  removeChatImage,
+  uploadChatImage,
+  useChatImageUrl,
+  type PreparedImage,
+} from '@/features/chat/images'
+import {
+  collectMentions,
+  filterPeople,
+  insertMention,
+  matchesAll,
+  mentionQuery,
+  splitMentions,
+  type PickedMention,
+} from '@/features/chat/mentions'
+import {
   chatKeys,
   flattenPages,
+  MESSAGE_COLUMNS,
   removeMessageFromCache,
   upsertMessageInCache,
+  useConversationPeople,
   useMessages,
   usePeopleNames,
 } from '@/features/chat/queries'
@@ -42,6 +64,9 @@ import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
 const READ_EVERY_MS = 30_000 // com a conversa aberta, avisa o servidor (não manda push)
+
+type Outgoing = ChatMessage & { image?: PreparedImage }
+type PendingImage = { prepared: PreparedImage; url: string }
 
 function useConversationInfo(conversationId: string) {
   return useQuery({
@@ -91,6 +116,15 @@ export function ConversationPage() {
   )
   const typing = useTyping(conversationId, me)
   const [text, setText] = useState('')
+  const [caret, setCaret] = useState(0)
+  const [picked, setPicked] = useState<PickedMention[]>([])
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [mentionClosedAt, setMentionClosedAt] = useState<number | null>(null)
+  const [image, setImage] = useState<PendingImage | null>(null)
+  const [preparing, setPreparing] = useState(false)
+  const [viewing, setViewing] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const people = useConversationPeople(conversationId)
   const [selected, setSelected] = useState<string | null>(null)
   const [newBelow, setNewBelow] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -183,7 +217,10 @@ export function ConversationPage() {
 
   // ---- enviar / apagar / silenciar ----
   const send = useMutation({
-    mutationFn: async (message: ChatMessage) => {
+    mutationFn: async ({ image: photo, ...message }: Outgoing) => {
+      const imagePath = photo
+        ? await uploadChatImage(message.church_id, message.conversation_id, photo)
+        : null
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
@@ -191,13 +228,21 @@ export function ConversationPage() {
           church_id: message.church_id,
           conversation_id: message.conversation_id,
           body: message.body,
+          mentions: message.mentions ?? [],
+          mention_all: message.mention_all ?? false,
+          image_path: imagePath,
+          image_width: photo?.width || null,
+          image_height: photo?.height || null,
         })
-        .select('id, conversation_id, church_id, sender_id, body, created_at, deleted_at')
+        .select(MESSAGE_COLUMNS)
         .single()
-      if (error) throw error
+      if (error) {
+        if (imagePath) void removeChatImage(imagePath).catch(() => undefined)
+        throw error
+      }
       return data as ChatMessage
     },
-    onMutate: (message) => upsertMessageInCache(queryClient, message),
+    onMutate: ({ image: _photo, ...message }) => upsertMessageInCache(queryClient, message),
     onSuccess: (saved) => {
       upsertMessageInCache(queryClient, { ...saved, pending: false })
       void queryClient.invalidateQueries({ queryKey: chatKeys.list(church.id) })
@@ -205,13 +250,19 @@ export function ConversationPage() {
     onError: (err, message) => {
       removeMessageFromCache(queryClient, conversationId, message.id)
       setText((t) => t || message.body)
+      if (message.image && message.local_image_url) {
+        setImage(
+          (current) => current ?? { prepared: message.image!, url: message.local_image_url! },
+        )
+      }
       toast.error(errorMessage(err, 'Não foi possível enviar a mensagem.'))
     },
   })
 
   const submit = () => {
     const body = text.trim()
-    if (!body || send.isPending) return
+    if ((!body && !image) || send.isPending || preparing) return
+    const { mentions, mentionAll } = collectMentions(body, picked)
     send.mutate({
       id: crypto.randomUUID(),
       conversation_id: conversationId,
@@ -220,11 +271,89 @@ export function ConversationPage() {
       body,
       created_at: new Date().toISOString(),
       deleted_at: null,
+      mentions,
+      mention_all: mentionAll && conv?.kind !== 'direct',
+      image_path: null,
+      image_width: image?.prepared.width || null,
+      image_height: image?.prepared.height || null,
+      local_image_url: image?.url,
+      image: image?.prepared,
       pending: true,
     })
     setText('')
+    setPicked([])
+    setImage(null)
     typing.notifyStopped()
     inputRef.current?.focus()
+  }
+
+  // ---- foto ----
+  const pickImage = async (file: File | undefined) => {
+    if (!file) return
+    if (!isSupportedImage(file)) {
+      toast.error('Escolha uma imagem (foto, print ou GIF).')
+      return
+    }
+    setPreparing(true)
+    try {
+      const prepared = await prepareImage(file)
+      setImage((old) => {
+        if (old) URL.revokeObjectURL(old.url)
+        return { prepared, url: URL.createObjectURL(prepared.blob) }
+      })
+      inputRef.current?.focus()
+    } catch (err) {
+      toast.error(errorMessage(err, 'Não foi possível abrir essa imagem.'))
+    } finally {
+      setPreparing(false)
+    }
+  }
+  const clearImage = () =>
+    setImage((old) => {
+      if (old) URL.revokeObjectURL(old.url)
+      return null
+    })
+
+  // ---- @menções ----
+  const mention = mentionQuery(text, caret)
+  const mentionOpen = Boolean(mention) && mention?.start !== mentionClosedAt && !archived
+  const mentionPeople = useMemo(
+    () =>
+      mention
+        ? filterPeople(
+            (people.data ?? []).filter((p) => p.id !== user.id),
+            mention.query,
+          )
+        : [],
+    [mention?.query, people.data, user.id], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const mentionOptions = [
+    ...(mention && conv && conv.kind !== 'direct' && matchesAll(mention.query)
+      ? [{ id: 'all', name: 'all', all: true as const }]
+      : []),
+    ...mentionPeople.map((p) => ({ ...p, all: false as const })),
+  ]
+  const showMentions = mentionOpen && mentionOptions.length > 0
+  const activeMention = Math.min(mentionIndex, Math.max(0, mentionOptions.length - 1))
+
+  const chooseMention = (option: { id: string; name: string; all: boolean }) => {
+    if (!mention) return
+    const next = insertMention(text, mention.start, caret, option.name)
+    setText(next.text)
+    setCaret(next.caret)
+    if (!option.all) {
+      setPicked((list) => [
+        ...list.filter((p) => p.id !== option.id),
+        { id: option.id, label: option.name },
+      ])
+    }
+    setMentionIndex(0)
+    requestAnimationFrame(() => {
+      const el = inputRef.current
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(next.caret, next.caret)
+    })
   }
 
   const remove = useMutation({
@@ -235,8 +364,16 @@ export function ConversationPage() {
     },
     onSuccess: (id) => {
       const m = list.find((x) => x.id === id)
-      if (m)
-        upsertMessageInCache(queryClient, { ...m, body: '', deleted_at: new Date().toISOString() })
+      if (m) {
+        upsertMessageInCache(queryClient, {
+          ...m,
+          body: '',
+          image_path: null,
+          local_image_url: undefined,
+          deleted_at: new Date().toISOString(),
+        })
+        if (m.image_path) void removeChatImage(m.image_path).catch(() => undefined)
+      }
       setSelected(null)
     },
     onError: (err) => toast.error(errorMessage(err)),
@@ -409,6 +546,9 @@ export function ConversationPage() {
                     ? (names[item.message.sender_id] ?? 'Alguém')
                     : 'Ex-integrante'
                 }
+                names={names}
+                myId={user.id}
+                onOpenImage={setViewing}
                 showName={conv?.kind !== 'direct'}
                 selected={selected === item.message.id}
                 canDelete={
@@ -444,47 +584,186 @@ export function ConversationPage() {
           </p>
         ) : (
           <form
-            className="flex items-end gap-2"
+            className="relative flex flex-col gap-2"
             onSubmit={(e) => {
               e.preventDefault()
               submit()
             }}
           >
-            <textarea
-              ref={inputRef}
-              rows={1}
-              value={text}
-              maxLength={2000}
-              placeholder="Mensagem"
-              aria-label="Mensagem"
-              enterKeyHint={coarse ? 'enter' : 'send'}
-              onChange={(e) => {
-                setText(e.target.value)
-                if (e.target.value.trim()) typing.notifyTyping()
-                else typing.notifyStopped()
-              }}
-              onBlur={typing.notifyStopped}
-              onKeyDown={(e) => {
-                // no computador Enter envia (Shift+Enter quebra a linha); no celular Enter quebra
-                if (e.key === 'Enter' && !e.shiftKey && !coarse && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  submit()
-                }
-              }}
-              className="bg-input/30 placeholder:text-muted-foreground focus-visible:ring-ring/50 max-h-[132px] min-h-11 flex-1 resize-none rounded-2xl border px-4 py-2.5 text-[15px] leading-snug outline-none focus-visible:ring-[3px]"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              className="shrink-0 rounded-full"
-              disabled={!text.trim()}
-              aria-label="Enviar"
-            >
-              <SendHorizontal className="size-5" />
-            </Button>
+            {showMentions && (
+              <ul
+                role="listbox"
+                aria-label="Citar alguém"
+                className="bg-popover absolute right-0 bottom-full left-0 z-20 mb-2 max-h-64 overflow-y-auto rounded-2xl border p-1 shadow-lg"
+              >
+                {mentionOptions.map((option, i) => (
+                  <li key={option.id} role="option" aria-selected={i === activeMention}>
+                    <button
+                      type="button"
+                      // mousedown: escolhe antes do campo perder o foco
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        chooseMention(option)
+                      }}
+                      className={cn(
+                        'flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px]',
+                        i === activeMention ? 'bg-secondary' : 'hover:bg-secondary/60',
+                      )}
+                    >
+                      {option.all ? (
+                        <>
+                          <span className="bg-primary/15 text-primary flex size-8 items-center justify-center rounded-full text-sm font-bold">
+                            @
+                          </span>
+                          <span className="flex flex-col">
+                            <span className="font-semibold">@all</span>
+                            <span className="text-muted-foreground text-xs">
+                              Avisa todo mundo da conversa
+                            </span>
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <ConversationAvatar
+                            kind="direct"
+                            title={option.name}
+                            className="size-8 text-xs"
+                          />
+                          <span className="truncate">{option.name}</span>
+                        </>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {(image || preparing) && (
+              <div className="flex items-center gap-2">
+                <div className="bg-secondary relative size-20 overflow-hidden rounded-xl border">
+                  {image ? (
+                    <img
+                      src={image.url}
+                      alt="Foto para enviar"
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <Skeleton className="size-full" />
+                  )}
+                  {image && (
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      aria-label="Tirar a foto"
+                      className="bg-background/80 absolute top-1 right-1 flex size-7 items-center justify-center rounded-full"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
+                </div>
+                <span className="text-muted-foreground text-xs">
+                  {preparing ? 'Preparando a foto…' : 'Escreva uma legenda (opcional) e envie.'}
+                </span>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  void pickImage(e.target.files?.[0])
+                  e.target.value = ''
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 rounded-full"
+                disabled={preparing || send.isPending}
+                onClick={() => fileRef.current?.click()}
+                aria-label="Enviar foto"
+                title="Enviar foto"
+              >
+                <ImagePlus className="size-5" />
+              </Button>
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={text}
+                maxLength={2000}
+                placeholder={image ? 'Legenda (opcional)' : 'Mensagem (@ para citar)'}
+                aria-label="Mensagem"
+                aria-autocomplete="list"
+                aria-expanded={showMentions}
+                enterKeyHint={coarse ? 'enter' : 'send'}
+                onChange={(e) => {
+                  setText(e.target.value)
+                  setCaret(e.target.selectionStart ?? e.target.value.length)
+                  setMentionIndex(0)
+                  setMentionClosedAt(null)
+                  if (e.target.value.trim()) typing.notifyTyping()
+                  else typing.notifyStopped()
+                }}
+                onSelect={(e) => setCaret(e.currentTarget.selectionStart ?? 0)}
+                onPaste={(e) => {
+                  const file = [...e.clipboardData.files].find(isSupportedImage)
+                  if (file) {
+                    e.preventDefault()
+                    void pickImage(file)
+                  }
+                }}
+                onBlur={typing.notifyStopped}
+                onKeyDown={(e) => {
+                  if (showMentions) {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault()
+                      const n = mentionOptions.length
+                      setMentionIndex((activeMention + (e.key === 'ArrowDown' ? 1 : n - 1)) % n)
+                      return
+                    }
+                    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+                      const option = mentionOptions[activeMention]
+                      if (option) {
+                        e.preventDefault()
+                        chooseMention(option)
+                        return
+                      }
+                    }
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setMentionClosedAt(mention?.start ?? null)
+                      return
+                    }
+                  }
+                  // no computador Enter envia (Shift+Enter quebra a linha); no celular Enter quebra
+                  if (e.key === 'Enter' && !e.shiftKey && !coarse && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    submit()
+                  }
+                }}
+                className="bg-input/30 placeholder:text-muted-foreground focus-visible:ring-ring/50 max-h-[132px] min-h-11 flex-1 resize-none rounded-2xl border px-4 py-2.5 text-[15px] leading-snug outline-none focus-visible:ring-[3px]"
+              />
+              <Button
+                type="submit"
+                size="icon"
+                className="shrink-0 rounded-full"
+                disabled={(!text.trim() && !image) || preparing}
+                aria-label="Enviar"
+              >
+                <SendHorizontal className="size-5" />
+              </Button>
+            </div>
           </form>
         )}
       </div>
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent className="max-w-[min(96vw,64rem)] border-0 bg-transparent p-0 shadow-none">
+          <DialogTitle className="sr-only">Foto</DialogTitle>
+          {viewing && <ChatImageFull path={viewing} />}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -494,6 +773,9 @@ function MessageBubble({
   mine,
   first,
   senderName,
+  names,
+  myId,
+  onOpenImage,
   showName,
   selected,
   canDelete,
@@ -505,6 +787,9 @@ function MessageBubble({
   mine: boolean
   first: boolean
   senderName: string
+  names: Record<string, string>
+  myId: string
+  onOpenImage: (path: string) => void
   showName: boolean
   selected: boolean
   canDelete: boolean
@@ -513,6 +798,12 @@ function MessageBubble({
   onDelete: () => void
 }) {
   const deleted = Boolean(message.deleted_at)
+  const hasImage = !deleted && Boolean(message.image_path || message.local_image_url)
+  const labels = (message.mentions ?? []).flatMap((id) =>
+    names[id] ? [{ id, label: names[id] }] : [],
+  )
+  const mentionsMe =
+    !mine && !deleted && (message.mention_all || (message.mentions ?? []).includes(myId))
   return (
     <div className={cn('flex flex-col', mine ? 'items-end' : 'items-start', first && 'mt-2')}>
       {first && showName && !mine && (
@@ -528,11 +819,22 @@ function MessageBubble({
             ? cn('bg-primary text-primary-foreground', first && 'rounded-tr-md')
             : cn('bg-card border', first && 'rounded-tl-md'),
           deleted && 'text-muted-foreground border border-dashed bg-transparent italic',
+          mentionsMe && 'border-primary/60',
+          hasImage && 'p-1.5',
           message.pending && 'opacity-70',
           selected && 'ring-ring/60 ring-2',
         )}
       >
-        <span className="break-words whitespace-pre-wrap">
+        {hasImage && (
+          <ChatImage
+            path={message.image_path ?? null}
+            localUrl={message.local_image_url}
+            width={message.image_width}
+            height={message.image_height}
+            onOpen={message.image_path ? () => onOpenImage(message.image_path!) : undefined}
+          />
+        )}
+        <span className={cn('break-words whitespace-pre-wrap', hasImage && 'px-1.5')}>
           {deleted
             ? 'Mensagem apagada'
             : splitLinks(message.body).map((part, i) =>
@@ -548,7 +850,25 @@ function MessageBubble({
                     {part.text}
                   </a>
                 ) : (
-                  <span key={i}>{part.text}</span>
+                  <span key={i}>
+                    {splitMentions(part.text, labels, myId, Boolean(message.mention_all)).map(
+                      (piece, j) =>
+                        piece.mention ? (
+                          <span
+                            key={j}
+                            className={cn(
+                              'font-semibold',
+                              !mine && 'text-primary',
+                              !mine && piece.mention !== 'other' && 'bg-primary/15 rounded px-0.5',
+                            )}
+                          >
+                            {piece.text}
+                          </span>
+                        ) : (
+                          <span key={j}>{piece.text}</span>
+                        ),
+                    )}
+                  </span>
                 ),
               )}
         </span>
@@ -573,5 +893,67 @@ function MessageBubble({
         </Button>
       )}
     </div>
+  )
+}
+
+/** Foto dentro da bolha: guarda o espaço pela proporção (a conversa não pula). */
+function ChatImage({
+  path,
+  localUrl,
+  width,
+  height,
+  onOpen,
+}: {
+  path: string | null
+  localUrl?: string
+  width?: number | null
+  height?: number | null
+  onOpen?: () => void
+}) {
+  const signed = useChatImageUrl(path)
+  const src = signed.data ?? localUrl
+  const ratio = width && height ? width / height : 4 / 3
+  return (
+    <span
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={onOpen ? 'Abrir foto' : undefined}
+      onClick={(e) => {
+        if (!onOpen) return
+        e.stopPropagation()
+        onOpen()
+      }}
+      onKeyDown={(e) => {
+        if (onOpen && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          e.stopPropagation()
+          onOpen()
+        }
+      }}
+      className="bg-secondary mb-1 block overflow-hidden rounded-xl"
+      style={{ width: `min(260px, 70vw, ${Math.round(320 * ratio)}px)`, aspectRatio: ratio }}
+    >
+      {src ? (
+        <img src={src} alt="Foto" className="size-full object-cover" loading="lazy" />
+      ) : signed.error ? (
+        <span className="text-muted-foreground flex size-full items-center justify-center p-2 text-center text-xs">
+          Não foi possível carregar a foto
+        </span>
+      ) : (
+        <Skeleton className="size-full" />
+      )}
+    </span>
+  )
+}
+
+function ChatImageFull({ path }: { path: string }) {
+  const signed = useChatImageUrl(path)
+  if (!signed.data) return <Skeleton className="mx-auto aspect-[4/3] w-full max-w-lg rounded-xl" />
+  return (
+    <img
+      src={signed.data}
+      alt="Foto"
+      className="mx-auto max-h-[85vh] w-auto max-w-full rounded-xl object-contain"
+    />
   )
 }

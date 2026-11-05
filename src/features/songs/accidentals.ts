@@ -69,33 +69,46 @@ export function transposeChord(chord: string, semitones: number, mode: Accidenta
   )
 }
 
-// --- preferência salva no aparelho ---
+// --- escolha por música, salva no aparelho ---
+// Cada música tem a sua (uma pede Bb, outra A#); sem escolha = Automático.
 
-const KEY = 'idex:acidentes'
+const KEY = 'idex:acidentes:musicas'
+const OLD_KEY = 'idex:acidentes' // antes valia para todas as músicas
 const listeners = new Set<() => void>()
-let current: AccidentalsPref | null = null
+let current: Record<string, AccidentalsPref> | null = null
 
-function read(): AccidentalsPref {
+function read(): Record<string, AccidentalsPref> {
+  const out: Record<string, AccidentalsPref> = {}
   try {
-    const v = localStorage.getItem(KEY)
-    if (v === 'auto' || v === 'sharp' || v === 'flat') return v
+    localStorage.removeItem(OLD_KEY)
+    const raw: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}')
+    if (raw && typeof raw === 'object') {
+      for (const [id, v] of Object.entries(raw)) {
+        if (v === 'sharp' || v === 'flat') out[id] = v
+      }
+    }
   } catch {
-    // sem acesso ao armazenamento: usa o padrão
+    // sem acesso ao armazenamento ou valor estragado: tudo automático
   }
-  return 'auto'
+  return out
 }
 
-export function setAccidentalsPref(pref: AccidentalsPref) {
+/** Escolha de uma música ("auto" apaga a escolha). */
+export function setAccidentalsPref(songId: string, pref: AccidentalsPref) {
+  const next = { ...(current ??= read()) }
+  if (pref === 'auto') delete next[songId]
+  else next[songId] = pref
   try {
-    localStorage.setItem(KEY, pref)
+    localStorage.setItem(KEY, JSON.stringify(next))
   } catch {
     // segue só nesta tela
   }
-  current = pref
+  current = next
   listeners.forEach((l) => l())
 }
 
-export function useAccidentalsPref(): AccidentalsPref {
+/** Escolhas de todas as músicas (id → sustenido/bemol). */
+export function useAccidentalsPrefs(): Readonly<Record<string, AccidentalsPref>> {
   return useSyncExternalStore(
     (l) => {
       listeners.add(l)
@@ -105,7 +118,22 @@ export function useAccidentalsPref(): AccidentalsPref {
   )
 }
 
-/** Grafia para o tom mostrado na tela, já com a escolha da pessoa. */
-export function useAccidentals(key: string | null | undefined): Accidentals | null {
-  return resolveAccidentals(useAccidentalsPref(), key)
+export function prefFor(
+  prefs: Readonly<Record<string, AccidentalsPref>>,
+  songId: string | null | undefined,
+): AccidentalsPref {
+  return (songId && prefs[songId]) || 'auto'
+}
+
+/** Escolha desta música (sem escolha: automático). */
+export function useAccidentalsPref(songId: string | null | undefined): AccidentalsPref {
+  return prefFor(useAccidentalsPrefs(), songId)
+}
+
+/** Grafia para o tom mostrado na tela, já com a escolha feita para a música. */
+export function useAccidentals(
+  songId: string | null | undefined,
+  key: string | null | undefined,
+): Accidentals | null {
+  return resolveAccidentals(useAccidentalsPref(songId), key)
 }

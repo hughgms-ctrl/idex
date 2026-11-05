@@ -125,6 +125,9 @@ describe('lista de conversas', () => {
     expect(previewText(row({ ...last, last_sender_id: 'eu' }), 'eu')).toBe('Você: Oi')
     expect(previewText(row({ ...last, kind: 'direct', last_sender_id: 'ana' }), 'eu')).toBe('Oi')
     expect(previewText(row({ ...last, last_deleted: true }), 'eu')).toBe('Mensagem apagada')
+    expect(previewText(row({ ...last, last_body: '', last_sender_id: 'ana' }), 'eu')).toBe(
+      'Ana: 📷 Foto',
+    )
   })
 
   it('grupo primeiro, depois a mais recente, depois o culto mais próximo', () => {

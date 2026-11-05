@@ -18,6 +18,7 @@ export function ChordSheet({
   lyricsOnly = false,
   fontScale = 1,
   songKey,
+  songId,
 }: {
   chordpro: string
   semitones?: number
@@ -25,9 +26,11 @@ export function ChordSheet({
   fontScale?: number
   /** Tom mostrado na tela: escolhe A# ou Bb no modo automático. */
   songKey?: string | null
+  /** Música: a escolha de sustenido/bemol é por música. */
+  songId?: string | null
 }) {
   const noteColor = useNoteColor()
-  const accidentals = useAccidentals(songKey)
+  const accidentals = useAccidentals(songId, songKey)
   const sections = useMemo(() => {
     try {
       return readChordPro(chordpro, semitones, accidentals)

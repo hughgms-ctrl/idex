@@ -1,5 +1,6 @@
 // Edge Function `r2-admin`: só com a chave de serviço (uso interno, uma vez).
 //   { "action": "cors" }    → libera o app (navegador) a enviar/baixar no bucket
+//   { "action": "cors_check" } → confere se o navegador tem acesso (preflight)
 //   { "action": "migrate" } → move arquivos do Storage do Supabase para o R2 (lotes de 20)
 //   { "action": "selftest" } → grava, lê e apaga um arquivo de teste
 import { createClient } from '@supabase/supabase-js'
@@ -23,7 +24,6 @@ const r2: R2Config = Deno.env.get('R2_ACCOUNT_ID')
       },
     }
   : null
-const appUrl = (Deno.env.get('APP_URL') ?? '').replace(/\/+$/, '')
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -33,7 +33,10 @@ Deno.serve(async (req) => {
   const { action } = (await req.json().catch(() => ({}))) as { action?: string }
 
   if (action === 'cors') {
-    const origins = [appUrl, 'http://localhost:5173', 'https://*.vercel.app'].filter(Boolean)
+    // Qualquer origem: os links são pré-assinados (curtos e por arquivo), então o
+    // CORS não protege nada aqui — e uma lista de domínios deixava o app de fora
+    // (o navegador não alcançava o bucket: envio caía, player não baixava).
+    const origins = ['*']
     const xml = `<CORSConfiguration><CORSRule>${origins
       .map((o) => `<AllowedOrigin>${o}</AllowedOrigin>`)
       .join(
@@ -47,6 +50,28 @@ Deno.serve(async (req) => {
       headers: { 'content-type': 'application/xml' },
     })
     return json({ status: res.status, body: (await res.text()).slice(0, 500), origins })
+  }
+
+  if (action === 'cors_check') {
+    // simula a pergunta que o navegador faz antes de enviar/baixar (preflight)
+    const check = async (method: string) => {
+      const res = await fetch(objectUrl(r2, '_teste/cors.txt'), {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'https://idex-eight.vercel.app',
+          'Access-Control-Request-Method': method,
+          'Access-Control-Request-Headers': 'content-type',
+        },
+      })
+      await res.body?.cancel()
+      return {
+        status: res.status,
+        allowOrigin: res.headers.get('access-control-allow-origin'),
+        allowMethods: res.headers.get('access-control-allow-methods'),
+        exposeHeaders: res.headers.get('access-control-expose-headers'),
+      }
+    }
+    return json({ get: await check('GET'), put: await check('PUT') })
   }
 
   if (action === 'migrate') {

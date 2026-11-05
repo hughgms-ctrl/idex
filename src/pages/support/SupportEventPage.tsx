@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { eventTimeRows, hhmm } from '@/features/schedule/datetime'
 import { ChordSheet } from '@/features/songs/ChordSheet'
 import { readChordPro, sheetToText, songsToText } from '@/features/songs/chordpro'
-import { resolveAccidentals, useAccidentalsPref } from '@/features/songs/accidentals'
+import { prefFor, resolveAccidentals, useAccidentalsPrefs } from '@/features/songs/accidentals'
 import { useSupportEvent, type SupportSetlistItem } from '@/features/support/queries'
 import { serviceKey, serviceSemitones, songHeading, teamByRole } from '@/features/support/support'
 import { formatEventDate } from '@/lib/format'
@@ -24,7 +24,7 @@ export function SupportEventPage() {
   const event = useSupportEvent(eventId)
   const [lyricsOnly, setLyricsOnly] = useState(false)
   const [open, setOpen] = useState<Record<string, boolean>>({})
-  const accidentalsPref = useAccidentalsPref()
+  const accidentalsPrefs = useAccidentalsPrefs()
 
   if (event.error) return <ErrorState error={event.error} onRetry={() => void event.refetch()} />
   if (event.isPending) return <FullScreenLoader />
@@ -43,7 +43,10 @@ export function SupportEventPage() {
             heading: songHeading(i + 1, item.songs?.title ?? 'Música', serviceKey(item)),
             chordpro: item.songs?.chordpro ?? '',
             semitones: serviceSemitones(item),
-            accidentals: resolveAccidentals(accidentalsPref, serviceKey(item)),
+            accidentals: resolveAccidentals(
+              prefFor(accidentalsPrefs, item.songs?.id),
+              serviceKey(item),
+            ),
           })),
           lyricsOnly,
         ),
@@ -174,7 +177,7 @@ function SongItem({
   const song = item.songs
   const key = serviceKey(item)
   const semitones = serviceSemitones(item)
-  const accidentals = resolveAccidentals(useAccidentalsPref(), key)
+  const accidentals = resolveAccidentals(prefFor(useAccidentalsPrefs(), song?.id), key)
   const details = [song?.artist, song?.bpm ? `${song.bpm} BPM` : null, song?.time_signature]
     .filter(Boolean)
     .join(' · ')
@@ -230,6 +233,7 @@ function SongItem({
             semitones={semitones}
             lyricsOnly={lyricsOnly}
             songKey={key}
+            songId={song?.id}
           />
         </div>
       )}

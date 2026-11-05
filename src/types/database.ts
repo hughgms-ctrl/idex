@@ -186,6 +186,11 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           id: string
+          image_height: number | null
+          image_path: string | null
+          image_width: number | null
+          mention_all: boolean
+          mentions: string[]
           sender_id: string | null
         }
         ComputedFields: never
@@ -196,6 +201,11 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          image_height?: number | null
+          image_path?: string | null
+          image_width?: number | null
+          mention_all?: boolean
+          mentions?: string[]
           sender_id?: string | null
         }
         Update: {
@@ -205,6 +215,11 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           id?: string
+          image_height?: number | null
+          image_path?: string | null
+          image_width?: number | null
+          mention_all?: boolean
+          mentions?: string[]
           sender_id?: string | null
         }
         Relationships: [
@@ -2236,6 +2251,7 @@ export type Database = {
         Returns: boolean
       }
       can_manage_song: { Args: { p_song_id: string }; Returns: boolean }
+      can_moderate_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
       can_send_to_conversation: { Args: { p_conversation_id: string }; Returns: boolean }
       chat_conversation_members: {
         Args: { p_conversation_id: string }
@@ -2261,6 +2277,10 @@ export type Database = {
       close_due_cycles: { Args: Record<PropertyKey, never>; Returns: number }
       commitment_outcome: { Args: { p_event_id: string; p_member_id: string }; Returns: string }
       confirm_my_presence: { Args: { p_event_id: string }; Returns: number }
+      conversation_people: {
+        Args: { p_conversation_id: string }
+        Returns: { full_name: string; profile_id: string }[]
+      }
       count_announcement_audience: {
         Args: {
           p_audience: string
@@ -2475,6 +2495,7 @@ export type Database = {
       shares_church_with: { Args: { p_user_id: string }; Returns: boolean }
       slugify: { Args: { p_text: string }; Returns: string }
       storage_church_id: { Args: { p_name: string }; Returns: string }
+      storage_conversation_id: { Args: { p_name: string }; Returns: string }
       storage_song_id: { Args: { p_name: string }; Returns: string }
       sync_rehearsal_team: { Args: { p_rehearsal_id: string }; Returns: undefined }
       tolerance_for_event: { Args: { p_event_id: string }; Returns: number }

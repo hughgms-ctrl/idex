@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { accidentalsForKey, resolveAccidentals, spellChord, transposeChord } from './accidentals'
+import {
+  accidentalsForKey,
+  prefFor,
+  resolveAccidentals,
+  spellChord,
+  transposeChord,
+} from './accidentals'
 import { readChordPro, transposeNote } from './chordpro'
 
 describe('accidentalsForKey', () => {
@@ -51,5 +57,17 @@ describe('cifra com grafia escolhida', () => {
     expect(transposeNote('Crescendo', 2, 'flat')).toBe('Crescendo')
     expect(transposeNote('2x', 2, 'flat')).toBe('2x')
     expect(transposeNote('Intro: Gm A# F', 2, 'sharp')).toBe('Intro: Am C G')
+  })
+})
+
+describe('prefFor (escolha por música)', () => {
+  const prefs = { a: 'flat', b: 'sharp' } as const
+  it('usa a escolha da própria música', () => {
+    expect(prefFor(prefs, 'a')).toBe('flat')
+    expect(prefFor(prefs, 'b')).toBe('sharp')
+  })
+  it('música sem escolha (ou sem id) fica no automático', () => {
+    expect(prefFor(prefs, 'c')).toBe('auto')
+    expect(prefFor(prefs, null)).toBe('auto')
   })
 })

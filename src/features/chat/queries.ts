@@ -19,6 +19,9 @@ export const chatKeys = {
 
 const PAGE = 50
 
+export const MESSAGE_COLUMNS =
+  'id, conversation_id, church_id, sender_id, body, created_at, deleted_at, mentions, mention_all, image_path, image_width, image_height'
+
 /** Conversas da pessoa nesta igreja (grupo, cultos da semana, diretas). */
 export function useConversations(churchId: string) {
   return useQuery({
@@ -62,6 +65,21 @@ export function useChurchPeople(churchId: string) {
   })
 }
 
+/** Quem participa da conversa (sugestões ao digitar @). */
+export function useConversationPeople(conversationId: string) {
+  return useQuery({
+    queryKey: ['chat', 'people-of', conversationId] as const,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('conversation_people', {
+        p_conversation_id: conversationId,
+      })
+      if (error) throw error
+      return data.map((p) => ({ id: p.profile_id, name: p.full_name }))
+    },
+  })
+}
+
 /** Nome por perfil (objeto simples). */
 export function usePeopleNames(churchId: string) {
   const people = useChurchPeople(churchId)
@@ -82,7 +100,7 @@ export function useMessages(conversationId: string) {
     queryFn: async ({ pageParam }) => {
       let query = supabase
         .from('chat_messages')
-        .select('id, conversation_id, church_id, sender_id, body, created_at, deleted_at')
+        .select(MESSAGE_COLUMNS)
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
         .limit(PAGE)

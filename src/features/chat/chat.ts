@@ -9,7 +9,17 @@ export type ChatMessage = {
   body: string
   created_at: string
   deleted_at: string | null
+  /** perfis citados com @Nome */
+  mentions?: string[]
+  /** citou todos (@all) */
+  mention_all?: boolean
+  /** foto no bucket `chat-images` */
+  image_path?: string | null
+  image_width?: number | null
+  image_height?: number | null
   pending?: boolean // enviada pelo aparelho, esperando o servidor
+  /** prévia da foto enquanto envia (só no aparelho de quem mandou) */
+  local_image_url?: string
 }
 
 export type ConversationKind = 'ministry' | 'event' | 'direct'
@@ -155,7 +165,8 @@ export function previewText(row: ConversationRow, myId: string): string {
       : row.kind === 'direct'
         ? ''
         : `${row.last_sender_name.split(' ')[0]}: `
-  return `${who}${row.last_body ?? ''}`
+  // foto sem texto: o corpo vem vazio
+  return `${who}${row.last_body || '📷 Foto'}`
 }
 
 /** Grupo do ministério primeiro; depois a conversa mais recente (culto sem mensagem: o mais próximo). */

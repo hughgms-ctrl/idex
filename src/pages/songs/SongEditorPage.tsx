@@ -383,6 +383,7 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
                     : chordpro
                 }
                 songKey={originalKey}
+                songId={song?.id}
               />
             </div>
           )}
