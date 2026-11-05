@@ -23,7 +23,6 @@ const r2: R2Config = Deno.env.get('R2_ACCOUNT_ID')
       },
     }
   : null
-const appUrl = (Deno.env.get('APP_URL') ?? '').replace(/\/+$/, '')
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -33,7 +32,10 @@ Deno.serve(async (req) => {
   const { action } = (await req.json().catch(() => ({}))) as { action?: string }
 
   if (action === 'cors') {
-    const origins = [appUrl, 'http://localhost:5173', 'https://*.vercel.app'].filter(Boolean)
+    // Qualquer origem: os links são pré-assinados (curtos e por arquivo), então o
+    // CORS não protege nada aqui — e uma lista de domínios deixava o app de fora
+    // (o navegador não alcançava o bucket: envio caía, player não baixava).
+    const origins = ['*']
     const xml = `<CORSConfiguration><CORSRule>${origins
       .map((o) => `<AllowedOrigin>${o}</AllowedOrigin>`)
       .join(
