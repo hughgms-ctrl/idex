@@ -133,20 +133,41 @@ export function parseCifraClubHtml(html: string, sourceUrl: string): ImportedCho
     .trim()
   if (!text) return null
 
+  // "Quem É Esse? - Julliany Souza - Cifra Club"
+  const og = (firstMatch(html, [/<meta property="og:title" content="([^"]+)"/i]) ?? '')
+    .replace(/\s+-\s+Cifra Club\s*$/i, '')
+    .split(/\s+-\s+/)
+  const capo = readCapo(html)
+  // O link "alterar o tom" pode trazer a forma dos acordes (E), não o tom
+  // real (F#): com capotraste e forma conhecidos, o tom real é a conta.
+  const linkKey = firstMatch(html, [
+    /id="cifra_tom"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/i,
+    /id="cifra_tom"[^>]*>\s*(?:tom:)?\s*([A-G][#b]?m?)/i,
+  ])
+  const key = capo.capo && capo.shapeKey ? shiftKey(capo.shapeKey, capo.capo) : linkKey
+
   return {
-    title: firstMatch(html, [
-      /<h1[^>]*class="[^"]*t1[^"]*"[^>]*>([\s\S]*?)<\/h1>/i,
-      /<meta property="og:title" content="([^"]+)"/i,
-    ]),
-    artist: firstMatch(html, [/<h2[^>]*class="[^"]*t3[^"]*"[^>]*>([\s\S]*?)<\/h2>/i]),
-    key: firstMatch(html, [
-      /id="cifra_tom"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/i,
-      /id="cifra_tom"[^>]*>\s*(?:tom:)?\s*([A-G][#b]?m?)/i,
-    ]),
-    ...readCapo(html),
+    title:
+      firstMatch(html, [/<h1[^>]*class="[^"]*t1[^"]*"[^>]*>([\s\S]*?)<\/h1>/i]) || og[0] || null,
+    artist:
+      firstMatch(html, [/<h2[^>]*class="[^"]*t3[^"]*"[^>]*>([\s\S]*?)<\/h2>/i]) || og[1] || null,
+    key,
+    ...capo,
     text,
     sourceUrl,
   }
+}
+
+const NOTES: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+const MAJOR = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+const MINOR = ['Cm', 'C#m', 'Dm', 'Ebm', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'Bbm', 'Bm']
+
+/** Tom deslocado em semitons ("E" + 2 = "F#"); mesma grafia de `src/lib/music.ts`. */
+export function shiftKey(key: string, semitones: number): string | null {
+  const m = key.trim().match(/^([A-G])([#b]?)(m?)$/)
+  if (!m?.[1]) return null
+  const base = NOTES[m[1]]! + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0)
+  return (m[3] ? MINOR : MAJOR)[(((base + semitones) % 12) + 12) % 12] ?? null
 }
 
 // Ex.: "tom: <a>F#</a> (forma dos acordes no tom de <b>E</b>)" e
@@ -154,8 +175,8 @@ export function parseCifraClubHtml(html: string, sourceUrl: string): ImportedCho
 function readCapo(html: string): { capo: number | null; shapeKey: string | null } {
   const text = stripTags(html.replace(/<pre[^>]*>[\s\S]*?<\/pre>/gi, ' ')).replace(/\s+/g, ' ')
   const fret = Number(
-    text.match(/capotraste\s+(?:na\s+)?(\d{1,2})\s*[ªºa]?\s*casa/i)?.[1] ??
-      text.match(/capotraste\s+(?:na\s+)?casa\s+(\d{1,2})/i)?.[1] ??
+    text.match(/capo(?:traste)?\s+(?:na\s+)?(\d{1,2})\s*[ªºa]?\s*casa/i)?.[1] ??
+      text.match(/capo(?:traste)?\s+(?:na\s+)?casa\s+(\d{1,2})/i)?.[1] ??
       0,
   )
   if (!fret || fret > 11) return { capo: null, shapeKey: null }
