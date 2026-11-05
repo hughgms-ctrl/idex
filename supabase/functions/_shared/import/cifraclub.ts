@@ -8,7 +8,11 @@ export const CIFRACLUB_HOSTS = ['www.cifraclub.com.br', 'cifraclub.com.br', 'm.c
 export type ImportedChords = {
   title: string | null
   artist: string | null
+  /** tom real (o que a banda toca) */
   key: string | null
+  /** casa do capotraste; com ele, os acordes do texto estão na forma de `shapeKey` */
+  capo: number | null
+  shapeKey: string | null
   text: string
   sourceUrl: string
 }
@@ -20,6 +24,8 @@ const ENTITIES: Record<string, string> = {
   quot: '"',
   apos: "'",
   nbsp: ' ',
+  ordf: 'ª',
+  ordm: 'º',
 }
 
 // &aacute; &atilde; &ccedil; ... gerados a partir dos acentos combinantes
@@ -137,7 +143,23 @@ export function parseCifraClubHtml(html: string, sourceUrl: string): ImportedCho
       /id="cifra_tom"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/i,
       /id="cifra_tom"[^>]*>\s*(?:tom:)?\s*([A-G][#b]?m?)/i,
     ]),
+    ...readCapo(html),
     text,
     sourceUrl,
   }
+}
+
+// Ex.: "tom: <a>F#</a> (forma dos acordes no tom de <b>E</b>)" e
+// "Capotraste na <a>2ª casa</a>": os acordes da página ficam na forma de E.
+function readCapo(html: string): { capo: number | null; shapeKey: string | null } {
+  const text = stripTags(html.replace(/<pre[^>]*>[\s\S]*?<\/pre>/gi, ' ')).replace(/\s+/g, ' ')
+  const fret = Number(
+    text.match(/capotraste\s+(?:na\s+)?(\d{1,2})\s*[ªºa]?\s*casa/i)?.[1] ??
+      text.match(/capotraste\s+(?:na\s+)?casa\s+(\d{1,2})/i)?.[1] ??
+      0,
+  )
+  if (!fret || fret > 11) return { capo: null, shapeKey: null }
+  const shapeKey =
+    text.match(/forma\s+dos\s+acordes\s+no\s+tom\s+de\s+([A-G][#b]?m?)(?![\w#])/i)?.[1] ?? null
+  return { capo: fret, shapeKey }
 }

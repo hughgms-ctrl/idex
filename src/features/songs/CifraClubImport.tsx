@@ -10,7 +10,11 @@ import { invokeFunction } from '@/lib/functions'
 export type ImportedChords = {
   title: string | null
   artist: string | null
+  /** tom real (o que a banda toca) */
   key: string | null
+  /** casa do capotraste; os acordes de `text` estão na forma de `shapeKey` (versões antigas da função não mandam) */
+  capo?: number | null
+  shapeKey?: string | null
   text: string
   sourceUrl: string
 }
