@@ -162,8 +162,8 @@ export function SetlistPage() {
                 <>
                   <NativeSelect
                     aria-label={`Tom de ${item.songs?.title}`}
-                    wrapperClassName="w-20 shrink-0"
-                    className="pr-7 font-mono"
+                    wrapperClassName="w-24 shrink-0"
+                    className="px-2.5 font-mono"
                     value={item.key ?? ''}
                     onChange={(e) => setKey.mutate({ id: item.id, key: e.target.value || null })}
                   >
