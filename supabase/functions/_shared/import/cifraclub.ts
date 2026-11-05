@@ -138,13 +138,16 @@ export function parseCifraClubHtml(html: string, sourceUrl: string): ImportedCho
     .replace(/\s+-\s+Cifra Club\s*$/i, '')
     .split(/\s+-\s+/)
   const capo = readCapo(html)
-  // O link "alterar o tom" pode trazer a forma dos acordes (E), não o tom
-  // real (F#): com capotraste e forma conhecidos, o tom real é a conta.
+  // Site novo: "Tom: F# (com forma de E)" no botão `--chord-tone`. Site
+  // antigo: link "alterar o tom" em #cifra_tom (pode trazer a forma, E).
+  const toneKey = firstMatch(html, [
+    /data-anchor="--chord-tone"[^>]*>([\s\S]*?)<\/button>/i,
+  ])?.match(/^\s*([A-G][#b]?m?)(?![\w#])/)?.[1]
   const linkKey = firstMatch(html, [
     /id="cifra_tom"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/i,
     /id="cifra_tom"[^>]*>\s*(?:tom:)?\s*([A-G][#b]?m?)/i,
   ])
-  const key = capo.capo && capo.shapeKey ? shiftKey(capo.shapeKey, capo.capo) : linkKey
+  const key = toneKey ?? (capo.capo && capo.shapeKey ? shiftKey(capo.shapeKey, capo.capo) : linkKey)
 
   return {
     title:
@@ -170,17 +173,24 @@ export function shiftKey(key: string, semitones: number): string | null {
   return (m[3] ? MINOR : MAJOR)[(((base + semitones) % 12) + 12) % 12] ?? null
 }
 
-// Ex.: "tom: <a>F#</a> (forma dos acordes no tom de <b>E</b>)" e
-// "Capotraste na <a>2ª casa</a>": os acordes da página ficam na forma de E.
+// Site novo: "Tom: F# (com forma de E)" e "Capotraste: 2ª casa" (botões
+// `--chord-tone`/`--chord-capo`). Antigo: "tom: F# (forma dos acordes no tom
+// de E)" e "Capotraste na 2ª casa". Os acordes da página ficam na forma de E.
 function readCapo(html: string): { capo: number | null; shapeKey: string | null } {
-  const text = stripTags(html.replace(/<pre[^>]*>[\s\S]*?<\/pre>/gi, ' ')).replace(/\s+/g, ' ')
+  const capoButton = firstMatch(html, [/data-anchor="--chord-capo"[^>]*>([\s\S]*?)<\/button>/i])
+  const text = stripTags(html.replace(/<(pre|style|script)[^>]*>[\s\S]*?<\/\1>/gi, ' ')).replace(
+    /\s+/g,
+    ' ',
+  )
   const fret = Number(
-    text.match(/capo(?:traste)?\s+(?:na\s+)?(\d{1,2})\s*[ªºa]?\s*casa/i)?.[1] ??
-      text.match(/capo(?:traste)?\s+(?:na\s+)?casa\s+(\d{1,2})/i)?.[1] ??
+    capoButton?.match(/(\d{1,2})\s*[ªºa]?\s*casa/i)?.[1] ??
+      text.match(/capo(?:traste)?\s*:?\s*(?:na\s+)?(\d{1,2})\s*[ªºa]?\s*casa/i)?.[1] ??
+      text.match(/capo(?:traste)?\s*:?\s*(?:na\s+)?casa\s+(\d{1,2})/i)?.[1] ??
       0,
   )
   if (!fret || fret > 11) return { capo: null, shapeKey: null }
   const shapeKey =
-    text.match(/forma\s+dos\s+acordes\s+no\s+tom\s+de\s+([A-G][#b]?m?)(?![\w#])/i)?.[1] ?? null
+    text.match(/forma\s+(?:dos\s+acordes\s+)?(?:no\s+tom\s+)?de\s+([A-G][#b]?m?)(?![\w#])/i)?.[1] ??
+    null
   return { capo: fret, shapeKey }
 }
