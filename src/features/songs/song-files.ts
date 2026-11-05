@@ -172,12 +172,11 @@ export async function uploadSongFile(params: {
   }
   let path: string
   if (useR2) {
-    // o arquivo vai direto do aparelho para o R2. Grande (WAV): em partes de
-    // 8 MB, cada uma com novas tentativas (um envio só de 80 MB caía no meio).
-    path =
-      file.size > MULTIPART_FROM
-        ? await uploadInParts(songId, file, mime, params.onProgress)
-        : await uploadWhole(songId, file, mime, params.onProgress)
+    // o arquivo vai direto do aparelho para o R2, em partes de 8 MB (um
+    // arquivo pequeno = uma parte), cada uma com novas tentativas. Se o
+    // navegador não alcança o R2, as partes vão pelo servidor — por isso até
+    // um MP3 de 10 MB passa pelo mesmo caminho (num envio só, não tinha volta).
+    path = await uploadInParts(songId, file, mime, params.onProgress)
   } else {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'bin'
     path = `${churchId}/${songId}/${crypto.randomUUID()}.${ext}`
@@ -207,26 +206,6 @@ export async function uploadSongFile(params: {
     throw err
   }
   if (kind === 'audio' && params.isDefault) await setDefaultAudio(row.id)
-}
-
-/** Acima disso o envio vai em partes. */
-const MULTIPART_FROM = 16 * 1024 * 1024
-
-async function uploadWhole(
-  songId: string,
-  file: File,
-  mime: string,
-  onProgress?: (fraction: number) => void,
-): Promise<string> {
-  const { key, url } = await invokeFunction<{ key: string; url: string }>('song-storage', {
-    action: 'upload',
-    songId,
-    fileName: file.name,
-    contentType: mime,
-    size: file.size,
-  })
-  await putWithProgress(url, file, mime, onProgress)
-  return key
 }
 
 async function uploadInParts(
@@ -350,48 +329,6 @@ function putPart(url: string, blob: Blob, onLoaded: (bytes: number) => void): Pr
     xhr.onerror = () => reject(new PartBlocked())
     xhr.ontimeout = xhr.onerror
     xhr.send(blob)
-  })
-}
-
-/**
- * Envia o arquivo direto para o armazenamento (R2) mostrando o progresso.
- * Arquivo grande (WAV) leva minutos: o `fetch` não mostra progresso e, se a
- * conexão cai no meio, só dizia "sem conexão com o servidor".
- */
-function putWithProgress(
-  url: string,
-  file: File,
-  mime: string,
-  onProgress?: (fraction: number) => void,
-): Promise<void> {
-  const mb = (file.size / 1024 / 1024).toFixed(0)
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', url)
-    xhr.setRequestHeader('Content-Type', mime)
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable && e.total > 0) onProgress?.(e.loaded / e.total)
-    }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) return resolve()
-      const code = /<Code>([^<]+)<\/Code>/.exec(xhr.responseText ?? '')?.[1]
-      reject(
-        new Error(
-          `O armazenamento recusou "${file.name}" (erro ${xhr.status}${code ? `, ${code}` : ''}). Tente de novo.`,
-        ),
-      )
-    }
-    xhr.onerror = () =>
-      reject(
-        new Error(
-          `A conexão caiu no meio do envio de "${file.name}" (${mb} MB). Tente de novo numa internet estável` +
-            (/\.wav$/i.test(file.name)
-              ? ' ou exporte em MP3 (fica cerca de 10 vezes menor).'
-              : '.'),
-        ),
-      )
-    xhr.ontimeout = xhr.onerror
-    xhr.send(file)
   })
 }
 
