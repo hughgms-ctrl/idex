@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 import type { Commitment } from '@domain/gamification.ts'
-import { checkinWindow } from '@domain/schedule.ts'
+import { checkinWindow, jointEvents } from '@domain/schedule.ts'
 
 export const attendanceKeys = {
   all: ['attendance'] as const,
@@ -56,7 +56,9 @@ export function useMyAttendanceEvents(memberId: string | undefined) {
       const since = new Date(Date.now() - 4 * 86_400_000).toISOString()
       const { data, error } = await supabase
         .from('schedule_assignments')
-        .select('id, events!inner(id, title, kind, starts_at, ends_at)')
+        .select(
+          'id, events!inner(id, title, kind, starts_at, ends_at, arrive_at, service_event_id)',
+        )
         .eq('ministry_member_id', memberId ?? '')
         .gte('events.starts_at', since)
       if (error) throw error
@@ -79,13 +81,21 @@ export function useMyAttendanceEvents(memberId: string | undefined) {
           .in('event_id', eventIds),
       ])
       for (const r of [checkins, requests, justifications]) if (r.error) throw r.error
+      const allEvents = data.map((a) => a.events)
       return data
-        .map((a) => ({
-          event: a.events,
-          checkin: checkins.data?.find((c) => c.event_id === a.events.id) ?? null,
-          request: requests.data?.find((r) => r.event_id === a.events.id) ?? null,
-          justification: justifications.data?.find((j) => j.event_id === a.events.id) ?? null,
-        }))
+        .map((a) => {
+          // ensaio junto do culto (mesma chegada): um "esqueci" vale para os dois
+          const joint = jointEvents(a.events, allEvents)
+          return {
+            event: a.events,
+            checkin: checkins.data?.find((c) => c.event_id === a.events.id) ?? null,
+            request: requests.data?.find((r) => r.event_id === a.events.id) ?? null,
+            jointRequest:
+              requests.data?.find((r) => joint.some((e) => e.id === r.event_id)) ?? null,
+            joint,
+            justification: justifications.data?.find((j) => j.event_id === a.events.id) ?? null,
+          }
+        })
         .sort((x, y) => x.event.starts_at.localeCompare(y.event.starts_at))
     },
   })

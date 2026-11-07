@@ -68,9 +68,12 @@ export function MemberAttendance({
   const [params, setParams] = useSearchParams()
   const ledger = useMyLedger(memberId, cycle?.id)
   const events = useMyAttendanceEvents(memberId)
-  const [forgot, setForgot] = useState<{ id: string; title: string; starts_at: string } | null>(
-    null,
-  )
+  const [forgot, setForgot] = useState<{
+    id: string
+    title: string
+    starts_at: string
+    jointTitles?: string[]
+  } | null>(null)
   const [justify, setJustify] = useState<{ id: string; title: string; starts_at: string } | null>(
     null,
   )
@@ -88,9 +91,17 @@ export function MemberAttendance({
       now <= end + deadlineMs &&
       !e.checkin &&
       !e.request &&
+      !e.jointRequest &&
       e.justification?.status !== 'approved'
     )
   })
+  // culto e ensaio juntos (mesma chegada) aparecem uma vez só: o pedido vale para os dois
+  // (fica o culto; entre ensaios, o primeiro)
+  const rank = (e: (typeof forgotten)[number]) =>
+    `${e.event.service_event_id ? 1 : 0}:${e.event.id}`
+  const forgottenOnce = forgotten.filter(
+    (e) => !forgotten.some((o) => e.joint.some((j) => j.id === o.event.id) && rank(o) < rank(e)),
+  )
   const upcoming = list.filter((e) => Date.parse(e.event.starts_at) > now)
   const history = list.filter((e) => e.request || e.justification)
 
@@ -190,11 +201,11 @@ export function MemberAttendance({
       {settings && <TeamGoal ministryId={settings.ministry_id} />}
       <LastCycleSummary memberId={memberId} settings={settings} />
 
-      {forgotten.length > 0 && (
+      {forgottenOnce.length > 0 && (
         <section className="flex flex-col gap-2">
           <SectionTitle title="Esqueceu de registrar?" />
           <ul className="flex flex-col gap-2">
-            {forgotten.map((e) => (
+            {forgottenOnce.map((e) => (
               <li key={e.event.id}>
                 <Panel className="flex-row items-center gap-3">
                   <span className="flex min-w-0 flex-1 flex-col text-sm">
@@ -203,7 +214,18 @@ export function MemberAttendance({
                       {formatEventDate(e.event.starts_at)}
                     </span>
                   </span>
-                  <Button variant="outline" size="sm" onClick={() => setForgot(e.event)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setForgot({
+                        ...e.event,
+                        jointTitles: forgotten
+                          .filter((o) => e.joint.some((j) => j.id === o.event.id))
+                          .map((o) => o.event.title),
+                      })
+                    }
+                  >
                     Pedir registro
                   </Button>
                 </Panel>
