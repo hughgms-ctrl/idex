@@ -10,6 +10,7 @@ import {
   canTakeRole,
   isEligible,
   isUnavailable,
+  jointEvents,
   presenceState,
   parseWeeklyRule,
   suggestSubstitutes,
@@ -150,6 +151,68 @@ describe('conflitos', () => {
       eligibility: { hasClosedCycle: true, evaluated: new Set(['m1']), eligible: new Set() },
     }).map((c) => c.kind)
     expect(kinds).toEqual(['inactive', 'ineligible', 'missing_role', 'double_booked'])
+  })
+
+  it('o ensaio do próprio culto no mesmo horário não é choque', () => {
+    const service = { id: 's1', starts_at: '2026-11-08T12:30:00Z', ends_at: null }
+    const rehearsal = {
+      id: 'r1',
+      starts_at: '2026-11-08T11:00:00Z', // 08:00, 2 h → passa das 09:30
+      ends_at: null,
+      service_event_id: 's1',
+    }
+    const conflicts = assignmentConflicts({
+      ...base,
+      member: ana,
+      event: service,
+      events: [service, rehearsal],
+      assignments: [{ event_id: 'r1', ministry_member_id: 'm1', ministry_role_id: VOCAL }],
+    })
+    expect(conflicts).toEqual([])
+    // e no ensaio, o culto dele também não
+    expect(
+      assignmentConflicts({
+        ...base,
+        member: ana,
+        event: rehearsal,
+        events: [service, rehearsal],
+        assignments: [{ event_id: 's1', ministry_member_id: 'm1', ministry_role_id: VOCAL }],
+      }),
+    ).toEqual([])
+  })
+})
+
+describe('presença única (ensaio junto do culto)', () => {
+  const service = {
+    id: 's1',
+    service_event_id: null,
+    starts_at: '2026-11-08T12:30:00Z',
+    arrive_at: '2026-11-08T10:40:00Z',
+  }
+  const vozes = {
+    id: 'r1',
+    service_event_id: 's1',
+    starts_at: '2026-11-08T11:00:00Z',
+    arrive_at: '2026-11-08T10:40:00Z',
+  }
+  const banda = { ...vozes, id: 'r2', arrive_at: '2026-11-08T10:43:00Z' }
+  const outroDia = {
+    id: 'r3',
+    service_event_id: 's1',
+    starts_at: '2026-11-05T22:00:00Z',
+    arrive_at: null,
+  }
+  const outroCulto = { ...service, id: 's2' }
+  const family = [service, vozes, banda, outroDia, outroCulto]
+
+  it('mesma chegada (até 5 min) vale para culto e ensaios do mesmo culto', () => {
+    expect(jointEvents(service, family).map((e) => e.id)).toEqual(['r1', 'r2'])
+    expect(jointEvents(vozes, family).map((e) => e.id)).toEqual(['s1', 'r2'])
+  })
+
+  it('ensaio em outro dia ou culto diferente não entra', () => {
+    expect(jointEvents(outroDia, family)).toEqual([])
+    expect(jointEvents(outroCulto, family)).toEqual([])
   })
 })
 

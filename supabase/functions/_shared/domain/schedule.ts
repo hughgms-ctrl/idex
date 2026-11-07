@@ -11,7 +11,22 @@ import {
 
 export const DEFAULT_EVENT_DURATION_MIN = 120
 
-export type EventLike = { id: string; starts_at: string; ends_at: string | null }
+export type EventLike = {
+  id: string
+  starts_at: string
+  ends_at: string | null
+  /** ensaio: o culto a que pertence */
+  service_event_id?: string | null
+}
+
+/** Culto e ensaio do mesmo culto (ou dois ensaios dele): nunca são "choque". */
+export function sameServiceFamily(
+  a: Pick<EventLike, 'id' | 'service_event_id'>,
+  b: Pick<EventLike, 'id' | 'service_event_id'>,
+): boolean {
+  const root = (e: Pick<EventLike, 'id' | 'service_event_id'>) => e.service_event_id ?? e.id
+  return a.id !== b.id && root(a) === root(b)
+}
 
 export type Unavailability = {
   ministry_member_id: string
@@ -65,6 +80,28 @@ export type EligibilityInfo = {
  */
 export function callTime(event: { starts_at: string; arrive_at?: string | null }): string {
   return event.arrive_at ?? event.starts_at
+}
+
+/** Diferença máxima entre chegadas para o ensaio contar como "junto do culto". */
+export const JOINT_CALL_TOLERANCE_MIN = 5
+
+/**
+ * Ensaio no mesmo horário de chegada do culto (ex.: culto mudou para a manhã e
+ * o ensaio virou a passagem de som): uma presença só vale para os dois.
+ * Devolve os outros eventos da mesma família (culto + ensaios) com a mesma
+ * chegada (diferença até 5 min).
+ */
+export function jointEvents<
+  E extends Pick<EventLike, 'id' | 'service_event_id' | 'starts_at'> & {
+    arrive_at?: string | null
+  },
+>(event: E, family: E[]): E[] {
+  const call = new Date(callTime(event)).getTime()
+  return family.filter(
+    (e) =>
+      sameServiceFamily(event, e) &&
+      Math.abs(new Date(callTime(e)).getTime() - call) <= JOINT_CALL_TOLERANCE_MIN * 60_000,
+  )
 }
 
 export function eventEnd(event: Pick<EventLike, 'starts_at' | 'ends_at'>): Date {
@@ -335,6 +372,8 @@ export function assignmentConflicts(params: {
   for (const a of assignments) {
     if (a.ministry_member_id !== member.id || a.event_id === event.id) continue
     const other = byId.get(a.event_id)
+    // o ensaio do próprio culto não é "outro compromisso no mesmo horário"
+    if (other && sameServiceFamily(event, other)) continue
     if (other && overlaps(start, end, new Date(other.starts_at), eventEnd(other))) {
       out.push({
         kind: 'double_booked',

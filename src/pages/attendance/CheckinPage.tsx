@@ -30,6 +30,8 @@ type Result = {
   balance: number | null
   distanceM: number | null
   consequence?: { scope: string; message: string } | null
+  /** outros eventos que receberam a mesma presença (ensaio junto do culto) */
+  joint?: string[]
 }
 type Step =
   | { name: 'intro' }
@@ -347,6 +349,12 @@ function CheckinResult({ result }: { result: Result }) {
               ? 'ATRASO JUSTIFICADO · SEM DESCONTO'
               : 'NO HORÁRIO'}
         </span>
+        {result.joint && result.joint.length > 0 && (
+          <p className="text-muted-foreground text-sm">
+            Vale também para {result.joint.includes('service') ? 'o culto' : 'o ensaio'} — mesma
+            chegada, uma presença só.
+          </p>
+        )}
         {result.balance !== null && (
           <p className="text-muted-foreground text-sm">
             Seu saldo no ciclo:{' '}
