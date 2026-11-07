@@ -32,6 +32,7 @@ export function useScheduleData(ministryId: string | undefined, year: number, mo
       id: e.id,
       starts_at: e.starts_at,
       ends_at: e.ends_at,
+      service_event_id: e.service_event_id,
     }))
     const assignments: Assignment[] = eventList.flatMap((e) => e.schedule_assignments)
     const memberList: MemberLike[] = (members.data ?? []).map((m) => ({

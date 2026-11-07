@@ -227,6 +227,47 @@ describe('checkin', () => {
     expect(ok.status).toBe(200)
   })
 
+  describe('ensaio junto do culto (mesma chegada)', () => {
+    const REHEARSAL = '1b6f6f8e-3c1a-4d2a-9f4b-1a2b3c4d5e6f'
+    function jointSetup(now: number, rehearsal: Partial<EventContext> = {}) {
+      const service = context()
+      const reh = context(rehearsal)
+      reh.event = { ...reh.event, id: REHEARSAL, kind: 'rehearsal', service_event_id: EVENT }
+      const s = setup(now, service)
+      s.deps.loadEventContext = async (id) => (id === EVENT ? service : reh)
+      s.deps.loadServiceFamily = async () => [
+        { id: EVENT, service_event_id: null, starts_at: service.event.starts_at, arrive_at: null },
+        {
+          id: REHEARSAL,
+          service_event_id: EVENT,
+          starts_at: reh.event.starts_at,
+          arrive_at: null,
+        },
+      ]
+      return s
+    }
+
+    it('uma presença vale para o culto e o ensaio; o desconto conta uma vez', async () => {
+      const now = START + 25 * 60_000
+      const { deps, recorded } = jointSetup(now)
+      const r = await post(deps, { qr: await qrPayload(SECRET, EVENT, now), ...IGREJA })
+      expect(r.status).toBe(200)
+      expect(r.body).toMatchObject({ kind: 'late', delta: -10, joint: ['rehearsal'] })
+      expect(recorded).toHaveLength(2)
+      expect(recorded[1]).toMatchObject({ eventId: REHEARSAL, delta: 0, lateMinutes: 25 })
+    })
+
+    it('não registra no ensaio quem não está nele ou já registrou', async () => {
+      const now = START
+      for (const over of [{ assigned: false }, { alreadyCheckedIn: true }, { benched: true }]) {
+        const { deps, recorded } = jointSetup(now, over)
+        const r = await post(deps, { qr: await qrPayload(SECRET, EVENT, now), ...IGREJA })
+        expect(r.body).toMatchObject({ joint: [] })
+        expect(recorded).toHaveLength(1)
+      }
+    })
+  })
+
   describe('QR fixo e regras de atraso', () => {
     it('QR fixo (endereço impresso) leva ao evento com ponto aberto', async () => {
       const { deps, recorded } = setup(START)
