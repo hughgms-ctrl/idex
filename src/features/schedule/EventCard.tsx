@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AlertCircle } from 'lucide-react'
 import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
@@ -9,6 +10,12 @@ import type { ScheduleData } from '@/features/schedule/useScheduleData'
 import { writtenBeforeChange } from '@/features/availability/answered'
 import { formatEventDate, formatShortDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import {
+  alertKey,
+  ignoreAlert,
+  ignoredAlerts,
+  unignoreEvent,
+} from '@/features/schedule/ignored-alerts'
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const hour = (iso: string) => {
@@ -34,6 +41,7 @@ export function EventCard({
   past?: boolean
 }) {
   const navigate = useNavigate()
+  const [ignored, setIgnored] = useState(ignoredAlerts)
   const p = localParts(event.starts_at)
   const assignments = [...event.schedule_assignments].sort(
     (a, b) =>
@@ -44,7 +52,7 @@ export function EventCard({
   )
 
   // Alertas (só o líder vê): conflitos com sugestão de substituto
-  const alerts =
+  const allAlerts =
     leader && !past
       ? assignments.flatMap((a) => {
           const member = data.memberById.get(a.ministry_member_id)
@@ -68,6 +76,7 @@ export function EventCard({
           }
           const first = conflicts[0]
           if (!first) return []
+          const key = alertKey(a.id, first.kind)
           const [suggestion] = suggestSubstitutes({
             roleId: a.ministry_role_id,
             event,
@@ -96,6 +105,7 @@ export function EventCard({
           return [
             {
               id: a.id,
+              key,
               text: `${first.message.replace(/\.$/, '')}${when}.${
                 suggestion
                   ? ` Sugestão: ${suggestion.member.name} (disponível, ${suggestion.assignmentsInMonth} ${suggestion.assignmentsInMonth === 1 ? 'escala' : 'escalas'} no mês).`
@@ -105,6 +115,8 @@ export function EventCard({
           ]
         })
       : []
+  const alerts = allAlerts.filter((alert) => !ignored.has(alert.key))
+  const hiddenCount = allAlerts.length - alerts.length
 
   const content = (
     <>
@@ -153,6 +165,11 @@ export function EventCard({
           )}
         </div>
       ))}
+      {rehearsals.some((r) => sameCall(r, event)) && (
+        <p className="text-muted-foreground text-[13px]">
+          Ensaio junto do culto (mesma chegada): uma presença só vale para os dois.
+        </p>
+      )}
       {assignments.length === 0 ? (
         <p className="text-muted-foreground text-[13px]">
           {event.service_event_id
@@ -195,11 +212,35 @@ export function EventCard({
           className="border-warning flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-[13px] leading-snug"
         >
           <AlertCircle className="text-warning mt-px size-[18px] shrink-0" aria-hidden="true" />
-          <span>
+          <span className="flex-1">
             {alert.text} <span className="text-primary underline">Trocar</span>
           </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIgnored(ignoreAlert(alert.key))
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="text-muted-foreground hover:text-foreground -my-2 -mr-2 min-h-11 shrink-0 px-2 text-[13px] font-semibold underline"
+          >
+            Ignorar
+          </button>
         </div>
       ))}
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setIgnored(unignoreEvent(assignments.map((a) => a.id)))
+          }}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="text-muted-foreground hover:text-foreground min-h-11 self-start text-[13px] underline"
+        >
+          {hiddenCount === 1 ? '1 alerta ignorado' : `${hiddenCount} alertas ignorados`} · mostrar
+        </button>
+      )}
     </>
   )
 
@@ -229,6 +270,19 @@ export function EventCard({
     </div>
   ) : (
     <section className={className}>{content}</section>
+  )
+}
+
+function sameCall(
+  a: { starts_at: string; arrive_at: string | null },
+  b: { starts_at: string; arrive_at: string | null },
+): boolean {
+  return (
+    Math.abs(
+      new Date(a.arrive_at ?? a.starts_at).getTime() -
+        new Date(b.arrive_at ?? b.starts_at).getTime(),
+    ) <=
+    5 * 60_000
   )
 }
 

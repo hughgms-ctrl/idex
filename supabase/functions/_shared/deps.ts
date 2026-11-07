@@ -264,6 +264,33 @@ export function makeDeps(
       ),
 
     /**
+     * Família do evento (o culto e os ensaios dele), para a presença única
+     * quando o ensaio tem a mesma chegada do culto.
+     */
+    loadServiceFamily: async (
+      eventId: string,
+    ): Promise<
+      {
+        id: string
+        service_event_id: string | null
+        starts_at: string
+        arrive_at: string | null
+      }[]
+    > => {
+      const event = await must<any>(
+        service.from('events').select('id, service_event_id').eq('id', eventId).maybeSingle(),
+      )
+      if (!event) return []
+      const root = event.service_event_id ?? event.id
+      return must<any[]>(
+        service
+          .from('events')
+          .select('id, service_event_id, starts_at, arrive_at')
+          .or(`id.eq.${root},service_event_id.eq.${root}`),
+      )
+    },
+
+    /**
      * QR fixo: acha o evento do integrante com o ponto aberto agora
      * (2h antes da chegada até o fim), o mais próximo do horário de chegada.
      */
@@ -295,7 +322,9 @@ export function makeDeps(
       const rows = await must<any[]>(
         service
           .from('schedule_assignments')
-          .select('event_id, events!inner(id, ministry_id, starts_at, arrive_at, ends_at)')
+          .select(
+            'event_id, events!inner(id, ministry_id, service_event_id, starts_at, arrive_at, ends_at)',
+          )
           .eq('ministry_member_id', member.id)
           .neq('status', 'declined')
           .eq('events.ministry_id', settings.ministry_id)
@@ -313,7 +342,9 @@ export function makeDeps(
         .sort(
           (a, b) =>
             Math.abs(new Date(a.arrive_at ?? a.starts_at).getTime() - nowMs) -
-            Math.abs(new Date(b.arrive_at ?? b.starts_at).getTime() - nowMs),
+              Math.abs(new Date(b.arrive_at ?? b.starts_at).getTime() - nowMs) ||
+            // mesma chegada (ensaio junto do culto): o culto primeiro
+            Number(Boolean(a.service_event_id)) - Number(Boolean(b.service_event_id)),
         )
       return open[0] ? { status: 'ok', eventId: open[0].id } : { status: 'none' }
     },
