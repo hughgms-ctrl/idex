@@ -23,7 +23,14 @@ import { supabase } from '@/lib/supabase'
 type EventInfo = { id: string; title: string; starts_at: string }
 
 /** "Esqueci de registrar": horário declarado + motivo. */
-export function ForgotDialog({ event, onClose }: { event: EventInfo | null; onClose: () => void }) {
+export function ForgotDialog({
+  event,
+  onClose,
+}: {
+  /** jointTitles: ensaio/culto com a mesma chegada, que o pedido também cobre */
+  event: (EventInfo & { jointTitles?: string[] }) | null
+  onClose: () => void
+}) {
   const queryClient = useQueryClient()
   const initial = event ? toLocalInputs(event.starts_at) : { date: '', time: '' }
   const [time, setTime] = useState(initial.time)
@@ -56,6 +63,9 @@ export function ForgotDialog({ event, onClose }: { event: EventInfo | null; onCl
           <DialogDescription>
             {event && `${event.title} · ${formatEventDate(event.starts_at)}`}. O líder confere e
             aprova.
+            {event?.jointTitles && event.jointTitles.length > 0 && (
+              <> Vale também para {event.jointTitles.join(' e ')} (mesma chegada).</>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
