@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import { supabase } from '@/lib/supabase'
 
@@ -102,3 +102,53 @@ export function useCanEditSetlist(eventId: string | undefined) {
     },
   })
 }
+
+/** Página de cultos que já passaram (mais recentes primeiro), com as músicas do setlist. */
+export const PAST_SERVICES_PAGE = 20
+
+export function usePastServices(ministryId: string | undefined) {
+  return useInfiniteQuery({
+    queryKey: ['songs', 'past-services', ministryId ?? ''],
+    enabled: Boolean(ministryId),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
+      // mesmo corte de useNextServices: o que ainda não "passou" aparece lá
+      const before = new Date(Date.now() - 6 * 3_600_000).toISOString()
+      const { data, error } = await supabase
+        .from('events')
+        .select(
+          'id, title, starts_at, setlists(id, setlist_items(position, key, songs(id, title)))',
+        )
+        .eq('ministry_id', ministryId ?? '')
+        .eq('kind', 'service')
+        .lt('starts_at', before)
+        .order('starts_at', { ascending: false })
+        .range(pageParam, pageParam + PAST_SERVICES_PAGE - 1)
+      if (error) throw error
+      return data.map((e) => {
+        // setlists é 1:1 com o evento; o PostgREST pode devolver objeto ou lista
+        const sl: unknown = e.setlists
+        const first = (Array.isArray(sl) ? sl[0] : sl) as
+          | {
+              setlist_items: {
+                position: number
+                key: string | null
+                songs: { id: string; title: string } | null
+              }[]
+            }
+          | null
+          | undefined
+        const songs = [...(first?.setlist_items ?? [])]
+          .sort((a, b) => a.position - b.position)
+          .flatMap((i) => (i.songs ? [{ id: i.songs.id, title: i.songs.title, key: i.key }] : []))
+        return { id: e.id, title: e.title, starts_at: e.starts_at, songs }
+      })
+    },
+    getNextPageParam: (last, pages) =>
+      last.length < PAST_SERVICES_PAGE ? undefined : pages.length * PAST_SERVICES_PAGE,
+  })
+}
+
+export type PastService = NonNullable<
+  ReturnType<typeof usePastServices>['data']
+>['pages'][number][number]

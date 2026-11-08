@@ -87,6 +87,13 @@ const router = createBrowserRouter([
           { path: 'repertorio', element: <RepertoirePage /> },
           { path: 'repertorio/culto/:eventId', element: <SetlistPage /> },
           {
+            path: 'repertorio/cultos-passados',
+            lazy: () =>
+              import('@/pages/songs/PastServicesPage').then((m) => ({
+                Component: m.PastServicesPage,
+              })),
+          },
+          {
             path: 'repertorio/nova',
             lazy: () =>
               import('@/pages/songs/SongEditorPage').then((m) => ({ Component: m.SongEditorPage })),

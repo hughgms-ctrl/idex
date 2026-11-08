@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { CalendarRange, Layers, ListMusic, Plus, Search } from 'lucide-react'
+import { Archive, CalendarRange, Layers, ListMusic, Plus, Search } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { PageHeader } from '@/components/PageHeader'
@@ -66,9 +66,25 @@ export function RepertoirePage() {
         }
       />
 
+      {nextServices.data && nextServices.data.length === 0 && (
+        <Link to="/repertorio/cultos-passados" className="text-primary self-start text-sm">
+          Ver cultos passados
+        </Link>
+      )}
+
       {nextServices.data && nextServices.data.length > 0 && (
         <section className="flex flex-col gap-2">
-          <SectionTitle title="Setlist dos próximos cultos" />
+          <SectionTitle
+            title="Setlist dos próximos cultos"
+            action={
+              <Link
+                to="/repertorio/cultos-passados"
+                className="text-primary inline-flex min-h-11 items-center gap-1 text-sm"
+              >
+                <Archive className="size-4" aria-hidden="true" /> Cultos passados
+              </Link>
+            }
+          />
           <ul className="flex gap-2.5 overflow-x-auto pb-1">
             {nextServices.data.map((e) => {
               // setlists é 1:1 com o evento; o PostgREST pode devolver objeto ou lista
