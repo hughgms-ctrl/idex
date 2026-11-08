@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { AlertCircle, AlertTriangle, MonitorUp } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ChevronRight, MonitorUp } from 'lucide-react'
 
 import { Panel } from '@/components/Section'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,11 @@ import {
   useMinistryBalances,
   usePendingReviews,
 } from '@/features/attendance/queries'
+import {
+  LeaderJustifyDialog,
+  MemberPointsDialog,
+  type JustifyTarget,
+} from '@/features/attendance/LeaderJustify'
 import { liveStatus, type LiveTone } from '@/features/attendance/status'
 import { noticeOutdated } from '@/features/availability/answered'
 import type { MinistryMemberRow } from '@/features/members/queries'
@@ -69,6 +74,7 @@ export function LiveEventPanel({
   const eventId = selected ?? current?.id
   const event = list.find((e) => e.id === eventId)
   const live = useLiveAttendance(eventId)
+  const [justify, setJustify] = useState<JustifyTarget | null>(null)
 
   if (events.isPending) return <p className="text-muted-foreground text-sm">Carregando…</p>
   if (!event) {
@@ -184,11 +190,32 @@ export function LiveEventPanel({
                     {status.label}
                   </span>
                 )}
+                {member &&
+                  status &&
+                  (status.tone === 'absent' ||
+                    status.tone === 'late' ||
+                    status.tone === 'waiting') && (
+                    <button
+                      type="button"
+                      className="text-primary min-h-6 text-[12px] font-medium underline"
+                      onClick={() =>
+                        setJustify({
+                          memberId: member.id,
+                          memberName: member.name,
+                          eventId: event.id,
+                          kind: status.tone === 'late' ? 'late' : 'absence',
+                        })
+                      }
+                    >
+                      Justificar
+                    </button>
+                  )}
               </span>
             </li>
           ))}
         </ul>
       )}
+      <LeaderJustifyDialog target={justify} onClose={() => setJustify(null)} />
     </>
   )
 }
@@ -424,33 +451,57 @@ export function TeamBalances({
   minPoints: number
 }) {
   const balances = useMinistryBalances(ministryId, cycleId, true)
+  const [open, setOpen] = useState<{ id: string; name: string } | null>(null)
+  const [justify, setJustify] = useState<JustifyTarget | null>(null)
   const rows = members
     .filter((m) => m.status === 'active')
     .map((m) => ({ m, b: balances.data?.find((b) => b.ministry_member_id === m.id) }))
     .sort((x, y) => (x.b?.balance ?? 0) - (y.b?.balance ?? 0))
 
   return (
-    <ul className="bg-card flex flex-col overflow-hidden rounded-2xl border">
-      {rows.map(({ m, b }) => {
-        const value = b?.balance ?? 0
-        return (
-          <li key={m.id} className="flex items-center gap-3 border-b px-3.5 py-2.5 last:border-b-0">
-            <span className="flex-1 truncate text-[15px]">{m.name}</span>
-            {(b?.penalties ?? 0) > 0 && (
-              <span className="text-muted-foreground text-xs">{b?.penalties} desc.</span>
-            )}
-            <span
-              className={cn(
-                'font-mono text-[15px] font-semibold',
-                value >= minPoints ? 'text-primary' : 'text-warning',
-              )}
-            >
-              {value}
-            </span>
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      <p className="text-muted-foreground -mb-2 text-xs">
+        Toque em uma pessoa para ver o extrato e justificar um desconto.
+      </p>
+      <ul className="bg-card flex flex-col overflow-hidden rounded-2xl border">
+        {rows.map(({ m, b }) => {
+          const value = b?.balance ?? 0
+          return (
+            <li key={m.id} className="border-b last:border-b-0">
+              <button
+                type="button"
+                className="hover:bg-secondary/50 flex min-h-11 w-full items-center gap-3 px-3.5 py-2.5 text-left"
+                onClick={() => setOpen({ id: m.id, name: m.name })}
+              >
+                <span className="flex-1 truncate text-[15px]">{m.name}</span>
+                {(b?.penalties ?? 0) > 0 && (
+                  <span className="text-muted-foreground text-xs">{b?.penalties} desc.</span>
+                )}
+                <span
+                  className={cn(
+                    'font-mono text-[15px] font-semibold',
+                    value >= minPoints ? 'text-primary' : 'text-warning',
+                  )}
+                >
+                  {value}
+                </span>
+                <ChevronRight className="text-muted-foreground size-4" aria-hidden="true" />
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      <MemberPointsDialog
+        member={open}
+        cycleId={cycleId}
+        onClose={() => setOpen(null)}
+        onJustify={(t) => {
+          setOpen(null)
+          setJustify(t)
+        }}
+      />
+      <LeaderJustifyDialog target={justify} onClose={() => setJustify(null)} />
+    </>
   )
 }
 

@@ -7,6 +7,7 @@ import {
   TeamBalances,
 } from '@/features/attendance/LeaderAttendance'
 import { RulesCard, TeamGoal } from '@/features/attendance/Gamification'
+import { JustificationHistory } from '@/features/attendance/LeaderJustify'
 import { MemberAttendance } from '@/features/attendance/MemberAttendance'
 import { usePendingReviews } from '@/features/attendance/queries'
 import { useMinistryMembers } from '@/features/members/queries'
@@ -77,11 +78,12 @@ export function PresencePage() {
             settings={settings.data ?? null}
           />
         </TabsContent>
-        <TabsContent value="pedidos">
+        <TabsContent value="pedidos" className="flex flex-col gap-6">
           <PendingReviews
             ministryId={ministry.id}
             limit={s?.checkin_request_limit_per_cycle ?? 3}
           />
+          <JustificationHistory ministryId={ministry.id} />
         </TabsContent>
         <TabsContent value="equipe" className="flex flex-col gap-4">
           <TeamGoal ministryId={ministry.id} />

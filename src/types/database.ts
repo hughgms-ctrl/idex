@@ -918,10 +918,76 @@ export type Database = {
           },
         ]
       }
+      justification_log: {
+        Row: {
+          action: string
+          actor: string | null
+          at: string
+          church_id: string
+          event_id: string | null
+          id: string
+          justification_id: string | null
+          kind: Database['public']['Enums']['justification_kind'] | null
+          ministry_member_id: string | null
+          note: string | null
+          reason: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          action: string
+          actor?: string | null
+          at?: string
+          church_id: string
+          event_id?: string | null
+          id?: string
+          justification_id?: string | null
+          kind?: Database['public']['Enums']['justification_kind'] | null
+          ministry_member_id?: string | null
+          note?: string | null
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string | null
+          at?: string
+          church_id?: string
+          event_id?: string | null
+          id?: string
+          justification_id?: string | null
+          kind?: Database['public']['Enums']['justification_kind'] | null
+          ministry_member_id?: string | null
+          note?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'justification_log_actor_fkey'
+            columns: ['actor']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'justification_log_event_id_fkey'
+            columns: ['event_id']
+            isOneToOne: false
+            referencedRelation: 'events'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'justification_log_ministry_member_id_fkey'
+            columns: ['ministry_member_id']
+            isOneToOne: false
+            referencedRelation: 'ministry_members'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       justifications: {
         Row: {
           church_id: string
           created_at: string
+          created_by: string | null
           event_id: string
           id: string
           kind: Database['public']['Enums']['justification_kind']
@@ -937,6 +1003,7 @@ export type Database = {
         Insert: {
           church_id: string
           created_at?: string
+          created_by?: string | null
           event_id: string
           id?: string
           kind: Database['public']['Enums']['justification_kind']
@@ -951,6 +1018,7 @@ export type Database = {
         Update: {
           church_id?: string
           created_at?: string
+          created_by?: string | null
           event_id?: string
           id?: string
           kind?: Database['public']['Enums']['justification_kind']
@@ -976,6 +1044,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'ministry_members'
             referencedColumns: ['id', 'church_id']
+          },
+          {
+            foreignKeyName: 'justifications_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
           },
           {
             foreignKeyName: 'justifications_reviewed_by_fkey'
@@ -2351,6 +2426,15 @@ export type Database = {
       is_self_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_setlist_leader: { Args: { p_setlist_id: string }; Returns: boolean }
       is_support_only: { Args: { p_church_id: string; p_user_id: string }; Returns: boolean }
+      leader_register_justification: {
+        Args: {
+          p_event_id: string
+          p_kind: Database['public']['Enums']['justification_kind']
+          p_ministry_member_id: string
+          p_reason: string
+        }
+        Returns: string
+      }
       log_checkin_attempt: {
         Args: {
           p_accuracy_m?: number
