@@ -16,7 +16,7 @@ begin
 end;
 $fn$;
 
-select plan(7);
+select plan(8);
 
 insert into auth.users (id, email) values
   ('c3000000-0000-4000-8000-000000000001', 'lider@aviso.local'),
@@ -77,6 +77,14 @@ values ((select v from ids where k = 'church'), (select v from ids where k = 'en
 reset role;
 select pg_temp.entrar_como('c3000000-0000-4000-8000-000000000001');
 select public.review_justification(id, true) from justifications;
+reset role;
+
+-- um 2º aviso no culto junto não entra: o do ensaio já vale para os dois
+select pg_temp.entrar_como('c3000000-0000-4000-8000-000000000002');
+select throws_ok(
+  format($$insert into justifications (church_id, event_id, ministry_member_id, kind, reason) values (%L, %L, %L, 'absence', 'De novo')$$,
+    (select v from ids where k = 'church'), (select v from ids where k = 'culto'), (select v from ids where k = 'faltou')),
+  '22023', null, 'não aceita um 2º aviso no evento junto');
 reset role;
 
 select ok(public.has_approved_justification((select v from ids where k = 'culto'), (select v from ids where k = 'faltou')),
