@@ -37,6 +37,23 @@ describe('painel ao vivo', () => {
     ).toBe('JUSTIFICOU')
   })
 
+  it('aviso aprovado do evento junto vale mais que um pendente deste', () => {
+    expect(
+      liveStatus({
+        memberId: 'a',
+        data: {
+          ...empty,
+          justifications: [
+            { ministry_member_id: 'a', status: 'pending' },
+            { ministry_member_id: 'a', status: 'approved' },
+          ],
+        },
+        eventEnded: true,
+        toleranceMin: 10,
+      }).tone,
+    ).toBe('justified')
+  })
+
   it('aguardando, em análise, falta', () => {
     expect(
       liveStatus({ memberId: 'a', data: empty, eventEnded: false, toleranceMin: 10 }).tone,
