@@ -178,7 +178,11 @@ function HistoryItem({ card }: { card: HistoryCard }) {
           </li>
         ))}
       </ul>
-      {card.reason && <p className="text-sm">“{card.reason}”</p>}
+      {card.reasons.map((r) => (
+        <p key={r} className="text-sm">
+          “{r}”
+        </p>
+      ))}
       <ol className="flex flex-col gap-0.5 border-t pt-2">
         {card.steps.map((s, i) => (
           <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-xs">

@@ -145,7 +145,17 @@ describe('groupHistory', () => {
     expect(cards[0]!.steps.map((s) => s.action)).toEqual(['created', 'approved'])
   })
 
-  it('não junta outro culto, outra pessoa nem motivo diferente', () => {
+  it('junta culto e ensaio mesmo com motivos diferentes (mostra os dois)', () => {
+    const cards = groupHistory([
+      row('1', 'j1', 'created', '2026-11-08T10:00:00Z', culto, { reason: 'Chuva' }),
+      row('2', 'j2', 'created', '2026-11-08T10:05:00Z', ensaio, { reason: 'Chuva e crianças' }),
+      row('3', 'j3', 'created', '2026-11-08T10:06:00Z', ensaio, { member_id: 'n', member: 'Bia' }),
+    ])
+    expect(cards).toHaveLength(2)
+    expect(cards.find((c) => c.memberId === 'm')!.reasons).toEqual(['Chuva', 'Chuva e crianças'])
+  })
+
+  it('não junta outro culto, outra pessoa nem outro tipo', () => {
     expect(
       groupHistory([
         row('1', 'j1', 'created', '2026-11-08T10:00:00Z', culto),
@@ -154,7 +164,7 @@ describe('groupHistory', () => {
           member_id: 'n',
           member: 'Bia',
         }),
-        row('4', 'j4', 'created', '2026-11-08T10:00:00Z', ensaio, { reason: 'Outro' }),
+        row('4', 'j4', 'created', '2026-11-08T10:00:00Z', ensaio, { kind: 'late' }),
       ]),
     ).toHaveLength(4)
   })

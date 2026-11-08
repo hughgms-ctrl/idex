@@ -106,7 +106,8 @@ export type HistoryCard = {
   memberId: string
   member: string
   kind: string | null
-  reason: string | null
+  /** motivos (um por aviso; repetidos aparecem uma vez) */
+  reasons: string[]
   events: HistoryEvent[]
   /** situação atual: a última decisão (ou cancelado / aguardando) */
   status: 'pending' | 'approved' | 'rejected' | 'cancelled'
@@ -161,7 +162,7 @@ export function groupHistory(rows: HistoryRow[]): HistoryCard[] {
       memberId: latest.member_id,
       member: latest.member,
       kind: textRow.kind,
-      reason: textRow.reason,
+      reasons: textRow.reason ? [textRow.reason] : [],
       events: [latest.event],
       status,
       byLeader: sorted.some((r) => r.action === 'created_by_leader'),
@@ -170,14 +171,13 @@ export function groupHistory(rows: HistoryRow[]): HistoryCard[] {
     })
   }
 
-  // 2) junta os avisos da mesma pessoa em culto e ensaio juntos (mesmo tipo e motivo)
+  // 2) junta os avisos da mesma pessoa e do mesmo tipo em culto e ensaio juntos
   const merged: HistoryCard[] = []
   for (const card of cards.sort((a, b) => a.lastAt.localeCompare(b.lastAt))) {
     const twin = merged.find(
       (m) =>
         m.memberId === card.memberId &&
         m.kind === card.kind &&
-        norm(m.reason) === norm(card.reason) &&
         m.events.some((e) => card.events.some((c) => historyEventsJoint(e, c))),
     )
     if (!twin) {
@@ -185,6 +185,9 @@ export function groupHistory(rows: HistoryRow[]): HistoryCard[] {
       continue
     }
     twin.events.push(...card.events)
+    for (const r of card.reasons) {
+      if (!twin.reasons.some((x) => norm(x) === norm(r))) twin.reasons.push(r)
+    }
     twin.events.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
     twin.steps = dedupeSteps([...twin.steps, ...card.steps])
     twin.byLeader ||= card.byLeader
