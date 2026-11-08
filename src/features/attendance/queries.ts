@@ -142,10 +142,8 @@ export function useLiveAttendance(eventId: string | undefined) {
           .from('checkins')
           .select('ministry_member_id, arrived_at, late_minutes, source')
           .eq('event_id', id),
-        supabase
-          .from('justifications')
-          .select('ministry_member_id, status, kind')
-          .eq('event_id', id),
+        // avisos deste evento e do evento junto (ensaio com a mesma chegada do culto)
+        supabase.rpc('justifications_for_event', { p_event_id: id }),
         supabase.from('checkin_requests').select('ministry_member_id, status').eq('event_id', id),
         supabase
           .from('point_ledger')

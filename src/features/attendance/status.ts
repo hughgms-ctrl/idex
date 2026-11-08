@@ -19,7 +19,9 @@ export function liveStatus(params: {
 }): LiveStatus {
   const { memberId, data, eventEnded, toleranceMin } = params
   const checkin = data.checkins.find((c) => c.ministry_member_id === memberId)
-  const justification = data.justifications.find((j) => j.ministry_member_id === memberId)
+  // pode haver aviso deste evento e do evento junto: o aprovado vale mais
+  const mine = data.justifications.filter((j) => j.ministry_member_id === memberId)
+  const justification = mine.find((j) => j.status === 'approved') ?? mine[0]
   const request = data.requests.find((r) => r.ministry_member_id === memberId)
   const penalty = data.ledger
     .filter((l) => l.ministry_member_id === memberId && l.reason !== 'cycle_start')

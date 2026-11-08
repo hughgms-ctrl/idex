@@ -2426,6 +2426,16 @@ export type Database = {
       is_self_member: { Args: { p_ministry_member_id: string }; Returns: boolean }
       is_setlist_leader: { Args: { p_setlist_id: string }; Returns: boolean }
       is_support_only: { Args: { p_church_id: string; p_user_id: string }; Returns: boolean }
+      justifications_for_event: {
+        Args: { p_event_id: string }
+        Returns: Database['public']['Tables']['justifications']['Row'][]
+        SetofOptions: {
+          from: '*'
+          to: 'justifications'
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       leader_register_justification: {
         Args: {
           p_event_id: string
