@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { FileCheck2, History } from 'lucide-react'
+import { FileCheck2 } from 'lucide-react'
 
 import { FormField } from '@/components/FormField'
-import { Panel } from '@/components/Section'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -16,12 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
-import {
-  historySentence,
-  kindForLedgerReason,
-  openDiscount,
-  type HistoryTone,
-} from '@/features/attendance/justification-history'
+import { kindForLedgerReason, openDiscount } from '@/features/attendance/justification-history'
 import { attendanceKeys, LEDGER_REASON } from '@/features/attendance/queries'
 import { errorMessage } from '@/lib/errors'
 import { formatDateTime, formatEventDate } from '@/lib/format'
@@ -339,102 +333,5 @@ export function MemberPointsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-const TONE: Record<HistoryTone, string> = {
-  info: 'bg-info',
-  ok: 'bg-primary',
-  bad: 'bg-destructive',
-  neutral: 'bg-muted-foreground',
-}
-
-/** Histórico dos avisos do ministério: quem fez, o quê e quando. */
-export function JustificationHistory({ ministryId }: { ministryId: string }) {
-  const [person, setPerson] = useState('')
-  const history = useQuery({
-    queryKey: [...attendanceKeys.all, 'justification-history', ministryId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('justification_log')
-        .select(
-          'id, action, kind, reason, note, at, ministry_member_id, events!inner(title, starts_at, ministry_id), ministry_members(profiles(full_name)), actor_profile:profiles!justification_log_actor_fkey(full_name)',
-        )
-        .eq('events.ministry_id', ministryId)
-        .order('at', { ascending: false })
-        .limit(300)
-      if (error) throw error
-      return data
-    },
-  })
-  const rows = history.data ?? []
-  const people = [
-    ...new Map(
-      rows.map((r) => [r.ministry_member_id ?? '', r.ministry_members?.profiles?.full_name ?? '—']),
-    ),
-  ].sort((a, b) => a[1].localeCompare(b[1]))
-  const shown = person ? rows.filter((r) => r.ministry_member_id === person) : rows
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <History className="text-muted-foreground size-4" aria-hidden="true" />
-        <h2 className="flex-1 text-sm font-semibold">Histórico de avisos</h2>
-      </div>
-      {people.length > 1 && (
-        <NativeSelect
-          aria-label="Filtrar por pessoa"
-          value={person}
-          onChange={(e) => setPerson(e.target.value)}
-        >
-          <option value="">Todas as pessoas</option>
-          {people.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </NativeSelect>
-      )}
-      {history.isPending ? (
-        <p className="text-muted-foreground text-sm">Carregando…</p>
-      ) : shown.length === 0 ? (
-        <Panel className="text-muted-foreground items-center py-6 text-center text-sm">
-          Nenhum aviso registrado ainda.
-        </Panel>
-      ) : (
-        <ul className="bg-card flex flex-col overflow-hidden rounded-2xl border">
-          {shown.map((r) => {
-            const s = historySentence({
-              action: r.action,
-              kind: r.kind,
-              actor: r.actor_profile?.full_name ?? null,
-              member: r.ministry_members?.profiles?.full_name ?? 'Integrante',
-            })
-            return (
-              <li key={r.id} className="flex gap-3 border-b px-3.5 py-2.5 last:border-b-0">
-                <span
-                  className={cn('mt-1.5 size-2 shrink-0 rounded-full', TONE[s.tone])}
-                  aria-hidden="true"
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-sm">{s.text}</span>
-                  <span className="text-muted-foreground text-xs">
-                    {r.events.title} · {formatEventDate(r.events.starts_at)}
-                  </span>
-                  {r.reason &&
-                    (r.action === 'created' ||
-                      r.action === 'created_by_leader' ||
-                      r.action === 'edited') && <span className="text-[13px]">“{r.reason}”</span>}
-                  {r.note && <span className="text-muted-foreground text-xs">{r.note}</span>}
-                  <span className="text-muted-foreground font-mono text-xs">
-                    {formatDateTime(r.at)}
-                  </span>
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
   )
 }

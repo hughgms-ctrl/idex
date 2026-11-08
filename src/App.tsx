@@ -121,6 +121,13 @@ const router = createBrowserRouter([
           },
           { path: 'presenca', element: <PresencePage /> },
           {
+            path: 'presenca/historico',
+            lazy: () =>
+              import('@/pages/attendance/JustificationHistoryPage').then((m) => ({
+                Component: m.JustificationHistoryPage,
+              })),
+          },
+          {
             path: 'presenca/checkin',
             lazy: () =>
               import('@/pages/attendance/CheckinPage').then((m) => ({ Component: m.CheckinPage })),

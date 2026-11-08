@@ -1,3 +1,6 @@
+import { Link } from 'react-router'
+import { ChevronRight, History } from 'lucide-react'
+
 import { PageHeader } from '@/components/PageHeader'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useChurch } from '@/features/church/church-context'
@@ -7,7 +10,6 @@ import {
   TeamBalances,
 } from '@/features/attendance/LeaderAttendance'
 import { RulesCard, TeamGoal } from '@/features/attendance/Gamification'
-import { JustificationHistory } from '@/features/attendance/LeaderJustify'
 import { MemberAttendance } from '@/features/attendance/MemberAttendance'
 import { usePendingReviews } from '@/features/attendance/queries'
 import { useMinistryMembers } from '@/features/members/queries'
@@ -83,7 +85,19 @@ export function PresencePage() {
             ministryId={ministry.id}
             limit={s?.checkin_request_limit_per_cycle ?? 3}
           />
-          <JustificationHistory ministryId={ministry.id} />
+          <Link
+            to="/presenca/historico"
+            className="bg-card hover:bg-secondary/50 flex min-h-12 items-center gap-3 rounded-2xl border px-4 py-3"
+          >
+            <History className="text-muted-foreground size-4" aria-hidden="true" />
+            <span className="flex flex-1 flex-col">
+              <span className="text-sm font-medium">Histórico de avisos</span>
+              <span className="text-muted-foreground text-xs">
+                Quem avisou, quem aprovou e quando
+              </span>
+            </span>
+            <ChevronRight className="text-muted-foreground size-4" aria-hidden="true" />
+          </Link>
         </TabsContent>
         <TabsContent value="equipe" className="flex flex-col gap-4">
           <TeamGoal ministryId={ministry.id} />
