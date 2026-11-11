@@ -94,6 +94,37 @@ describe('Cifra Club', () => {
     expect(r?.shapeKey).toBe('E')
   })
 
+  it('site novo: "Tom: F# (com forma de E)" e "Capotraste: 2ª casa"', () => {
+    // trecho real da página (nov/2026), sem o h1 antigo nem #cifra_tom
+    const page = `<!doctype html><html><head>
+<meta property="og:title" content="Quem É Esse? - Julliany Souza - Cifra Club">
+<style>.y0WYx[data-has-capo=true]{height:1px}.tAvU5[data-icon=capo]{}</style></head><body>
+<p class="_5QAC" style="--lineClamp:1">Capotraste</p><span class="_QG2y"><p class="_5QAC">2ª casa</p></span>
+<div class="ebNp" data-chord-config="true"><div class="IERZz"><span>Tom<!-- -->: </span> <button type="button" class="eVroG" data-anchor="--chord-tone" style="--anchorName:--chord-tone">F#<!-- --> (com forma de E)</button></div><div class="IERZz"><span>Capotraste<!-- -->:</span> <button type="button" class="eVroG" data-anchor="--chord-capo" style="--anchorName:--chord-capo">2ª casa</button></div></div>
+<article data-chord-container="true"><pre class="_crVx" data-chord-content="true">[Intro] <b>A2</b>  <b>B2</b>  <b>C#m7</b>
+
+[Primeira Parte]
+            <b>A2</b>
+Eu me deparei
+</pre></article></body></html>`
+    const r = parseCifraClubHtml(page, 'x')
+    expect(r?.title).toBe('Quem É Esse?')
+    expect(r?.artist).toBe('Julliany Souza')
+    expect(r?.key).toBe('F#')
+    expect(r?.capo).toBe(2)
+    expect(r?.shapeKey).toBe('E')
+  })
+
+  it('site novo sem capotraste: só o tom', () => {
+    const page = PAGE.replace(
+      '<span id="cifra_tom">tom: <a class="js-modal-trigger" href="#">G</a></span>',
+      '<div><span>Tom<!-- -->: </span> <button type="button" data-anchor="--chord-tone">Bb</button></div>',
+    )
+    const r = parseCifraClubHtml(page, 'x')
+    expect(r?.key).toBe('Bb')
+    expect(r?.capo).toBeNull()
+  })
+
   it('sem o h1: título e artista pelo og:title', () => {
     const page = PAGE.replace(/<h1[\s\S]*?<\/h2>/, '')
     const r = parseCifraClubHtml(page, 'x')

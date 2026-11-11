@@ -22,6 +22,13 @@ describe('capotraste', () => {
     expect(detectCapo('{capo: 1}\n[G]Letra')?.fret).toBe(1)
     expect(detectCapo('G  D\nUma letra qualquer')).toBeNull()
     expect(detectCapo('Capotraste na 0ª casa')).toBeNull()
+    // como o site novo mostra (e vem ao copiar o cabeçalho)
+    expect(detectCapo('Tom: F# (com forma de E)\nCapotraste: 2ª casa\n\nA2  B2')).toEqual({
+      fret: 2,
+      shapeKey: 'E',
+      realKey: 'F#',
+    })
+    expect(stripCapoLines('Tom: F# (com forma de E)\nCapotraste: 2ª casa\n\nA2  B2')).toBe('A2  B2')
   })
 
   it('tom real: o do texto, senão forma + casa, senão o cadastrado', () => {
