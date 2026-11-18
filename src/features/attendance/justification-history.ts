@@ -68,7 +68,8 @@ export function openDiscount(
   let total = 0
   for (const l of lines) {
     if (l.reason === 'late' || l.reason === 'absence') total += l.delta
-    else if (l.reason === 'adjustment' && (l.note ?? '').startsWith('Aviso aprovado'))
+    // devolução por aviso aprovado ou correção feita pelo sistema ("Correção: …")
+    else if (l.reason === 'adjustment' && /^(Aviso aprovado|Correção:)/.test(l.note ?? ''))
       total += l.delta
   }
   return total < 0 ? -total : 0

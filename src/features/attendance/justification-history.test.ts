@@ -58,6 +58,19 @@ describe('openDiscount', () => {
     ).toBe(0)
   })
 
+  it('desconto já devolvido por correção do sistema', () => {
+    expect(
+      openDiscount([
+        { delta: -20, reason: 'absence', note: 'Falta sem aviso' },
+        {
+          delta: 20,
+          reason: 'adjustment',
+          note: 'Correção: a presença no ensaio vale para o culto',
+        },
+      ]),
+    ).toBe(0)
+  })
+
   it('ignora outros lançamentos', () => {
     expect(
       openDiscount([
