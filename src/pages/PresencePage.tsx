@@ -1,4 +1,4 @@
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { ChevronRight, History } from 'lucide-react'
 
 import { PageHeader } from '@/components/PageHeader'
@@ -24,6 +24,9 @@ export function PresencePage() {
   const members = useMinistryMembers(leader ? ministry?.id : undefined)
   const roles = useMinistryRoles(leader ? ministry?.id : undefined)
   const pending = usePendingReviews(ministry?.id, leader)
+  const [params] = useSearchParams()
+  // atalhos do próprio integrante (aviso de presença não registrada, avisar falta)
+  const ownShortcut = params.has('esqueci') || params.has('justificar')
 
   if (!ministry) return <PageHeader title="Presença" description="Nenhum ministério cadastrado." />
 
@@ -55,7 +58,7 @@ export function PresencePage() {
   return (
     <>
       <PageHeader eyebrow="VISÃO DO LÍDER" title="Presença" />
-      <Tabs defaultValue="ao-vivo">
+      <Tabs defaultValue={ownShortcut && memberView ? 'eu' : 'ao-vivo'}>
         <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="ao-vivo" className="min-h-9">
             Ao vivo

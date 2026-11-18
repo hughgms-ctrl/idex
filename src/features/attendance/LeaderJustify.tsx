@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { FileCheck2 } from 'lucide-react'
+import { trailFor } from '@/features/attendance/presence-trail'
 
 import { FormField } from '@/components/FormField'
 import { Button } from '@/components/ui/button'
@@ -250,7 +251,9 @@ export function MemberPointsDialog({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('point_ledger')
-        .select('id, delta, reason, note, created_at, event_id, events(title, starts_at)')
+        .select(
+          'id, delta, reason, note, created_at, event_id, events(title, starts_at, service_event_id)',
+        )
         .eq('ministry_member_id', member?.id ?? '')
         .eq('cycle_id', cycleId ?? '')
         .order('created_at', { ascending: false })
@@ -259,6 +262,23 @@ export function MemberPointsDialog({
     },
   })
   const rows = useMemo(() => ledger.data ?? [], [ledger.data])
+  // registro rigoroso: tentativas, presenças, pedidos e avisos de cada culto/ensaio
+  const since = rows.reduce<string | null>(
+    (min, r) => (r.events && (!min || r.events.starts_at < min) ? r.events.starts_at : min),
+    null,
+  )
+  const trail = useQuery({
+    queryKey: [...attendanceKeys.all, 'presence-trail', member?.id ?? '', since ?? ''],
+    enabled: Boolean(member && since),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('member_presence_trail', {
+        p_member_id: member?.id ?? '',
+        p_since: new Date(Date.parse(since ?? '') - 86_400_000).toISOString(),
+      })
+      if (error) throw error
+      return data
+    },
+  })
   const byEvent = useMemo(() => {
     const m = new Map<string, number>()
     for (const r of rows) {
@@ -294,6 +314,16 @@ export function MemberPointsDialog({
                       ? `${r.events.title} · ${formatEventDate(r.events.starts_at)}`
                       : formatDateTime(r.created_at)}
                   </span>
+                  {discountLine && r.event_id && r.events && (
+                    <PresenceTrail
+                      lines={trailFor(
+                        trail.data ?? [],
+                        r.event_id,
+                        r.events.service_event_id ?? r.event_id,
+                      )}
+                      loading={trail.isLoading}
+                    />
+                  )}
                   {open && member && r.event_id && (
                     <button
                       type="button"
@@ -333,5 +363,18 @@ export function MemberPointsDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function PresenceTrail({ lines, loading }: { lines: string[]; loading: boolean }) {
+  if (loading) return null
+  return (
+    <ul className="text-muted-foreground mt-1 flex flex-col gap-0.5 border-l-2 pl-2 text-xs">
+      {lines.length === 0 ? (
+        <li>Nenhuma tentativa de registrar presença</li>
+      ) : (
+        lines.map((l, i) => <li key={i}>{l}</li>)
+      )}
+    </ul>
   )
 }

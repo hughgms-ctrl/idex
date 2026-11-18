@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { AlertCircle, AlertTriangle, ChevronRight, MonitorUp } from 'lucide-react'
+import { ATTEMPT_LABEL } from '@/features/attendance/presence-trail'
 
 import { Panel } from '@/components/Section'
 import { Button } from '@/components/ui/button'
@@ -218,15 +219,6 @@ export function LiveEventPanel({
       <LeaderJustifyDialog target={justify} onClose={() => setJustify(null)} />
     </>
   )
-}
-
-const ATTEMPT_LABEL: Record<string, string> = {
-  ok: 'check-in aceito',
-  outside_radius: 'fora do raio',
-  invalid_qr: 'QR expirado',
-  no_location: 'igreja sem localização',
-  not_scheduled: 'não escalado',
-  out_of_time: 'fora do horário',
 }
 
 export function PendingReviews({ ministryId, limit }: { ministryId: string; limit: number }) {

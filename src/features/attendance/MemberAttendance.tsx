@@ -18,7 +18,7 @@ import {
   useMyCommitments,
   useMyLedger,
 } from '@/features/attendance/queries'
-import { formatDate, formatDayMonth, formatEventDate } from '@/lib/format'
+import { formatDate, formatDayMonth, formatEventDate, formatShortDateTime } from '@/lib/format'
 import { useNow } from '@/lib/use-now'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/types/database'
@@ -102,6 +102,27 @@ export function MemberAttendance({
   const forgottenOnce = forgotten.filter(
     (e) => !forgotten.some((o) => e.joint.some((j) => j.id === o.event.id) && rank(o) < rank(e)),
   )
+  const deadlineOf = (e: (typeof forgotten)[number]) => {
+    const start = Date.parse(e.event.starts_at)
+    const end = e.event.ends_at ? Date.parse(e.event.ends_at) : start + 2 * 3_600_000
+    return new Date(end + deadlineMs)
+  }
+  const forgotPayload = (e: (typeof forgotten)[number]) => ({
+    ...e.event,
+    jointTitles: forgotten
+      .filter((o) => e.joint.some((j) => j.id === o.event.id))
+      .map((o) => o.event.title),
+  })
+  // atalho do aviso "sua presença não foi registrada": /presenca?esqueci=<eventId>
+  const forgotId = params.get('esqueci')
+  const forgotFromParam = forgotId
+    ? forgottenOnce.find((e) => e.event.id === forgotId || e.joint.some((j) => j.id === forgotId))
+    : undefined
+  const forgotEvent = forgot ?? (forgotFromParam ? forgotPayload(forgotFromParam) : null)
+  const closeForgot = () => {
+    setForgot(null)
+    if (forgotId) setParams({}, { replace: true })
+  }
   const upcoming = list.filter((e) => Date.parse(e.event.starts_at) > now)
   const history = list.filter((e) => e.request || e.justification)
 
@@ -213,19 +234,12 @@ export function MemberAttendance({
                     <span className="text-muted-foreground text-xs">
                       {formatEventDate(e.event.starts_at)}
                     </span>
+                    <span className="text-warning text-xs">
+                      Sem registro · informe até {formatShortDateTime(deadlineOf(e))}, depois conta
+                      como falta
+                    </span>
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setForgot({
-                        ...e.event,
-                        jointTitles: forgotten
-                          .filter((o) => e.joint.some((j) => j.id === o.event.id))
-                          .map((o) => o.event.title),
-                      })
-                    }
-                  >
+                  <Button variant="outline" size="sm" onClick={() => setForgot(forgotPayload(e))}>
                     Pedir registro
                   </Button>
                 </Panel>
@@ -293,7 +307,7 @@ export function MemberAttendance({
         </section>
       )}
 
-      <ForgotDialog key={forgot?.id ?? 'none'} event={forgot} onClose={() => setForgot(null)} />
+      <ForgotDialog key={forgotEvent?.id ?? 'none'} event={forgotEvent} onClose={closeForgot} />
       <JustifyDialog
         key={justifyEvent?.id ?? 'none-j'}
         event={justifyEvent}

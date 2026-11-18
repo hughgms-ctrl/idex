@@ -2460,6 +2460,20 @@ export type Database = {
       mark_app_installed: { Args: Record<PropertyKey, never>; Returns: undefined }
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined }
       member_cycle_summary: { Args: { p_cycle_id: string; p_member_id: string }; Returns: Json }
+      member_presence_trail: {
+        Args: { p_member_id: string; p_since: string }
+        Returns: {
+          at: string
+          delivered: boolean | null
+          detail: string
+          distance_m: number | null
+          event_id: string
+          event_title: string
+          minutes: number | null
+          root_id: string
+          what: string
+        }[]
+      }
       ministry_member_devices: {
         Args: { p_ministry_id: string }
         Returns: {
