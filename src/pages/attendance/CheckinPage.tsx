@@ -351,8 +351,8 @@ function CheckinResult({ result }: { result: Result }) {
         </span>
         {result.joint && result.joint.length > 0 && (
           <p className="text-muted-foreground text-sm">
-            Vale também para {result.joint.includes('service') ? 'o culto' : 'o ensaio'} — mesma
-            chegada, uma presença só.
+            Vale também para {result.joint.includes('service') ? 'o culto' : 'o ensaio'} — estão
+            emendados, uma presença só.
           </p>
         )}
         {result.balance !== null && (

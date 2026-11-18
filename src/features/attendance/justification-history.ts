@@ -1,5 +1,7 @@
 /** Textos do histórico de avisos de falta/atraso (`justification_log`). */
 
+import { eventsJoint } from '@domain/schedule.ts'
+
 export type JustificationAction =
   | 'created'
   | 'created_by_leader'
@@ -82,6 +84,7 @@ export type HistoryEvent = {
   title: string
   starts_at: string
   arrive_at: string | null
+  ends_at?: string | null
   service_event_id: string | null
 }
 
@@ -117,17 +120,9 @@ export type HistoryCard = {
   lastAt: string
 }
 
-const JOINT_MS = 5 * 60_000
-
-/** Mesma regra de `events_joint`: mesmo culto (ou o próprio) e chegada até 5 min de diferença. */
+/** Mesma regra de `events_joint`: culto + ensaio com a mesma chegada ou emendados. */
 export function historyEventsJoint(a: HistoryEvent, b: HistoryEvent): boolean {
-  if (a.id === b.id) return false
-  const fa = a.service_event_id ?? a.id
-  const fb = b.service_event_id ?? b.id
-  if (fa !== fb) return false
-  const ta = Date.parse(a.arrive_at ?? a.starts_at)
-  const tb = Date.parse(b.arrive_at ?? b.starts_at)
-  return Math.abs(ta - tb) <= JOINT_MS
+  return eventsJoint(a, b)
 }
 
 const STATUS_OF: Record<string, HistoryCard['status'] | undefined> = {

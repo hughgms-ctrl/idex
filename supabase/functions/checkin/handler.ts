@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import type { Deps } from '../_shared/deps.ts'
 import { withinRadius } from '../_shared/domain/geo.ts'
-import { callTime, jointEvents } from '../_shared/domain/schedule.ts'
+import { callTime, eventEnd, jointEvents } from '../_shared/domain/schedule.ts'
 import {
   attendanceOutcome,
   consequenceReason,
@@ -170,23 +170,48 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   }
 
   const arrivedAt = new Date(now).toISOString()
-  const outcome = attendanceOutcome({
-    eventStart: callTime(ctx.event),
-    arrivedAt,
-    justified: ctx.justified,
-    rules: rulesFromSettings(
-      ctx.settings as Parameters<typeof rulesFromSettings>[0],
-      ctx.event.kind,
-    ),
-  })
+  const outcomeFor = (c: NonNullable<typeof ctx>) =>
+    attendanceOutcome({
+      eventStart: callTime(c.event),
+      arrivedAt,
+      justified: c.justified,
+      rules: rulesFromSettings(c.settings as Parameters<typeof rulesFromSettings>[0], c.event.kind),
+    })
+  const source = hasQr && needsQr ? 'qr' : 'geo'
+
+  // Ensaio junto do culto (mesma chegada ou um emenda no outro): a mesma
+  // presença vale para os outros eventos da família em que a pessoa está
+  // escalada. O desconto conta uma vez só: o maior atraso entre eles (quem
+  // chega 16:45 para ensaio 16:10 + culto 16:40 atrasou no ensaio, mesmo
+  // lendo o QR do culto); nos outros, 0. Evento que já acabou fica de fora
+  // (vale a regra de falta normal).
+  const joint: { ctx: NonNullable<typeof ctx>; outcome: ReturnType<typeof outcomeFor> }[] = []
+  if (deps.loadServiceFamily) {
+    try {
+      const family = await deps.loadServiceFamily(ctx.event.id)
+      for (const other of jointEvents(ctx.event, family)) {
+        const octx = await deps.loadEventContext(other.id, userId)
+        if (!octx || !octx.assigned || octx.benched || octx.alreadyCheckedIn) continue
+        if (now > eventEnd(octx.event).getTime()) continue
+        joint.push({ ctx: octx, outcome: outcomeFor(octx) })
+      }
+    } catch (err) {
+      console.error('presença conjunta', err)
+      joint.length = 0
+    }
+  }
+  const own = { ctx, outcome: outcomeFor(ctx) }
+  // quem paga o desconto: o evento com o pior resultado (empate = o lido)
+  const charged = joint.reduce((w, j) => (j.outcome.delta < w.outcome.delta ? j : w), own)
+
   try {
     await deps.recordAttendance({
       eventId: ctx.event.id,
       memberId: ctx.member.id,
       arrivedAt,
-      lateMinutes: outcome.lateMinutes,
-      delta: outcome.delta,
-      source: hasQr && needsQr ? 'qr' : 'geo',
+      lateMinutes: own.outcome.lateMinutes,
+      delta: charged === own ? own.outcome.delta : 0,
+      source,
       lat,
       lng,
       accuracyM: accuracy,
@@ -199,61 +224,47 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
   }
   await attempt('ok', geo?.distanceM)
 
-  // Ensaio com a mesma chegada do culto (tudo junto): a mesma presença vale
-  // para os outros eventos da família em que a pessoa está escalada. O
-  // desconto de atraso conta uma vez só (fica no evento lido); nos outros, 0.
-  const joint: string[] = []
-  if (deps.loadServiceFamily) {
+  const jointKinds: string[] = []
+  for (const j of joint) {
     try {
-      const family = await deps.loadServiceFamily(ctx.event.id)
-      for (const other of jointEvents(ctx.event, family)) {
-        const octx = await deps.loadEventContext(other.id, userId)
-        if (!octx || !octx.assigned || octx.benched || octx.alreadyCheckedIn) continue
-        const late = attendanceOutcome({
-          eventStart: callTime(octx.event),
-          arrivedAt,
-          justified: octx.justified,
-          rules: rulesFromSettings(
-            octx.settings as Parameters<typeof rulesFromSettings>[0],
-            octx.event.kind,
-          ),
-        })
-        await deps.recordAttendance({
-          eventId: octx.event.id,
-          memberId: ctx.member.id,
-          arrivedAt,
-          lateMinutes: late.lateMinutes,
-          delta: 0,
-          source: hasQr && needsQr ? 'qr' : 'geo',
-          lat,
-          lng,
-          accuracyM: accuracy,
-          distanceM: geo?.distanceM ?? null,
-        })
-        joint.push(octx.event.kind)
-      }
+      await deps.recordAttendance({
+        eventId: j.ctx.event.id,
+        memberId: ctx.member.id,
+        arrivedAt,
+        lateMinutes: j.outcome.lateMinutes,
+        delta: j === charged ? j.outcome.delta : 0,
+        source,
+        lat,
+        lng,
+        accuracyM: accuracy,
+        distanceM: geo?.distanceM ?? null,
+      })
+      jointKinds.push(j.ctx.event.kind)
     } catch (err) {
       // a presença principal já foi gravada; o resto não pode derrubar a resposta
       console.error('presença conjunta', err)
     }
   }
 
-  // Passou da tolerância: pode ficar de fora (regra do ministério)
+  // Passou da tolerância: pode ficar de fora (regra do ministério), pelo
+  // evento que levou o desconto
+  const outcome = charged.outcome
+  const cctx = charged.ctx
   const scope = lateConsequence({
-    kind: ctx.event.kind,
+    kind: cctx.event.kind,
     beyondTolerance: outcome.kind === 'late',
-    linkedToService: Boolean(ctx.event.service_event_id),
-    rule: ctx.settings,
+    linkedToService: Boolean(cctx.event.service_event_id),
+    rule: cctx.settings,
   })
   const tolerance = rulesFromSettings(
-    ctx.settings as Parameters<typeof rulesFromSettings>[0],
-    ctx.event.kind,
+    cctx.settings as Parameters<typeof rulesFromSettings>[0],
+    cctx.event.kind,
   ).lateToleranceMin
-  const limit = new Date(new Date(callTime(ctx.event)).getTime() + tolerance * 60_000)
+  const limit = new Date(new Date(callTime(cctx.event)).getTime() + tolerance * 60_000)
   const consequence = scope === 'none' ? null : consequenceReason(scope, hhmm(limit))
   if (scope !== 'none') {
     await deps.applyConsequence({
-      eventId: ctx.event.id,
+      eventId: cctx.event.id,
       memberId: ctx.member.id,
       scope,
       reason: consequence,
@@ -269,7 +280,7 @@ export async function handleCheckin(req: Request, deps: CheckinDeps): Promise<Re
     distanceM: geo?.distanceM ?? null,
     consequence: scope === 'none' ? null : { scope, message: consequence },
     /** tipos dos eventos que receberam a mesma presença (ex.: ['rehearsal']) */
-    joint,
+    joint: jointKinds,
   })
 }
 

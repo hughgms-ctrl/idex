@@ -236,12 +236,19 @@ describe('checkin', () => {
       const s = setup(now, service)
       s.deps.loadEventContext = async (id) => (id === EVENT ? service : reh)
       s.deps.loadServiceFamily = async () => [
-        { id: EVENT, service_event_id: null, starts_at: service.event.starts_at, arrive_at: null },
+        {
+          id: EVENT,
+          service_event_id: null,
+          starts_at: service.event.starts_at,
+          arrive_at: service.event.arrive_at,
+          ends_at: service.event.ends_at,
+        },
         {
           id: REHEARSAL,
           service_event_id: EVENT,
           starts_at: reh.event.starts_at,
-          arrive_at: null,
+          arrive_at: reh.event.arrive_at,
+          ends_at: reh.event.ends_at,
         },
       ]
       return s
@@ -255,6 +262,42 @@ describe('checkin', () => {
       expect(r.body).toMatchObject({ kind: 'late', delta: -10, joint: ['rehearsal'] })
       expect(recorded).toHaveLength(2)
       expect(recorded[1]).toMatchObject({ eventId: REHEARSAL, delta: 0, lateMinutes: 25 })
+    })
+
+    it('ensaio que emenda no culto: a presença do ensaio vale para o culto', async () => {
+      // ensaio 30 min antes do culto, até depois da chegada do culto
+      const reh = context()
+      reh.event = {
+        ...reh.event,
+        starts_at: new Date(START - 40 * 60_000).toISOString(),
+        arrive_at: new Date(START - 60 * 60_000).toISOString(),
+        ends_at: new Date(START + 60 * 60_000).toISOString(),
+      }
+      // chega 50 min antes do culto, lê o QR do ensaio: 10 min de atraso no ensaio
+      const now = START - 50 * 60_000
+      const { deps, recorded } = jointSetup(now, reh)
+      const r = await post(deps, { qr: await qrPayload(SECRET, REHEARSAL, now), ...IGREJA })
+      expect(r.status).toBe(200)
+      expect(r.body).toMatchObject({ kind: 'on_time', joint: ['service'] })
+      expect(recorded).toHaveLength(2)
+      expect(recorded[1]).toMatchObject({ eventId: EVENT, delta: 0, lateMinutes: 0 })
+    })
+
+    it('lendo o QR do culto, o atraso maior (do ensaio) é o que desconta, uma vez', async () => {
+      const reh = context()
+      reh.event = {
+        ...reh.event,
+        starts_at: new Date(START - 40 * 60_000).toISOString(),
+        arrive_at: new Date(START - 60 * 60_000).toISOString(),
+        ends_at: new Date(START + 60 * 60_000).toISOString(),
+      }
+      const now = START - 25 * 60_000 // 35 min depois da chegada do ensaio
+      const { deps, recorded } = jointSetup(now, reh)
+      const r = await post(deps, { qr: await qrPayload(SECRET, EVENT, now), ...IGREJA })
+      expect(r.status).toBe(200)
+      expect(r.body).toMatchObject({ kind: 'late', lateMinutes: 35, delta: -10 })
+      expect(recorded[0]).toMatchObject({ eventId: EVENT, delta: 0 })
+      expect(recorded[1]).toMatchObject({ eventId: REHEARSAL, delta: -10, lateMinutes: 35 })
     })
 
     it('não registra no ensaio quem não está nele ou já registrou', async () => {

@@ -275,6 +275,7 @@ export function makeDeps(
         service_event_id: string | null
         starts_at: string
         arrive_at: string | null
+        ends_at: string | null
       }[]
     > => {
       const event = await must<any>(
@@ -285,7 +286,7 @@ export function makeDeps(
       return must<any[]>(
         service
           .from('events')
-          .select('id, service_event_id, starts_at, arrive_at')
+          .select('id, service_event_id, starts_at, arrive_at, ends_at')
           .or(`id.eq.${root},service_event_id.eq.${root}`),
       )
     },

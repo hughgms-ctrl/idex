@@ -214,6 +214,32 @@ describe('presença única (ensaio junto do culto)', () => {
     expect(jointEvents(outroDia, family)).toEqual([])
     expect(jointEvents(outroCulto, family)).toEqual([])
   })
+
+  it('ensaio que emenda no culto conta junto, mesmo com chegada diferente', () => {
+    // ensaio de vozes 16:30–18:30 (chegada 16:10); culto 18:00 (chegada 16:40)
+    const culto = {
+      id: 'c1',
+      service_event_id: null,
+      starts_at: '2026-11-15T21:00:00Z',
+      arrive_at: '2026-11-15T19:40:00Z',
+      ends_at: '2026-11-15T23:00:00Z',
+    }
+    const ensaio = {
+      id: 'e1',
+      service_event_id: 'c1',
+      starts_at: '2026-11-15T19:30:00Z',
+      arrive_at: '2026-11-15T19:10:00Z',
+      ends_at: '2026-11-15T21:30:00Z',
+    }
+    expect(jointEvents(ensaio, [culto, ensaio]).map((e) => e.id)).toEqual(['c1'])
+    expect(jointEvents(culto, [culto, ensaio]).map((e) => e.id)).toEqual(['e1'])
+    // ensaio que acaba 16:20 e chegada do culto 16:40: dá para sair, não conta
+    const antes = { ...ensaio, ends_at: '2026-11-15T19:20:00Z' }
+    expect(jointEvents(culto, [culto, antes])).toEqual([])
+    // até 5 min de folga entre o fim de um e a chegada do outro
+    const quase = { ...ensaio, ends_at: '2026-11-15T19:36:00Z' }
+    expect(jointEvents(culto, [culto, quase]).map((e) => e.id)).toEqual(['e1'])
+  })
 })
 
 describe('sugestão de substituto', () => {

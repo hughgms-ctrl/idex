@@ -38,7 +38,7 @@ function useJustificationHistory(ministryId: string | undefined, enabled: boolea
       const { data, error } = await supabase
         .from('justification_log')
         .select(
-          'id, justification_id, action, kind, reason, note, at, ministry_member_id, events!inner(id, title, starts_at, arrive_at, service_event_id, ministry_id), ministry_members(profiles(full_name)), actor_profile:profiles!justification_log_actor_fkey(full_name)',
+          'id, justification_id, action, kind, reason, note, at, ministry_member_id, events!inner(id, title, starts_at, arrive_at, ends_at, service_event_id, ministry_id), ministry_members(profiles(full_name)), actor_profile:profiles!justification_log_actor_fkey(full_name)',
         )
         .eq('events.ministry_id', ministryId ?? '')
         .order('at', { ascending: false })
@@ -60,6 +60,7 @@ function useJustificationHistory(ministryId: string | undefined, enabled: boolea
           title: r.events.title,
           starts_at: r.events.starts_at,
           arrive_at: r.events.arrive_at,
+          ends_at: r.events.ends_at,
           service_event_id: r.events.service_event_id,
         },
       }))

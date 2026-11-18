@@ -85,23 +85,39 @@ export function callTime(event: { starts_at: string; arrive_at?: string | null }
 /** Diferença máxima entre chegadas para o ensaio contar como "junto do culto". */
 export const JOINT_CALL_TOLERANCE_MIN = 5
 
+type JointLike = Pick<EventLike, 'id' | 'service_event_id' | 'starts_at'> & {
+  arrive_at?: string | null
+  ends_at?: string | null
+}
+
 /**
- * Ensaio no mesmo horário de chegada do culto (ex.: culto mudou para a manhã e
- * o ensaio virou a passagem de som): uma presença só vale para os dois.
- * Devolve os outros eventos da mesma família (culto + ensaios) com a mesma
- * chegada (diferença até 5 min).
+ * Ensaio "junto do culto" (mesma família: o culto e os ensaios dele), quando:
+ *  - as chegadas são iguais (até 5 min de diferença) — ex.: culto de manhã e o
+ *    ensaio virou a passagem de som; ou
+ *  - um emenda no outro: o primeiro ainda não acabou quando chega a hora de
+ *    chegada do segundo (ex.: ensaio de vozes 16:30–18:30, chegada do culto
+ *    16:40). Quem está no ensaio já está na igreja para o culto.
+ * Espelho SQL: `events_joint`.
  */
-export function jointEvents<
-  E extends Pick<EventLike, 'id' | 'service_event_id' | 'starts_at'> & {
-    arrive_at?: string | null
-  },
->(event: E, family: E[]): E[] {
-  const call = new Date(callTime(event)).getTime()
-  return family.filter(
-    (e) =>
-      sameServiceFamily(event, e) &&
-      Math.abs(new Date(callTime(e)).getTime() - call) <= JOINT_CALL_TOLERANCE_MIN * 60_000,
+export function eventsJoint(a: JointLike, b: JointLike): boolean {
+  if (!sameServiceFamily(a, b)) return false
+  const ca = new Date(callTime(a)).getTime()
+  const cb = new Date(callTime(b)).getTime()
+  const slack = JOINT_CALL_TOLERANCE_MIN * 60_000
+  if (Math.abs(ca - cb) <= slack) return true
+  const [first, secondCall] = ca < cb ? [a, cb] : [b, ca]
+  return (
+    eventEnd({ starts_at: first.starts_at, ends_at: first.ends_at ?? null }).getTime() >=
+    secondCall - slack
   )
+}
+
+/**
+ * Presença única: os outros eventos da família que estão "juntos" deste
+ * (`eventsJoint`). Uma presença só vale para todos.
+ */
+export function jointEvents<E extends JointLike>(event: E, family: E[]): E[] {
+  return family.filter((e) => eventsJoint(event, e))
 }
 
 export function eventEnd(event: Pick<EventLike, 'starts_at' | 'ends_at'>): Date {

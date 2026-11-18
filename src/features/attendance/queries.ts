@@ -84,7 +84,7 @@ export function useMyAttendanceEvents(memberId: string | undefined) {
       const allEvents = data.map((a) => a.events)
       return data
         .map((a) => {
-          // ensaio junto do culto (mesma chegada): um "esqueci" vale para os dois
+          // ensaio junto do culto (mesma chegada ou emendado): um "esqueci" vale para os dois
           const joint = jointEvents(a.events, allEvents)
           return {
             event: a.events,

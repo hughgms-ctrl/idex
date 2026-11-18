@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { AlertCircle } from 'lucide-react'
-import { assignmentConflicts, suggestSubstitutes } from '@domain/schedule.ts'
+import { assignmentConflicts, eventsJoint, suggestSubstitutes } from '@domain/schedule.ts'
 import { localParts } from '@domain/time.ts'
 
 import { EVENT_KIND_LABEL } from '@/features/schedule/datetime'
@@ -165,9 +165,9 @@ export function EventCard({
           )}
         </div>
       ))}
-      {rehearsals.some((r) => sameCall(r, event)) && (
+      {rehearsals.some((r) => eventsJoint(r, event)) && (
         <p className="text-muted-foreground text-[13px]">
-          Ensaio junto do culto (mesma chegada): uma presença só vale para os dois.
+          Ensaio emendado no culto: uma presença só vale para os dois.
         </p>
       )}
       {assignments.length === 0 ? (
@@ -270,19 +270,6 @@ export function EventCard({
     </div>
   ) : (
     <section className={className}>{content}</section>
-  )
-}
-
-function sameCall(
-  a: { starts_at: string; arrive_at: string | null },
-  b: { starts_at: string; arrive_at: string | null },
-): boolean {
-  return (
-    Math.abs(
-      new Date(a.arrive_at ?? a.starts_at).getTime() -
-        new Date(b.arrive_at ?? b.starts_at).getTime(),
-    ) <=
-    5 * 60_000
   )
 }
 
