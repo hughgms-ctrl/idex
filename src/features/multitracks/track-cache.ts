@@ -92,6 +92,18 @@ export async function fetchTrack(src: TrackDownload): Promise<ArrayBuffer> {
   return bytes
 }
 
+/** Quantas destas faixas já estão no aparelho. */
+export async function countCached(fileIds: string[]): Promise<number> {
+  if (!supported()) return 0
+  try {
+    const cache = await caches.open(CACHE)
+    const hits = await Promise.all(fileIds.map((id) => cache.match(keyFor(id))))
+    return hits.filter(Boolean).length
+  } catch {
+    return 0
+  }
+}
+
 /** Músicas com faixas guardadas neste aparelho. */
 export async function listCachedSongs(): Promise<CachedSong[]> {
   if (!supported()) return []

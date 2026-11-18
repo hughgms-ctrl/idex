@@ -10,7 +10,7 @@ import {
   toSegments,
   type Segment,
 } from '@/features/multitracks/segments'
-import { fetchTrack, type TrackDownload } from '@/features/multitracks/track-cache'
+import { countCached, fetchTrack, type TrackDownload } from '@/features/multitracks/track-cache'
 
 // Motor do Multitracks, sem React.
 //
@@ -152,13 +152,14 @@ export class MultitrackPlayer {
   }
 
   /**
-   * Baixa e abre as faixas. `onProgress(n, total)` avisa a cada faixa pronta.
+   * Baixa (se ainda não estão no aparelho) e abre as faixas. `onProgress(n,
+   * total, aBaixar)` avisa a cada faixa pronta.
    * Devolve a duração (a da faixa mais longa).
    */
   async load(
     sources: TrackSource[],
     gains: Record<string, number>,
-    onProgress: (done: number, total: number) => void = () => undefined,
+    onProgress: (done: number, total: number, toDownload: number) => void = () => undefined,
   ): Promise<number> {
     this.pause()
     const gen = ++this.gen
@@ -198,8 +199,10 @@ export class MultitrackPlayer {
         channels: n,
         frames: decoded.length,
       }
-      onProgress(++done, sources.length)
+      onProgress(++done, sources.length, toDownload)
     }
+    const toDownload = sources.length - (await countCached(sources.map((x) => x.id)))
+    onProgress(0, sources.length, toDownload)
     let cursor = 0
     const worker = async () => {
       while (cursor < sources.length) {
