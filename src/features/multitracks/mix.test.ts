@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { cleanMix, EMPTY_MIX, memoryMb, toggleTrack, trackGain, type Mix } from './mix'
+import {
+  busShift,
+  cleanMix,
+  EMPTY_MIX,
+  memoryMb,
+  toggleTrack,
+  trackGain,
+  trackKind,
+  type Mix,
+} from './mix'
 
 const mix = (over: Partial<Mix>): Mix => ({ ...EMPTY_MIX, ...over })
 
@@ -41,5 +50,43 @@ describe('toggleTrack e cleanMix', () => {
 describe('memoryMb', () => {
   it('memória aproximada', () => {
     expect(memoryMb(2, 300, 44100)).toBe(101)
+  })
+})
+
+describe('trackKind', () => {
+  it('click e guia não mudam de tom', () => {
+    expect(trackKind('Click')).toBe('fixed')
+    expect(trackKind('01_click.wav')).toBe('fixed')
+    expect(trackKind('Guia')).toBe('fixed')
+    expect(trackKind('Metrônomo')).toBe('fixed')
+    expect(trackKind('CUE')).toBe('fixed')
+  })
+  it('vozes', () => {
+    expect(trackKind('Voz tenor')).toBe('voice')
+    expect(trackKind('Vocal')).toBe('voice')
+    expect(trackKind('BV')).toBe('voice')
+    expect(trackKind('Back vocal')).toBe('voice')
+  })
+  it('instrumentos', () => {
+    expect(trackKind('Baixo')).toBe('instrument')
+    expect(trackKind('Bateria')).toBe('instrument')
+    expect(trackKind('Teclado Pad')).toBe('instrument')
+    expect(trackKind('Guitarra')).toBe('instrument')
+  })
+})
+
+describe('busShift', () => {
+  it('no original não processa', () => {
+    expect(busShift('instrument', 0, 1)).toBe(0)
+    expect(busShift('fixed', 3, 1)).toBe(0)
+  })
+  it('tom muda instrumentos e vozes, não click/guia', () => {
+    expect(busShift('instrument', 2, 1)).toBe(2)
+    expect(busShift('voice', -3, 1)).toBe(-3)
+  })
+  it('andamento: desfaz a mudança de tom do playbackRate', () => {
+    expect(busShift('fixed', 0, 2)).toBeCloseTo(-12)
+    expect(busShift('instrument', 2, 0.5)).toBeCloseTo(14)
+    expect(busShift('voice', 0, 1.1)).toBeCloseTo(-12 * Math.log2(1.1))
   })
 })

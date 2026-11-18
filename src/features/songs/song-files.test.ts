@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { defaultAudio, fileInfo, sizeLabel } from '@/features/songs/song-files'
+import { audioNameFromFile, defaultAudio, fileInfo, sizeLabel } from '@/features/songs/song-files'
 
 describe('arquivos da música', () => {
   it('reconhece áudio, PDF e imagem, mesmo sem tipo informado pelo celular', () => {
@@ -34,5 +34,14 @@ describe('arquivos da música', () => {
     expect(defaultAudio([a, b])?.id).toBe('b')
     expect(defaultAudio([a, { ...b, is_default: false }])?.id).toBe('a')
     expect(defaultAudio([])).toBeUndefined()
+  })
+})
+
+describe('audioNameFromFile', () => {
+  it('tira a extensão e troca _ por espaço', () => {
+    expect(audioNameFromFile('01_Baixo.wav')).toBe('01 Baixo')
+    expect(audioNameFromFile('Voz Tenor.mp3')).toBe('Voz Tenor')
+    expect(audioNameFromFile('click')).toBe('click')
+    expect(audioNameFromFile('.mp3')).toBe('.mp3')
   })
 })
