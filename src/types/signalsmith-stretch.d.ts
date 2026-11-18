@@ -20,7 +20,12 @@ declare module 'signalsmith-stretch' {
     latency(): Promise<number>
     addBuffers(buffers: Float32Array[], transfer?: Transferable[]): Promise<number>
     dropBuffers(): Promise<unknown>
-    configure(config: { blockMs?: number; intervalMs?: number; preset?: string }): Promise<unknown>
+    configure(config: {
+      blockMs?: number
+      intervalMs?: number
+      splitComputation?: boolean
+      preset?: string
+    }): Promise<unknown>
   }
 
   export default function SignalsmithStretch(

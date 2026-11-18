@@ -302,6 +302,8 @@ export class ReferencePlayer {
         numberOfOutputs: 1,
         outputChannelCount: [2],
       })
+      // bloco de 300 ms: com o padrão (120 ms) o grave desafinava ao mudar o tom
+      await node.configure({ blockMs: 300, intervalMs: 75, splitComputation: true })
       const gain = this.ctx.createGain()
       gain.gain.value = 0
       node.connect(gain).connect(this.out)

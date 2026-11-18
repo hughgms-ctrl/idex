@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Music2, Pencil, Star, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Music2, Pencil, Star, Trash2, Upload, X } from 'lucide-react'
 
 import { ErrorState } from '@/components/ErrorState'
 import { FormField } from '@/components/FormField'
@@ -15,11 +15,13 @@ import { useChurch } from '@/features/church/church-context'
 import { AudioPlayer, type AudioFile } from '@/features/songs/AudioPlayer'
 import { beatsPerBar } from '@/features/songs/audio-math'
 import {
+  audioNameFromFile,
   defaultAudio,
   deleteSongFile,
   fileInfo,
   isR2Enabled,
   setDefaultAudio,
+  sizeLabel,
   songFileKeys,
   uploadSongFile,
   useSongFiles,
@@ -315,74 +317,156 @@ function UploadAudio({
 }) {
   const queryClient = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [name, setName] = useState('')
   const [bpm, setBpm] = useState(defaultBpm ? String(defaultBpm) : '')
   const [key, setKey] = useState(defaultKey ?? '')
   const [isDefault, setIsDefault] = useState(false)
-  const [progress, setProgress] = useState<number | null>(null)
+  const [progress, setProgress] = useState<{ index: number; fraction: number } | null>(null)
   const r2 = useQuery({ queryKey: ['song-storage-r2'], queryFn: isR2Enabled, staleTime: Infinity })
   const maxMb = r2.data ? 100 : 50
+  const single = files.length === 1
 
   const upload = useMutation({
     mutationFn: async () => {
-      if (!file) throw new Error('Escolha o arquivo de áudio')
-      if (fileInfo(file).kind !== 'audio') {
-        throw new Error('Escolha um arquivo de áudio (MP3, M4A, WAV…)')
+      if (files.length === 0) throw new Error('Escolha os arquivos de áudio')
+      const notAudio = files.find((f) => fileInfo(f).kind !== 'audio')
+      if (notAudio) {
+        throw new Error(`"${notAudio.name}" não é áudio. Escolha MP3, M4A, WAV…`)
       }
       const b = bpm ? Number(bpm) : null
       if (b !== null && (!Number.isInteger(b) || b < 20 || b > 300)) {
         throw new Error('BPM entre 20 e 300')
       }
-      await uploadSongFile({
-        churchId,
-        songId,
-        file,
-        name,
-        bpm: b,
-        musicalKey: key || null,
-        isDefault: firstAudio || isDefault,
-        onProgress: setProgress,
-      })
+      // um por vez (cada um já vai em partes); se um falhar, os outros seguem
+      const failed: { file: File; error: unknown }[] = []
+      for (const [index, file] of files.entries()) {
+        setProgress({ index, fraction: 0 })
+        try {
+          await uploadSongFile({
+            churchId,
+            songId,
+            file,
+            name: single && name.trim() ? name : audioNameFromFile(file.name),
+            bpm: b,
+            musicalKey: key || null,
+            isDefault: index === 0 && (firstAudio || (single && isDefault)),
+            onProgress: (fraction) => setProgress({ index, fraction }),
+          })
+        } catch (error) {
+          failed.push({ file, error })
+        }
+      }
+      return { sent: files.length - failed.length, failed }
     },
     onSettled: () => setProgress(null),
-    onSuccess: async () => {
-      setFile(null)
-      setName('')
-      setIsDefault(false)
+    onSuccess: async ({ sent, failed }) => {
       await queryClient.invalidateQueries({ queryKey: songFileKeys.list(songId) })
-      toast.success('Áudio enviado')
+      if (failed.length === 0) {
+        setFiles([])
+        setName('')
+        setIsDefault(false)
+        toast.success(sent === 1 ? 'Áudio enviado' : `${sent} áudios enviados`)
+        return
+      }
+      // ficam na lista só os que falharam, para tentar de novo
+      setFiles(failed.map((f) => f.file))
+      const first = failed[0]!
+      toast.error(
+        `${sent > 0 ? `${sent} enviado(s). ` : ''}Não foi: ${failed
+          .map((f) => f.file.name)
+          .join(', ')} — ${errorMessage(first.error)}`,
+      )
     },
     onError: (err) => toast.error(errorMessage(err)),
   })
 
+  const total = files.length
+  const overall = progress ? (progress.index + progress.fraction) / Math.max(1, total) : null
+
   return (
     <section className="flex flex-col gap-3 rounded-2xl border border-dashed p-4">
-      <h2 className="text-[15px] font-semibold">Enviar áudio</h2>
+      <h2 className="text-[15px] font-semibold">Enviar áudios</h2>
       <p className="text-muted-foreground text-[13px]">
-        MP3, M4A, AAC, WAV, OGG ou FLAC, até {maxMb} MB. Prefira <strong>MP3</strong>: uma música
-        inteira cabe com folga (WAV ocupa cerca de 10 MB por minuto).
+        Pode escolher vários de uma vez (ex.: todas as faixas do multitracks). MP3, M4A, AAC, WAV,
+        OGG ou FLAC, até {maxMb} MB cada. Prefira <strong>MP3</strong>: uma música inteira cabe com
+        folga (WAV ocupa cerca de 10 MB por minuto).
       </p>
       <input
         ref={inputRef}
         type="file"
+        multiple
         accept="audio/*,.mp3,.mpeg,.mpga,.m4a,.wav,.ogg,.oga,.opus,.aac,.flac"
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0] ?? null
+          const picked = Array.from(e.target.files ?? [])
           e.target.value = ''
-          setFile(f)
-          if (f && !name) setName(f.name.replace(/\.[^.]+$/, ''))
+          if (picked.length === 0) return
+          const seen = new Set(files.map((f) => `${f.name}:${f.size}`))
+          const next = [...files, ...picked.filter((f) => !seen.has(`${f.name}:${f.size}`))]
+          setFiles(next)
+          if (next.length === 1 && !name) setName(audioNameFromFile(next[0]!.name))
         }}
       />
-      <Button variant="outline" className="self-start" onClick={() => inputRef.current?.click()}>
-        <Upload aria-hidden="true" /> {file ? file.name : 'Escolher arquivo'}
+      <Button
+        variant="outline"
+        className="self-start"
+        disabled={upload.isPending}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload aria-hidden="true" />
+        {files.length === 0 ? 'Escolher arquivos' : 'Adicionar mais arquivos'}
       </Button>
-      <FormField id="up-name" label="Nome (ex.: Voz tenor, Guia completo)">
-        <Input id="up-name" value={name} onChange={(e) => setName(e.target.value)} />
-      </FormField>
+
+      {total > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {files.map((f, i) => {
+            const state = !progress
+              ? null
+              : i < progress.index
+                ? 'feito'
+                : i === progress.index
+                  ? `${Math.round(progress.fraction * 100)}%`
+                  : 'na fila'
+            return (
+              <li
+                key={`${f.name}:${f.size}`}
+                className="bg-card flex min-h-11 items-center gap-2 rounded-xl border py-1 pr-1 pl-3"
+              >
+                <Music2 className="text-primary size-4 shrink-0" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-sm">{f.name}</span>
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {state ?? sizeLabel(f.size)}
+                </span>
+                {!upload.isPending && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Tirar ${f.name}`}
+                    onClick={() => setFiles((prev) => prev.filter((x) => x !== f))}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {single ? (
+        <FormField id="up-name" label="Nome (ex.: Voz tenor, Guia completo)">
+          <Input id="up-name" value={name} onChange={(e) => setName(e.target.value)} />
+        </FormField>
+      ) : (
+        total > 1 && (
+          <p className="text-muted-foreground text-xs">
+            Cada faixa entra com o nome do arquivo. Depois é só tocar no lápis para renomear.
+          </p>
+        )
+      )}
       <div className="grid grid-cols-2 gap-3">
-        <FormField id="up-bpm" label="BPM">
+        <FormField id="up-bpm" label={total > 1 ? 'BPM (todos)' : 'BPM'}>
           <Input
             id="up-bpm"
             type="number"
@@ -391,7 +475,7 @@ function UploadAudio({
             onChange={(e) => setBpm(e.target.value)}
           />
         </FormField>
-        <FormField id="up-key" label="Tom do áudio">
+        <FormField id="up-key" label={total > 1 ? 'Tom (todos)' : 'Tom do áudio'}>
           <NativeSelect id="up-key" value={key} onChange={(e) => setKey(e.target.value)}>
             <option value="">—</option>
             {KEY_OPTIONS.map((k) => (
@@ -402,7 +486,7 @@ function UploadAudio({
           </NativeSelect>
         </FormField>
       </div>
-      {!firstAudio && (
+      {!firstAudio && single && (
         <label className="flex min-h-11 items-center gap-3 text-sm">
           <input
             type="checkbox"
@@ -420,27 +504,29 @@ function UploadAudio({
       )}
       <Button
         className="self-start"
-        disabled={upload.isPending || !file}
+        disabled={upload.isPending || total === 0}
         onClick={() => upload.mutate()}
       >
-        {upload.isPending
-          ? progress !== null
-            ? `Enviando… ${Math.round(progress * 100)}%`
-            : 'Enviando…'
-          : 'Enviar áudio'}
+        {upload.isPending && progress
+          ? total > 1
+            ? `Enviando ${progress.index + 1} de ${total}… ${Math.round((overall ?? 0) * 100)}%`
+            : `Enviando… ${Math.round(progress.fraction * 100)}%`
+          : total > 1
+            ? `Enviar ${total} áudios`
+            : 'Enviar áudio'}
       </Button>
-      {upload.isPending && progress !== null && (
+      {upload.isPending && overall !== null && (
         <div
           role="progressbar"
           aria-label="Progresso do envio"
-          aria-valuenow={Math.round(progress * 100)}
+          aria-valuenow={Math.round(overall * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
           className="bg-secondary h-2 overflow-hidden rounded-full"
         >
           <div
             className="bg-primary h-full transition-[width]"
-            style={{ width: `${progress * 100}%` }}
+            style={{ width: `${overall * 100}%` }}
           />
         </div>
       )}

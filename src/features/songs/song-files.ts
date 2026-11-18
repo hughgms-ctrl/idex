@@ -137,6 +137,12 @@ export async function removeSongStorage(songId: string) {
   if (paths.length) await supabase.storage.from(BUCKET).remove(paths)
 }
 
+/** Nome inicial da faixa a partir do arquivo ("01_Baixo.wav" → "01 Baixo"). */
+export function audioNameFromFile(fileName: string): string {
+  const base = fileName.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim()
+  return (base || fileName).slice(0, 200)
+}
+
 export function sizeLabel(bytes: number | null): string {
   if (!bytes) return ''
   return bytes > 1024 * 1024

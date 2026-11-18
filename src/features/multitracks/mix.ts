@@ -122,3 +122,41 @@ export function useMix(songId: string): Mix {
     () => readMix(songId),
   )
 }
+
+/**
+ * Como a faixa reage ao mudar o tom, pelo nome:
+ * - `fixed`: click, guia (contagem/"refrão!") e metrônomo não mudam de tom
+ *   (só de andamento) — click transposto soa estranho e a guia é fala.
+ * - `voice`: vozes ganham compensação de formantes (sem "voz de esquilo").
+ * - `instrument`: o resto muda de tom sem mexer no timbre.
+ */
+export type TrackKind = 'fixed' | 'voice' | 'instrument'
+
+const norm = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+
+const FIXED = /\b(click|clique|metronomo|metronome|guia|guide|cue|cues|contagem|count|vs guide)\b/
+const VOICE =
+  /\b(voz|vozes|vocal|vocals|vox|bv|bvs|back|backing|backs|soprano|contralto|tenor|baritono|coro|coral|choir|lead vocal|ministro|ministra)\b/
+
+export function trackKind(name: string): TrackKind {
+  const n = norm(name).replace(/[_\-.]+/g, ' ')
+  if (FIXED.test(n)) return 'fixed'
+  if (VOICE.test(n)) return 'voice'
+  return 'instrument'
+}
+
+/**
+ * Meios tons que o processador de um grupo precisa aplicar. As faixas tocam
+ * com `playbackRate = rate` (muda andamento E tom juntos, sem custo); o
+ * processador desfaz a mudança de tom do andamento e aplica o tom escolhido.
+ * Click/guia só desfazem o efeito do andamento.
+ */
+export function busShift(kind: TrackKind, semitones: number, rate: number): number {
+  const fromRate = 12 * Math.log2(rate)
+  const shift = (kind === 'fixed' ? 0 : semitones) - fromRate
+  return Math.abs(shift) < 0.005 ? 0 : shift
+}
