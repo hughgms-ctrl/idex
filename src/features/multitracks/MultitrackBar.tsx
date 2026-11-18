@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronUp, Layers, Loader2, Pause, Play, Settings2, SlidersHorizontal } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { trackGain, updateMix, type Mix } from '@/features/multitracks/mix'
+import { countCached } from '@/features/multitracks/track-cache'
 import type { useMultitrack } from '@/features/multitracks/useMultitrack'
 import type { AudioFile } from '@/features/songs/AudioPlayer'
 import { PlayerAdjustments } from '@/features/songs/PlayerAdjustments'
@@ -76,6 +77,18 @@ export function MultitrackBar({
   const loaded = loadedKey === setKey
   const missing = tracks.some((t) => !t.url)
 
+  // faixas já baixadas: começa a abrir ao entrar na música, sem esperar o play
+  const preopened = useRef<string | null>(null)
+  useEffect(() => {
+    if (loaded || engine.loading || missing || !setKey || preopened.current === setKey) return
+    preopened.current = setKey
+    const ids = tracks.map((t) => t.id)
+    void countCached(ids).then((n) => {
+      if (n === ids.length) void load(sources(), gains, setKey)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setKey, loaded, missing])
+
   const toggle = async () => {
     if (engine.playing) return engine.pause()
     if (!loaded && !(await load(sources(), gains, setKey))) return
@@ -85,7 +98,7 @@ export function MultitrackBar({
   const shownKey = baseKey ? transposeKey(baseKey, engine.semitones) : null
   const adjusted = engine.semitones !== 0 || engine.rate !== 1
   const status = engine.progress
-    ? `Abrindo faixa ${Math.min(engine.progress.done + 1, engine.progress.total)} de ${engine.progress.total}…`
+    ? `${engine.progress.toDownload > 0 ? 'Baixando e abrindo' : 'Abrindo (já baixadas)'} · faixa ${Math.min(engine.progress.done + 1, engine.progress.total)} de ${engine.progress.total}…`
     : null
 
   const flip = (field: 'muted' | 'solo', id: string) =>

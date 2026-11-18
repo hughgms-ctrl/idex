@@ -9,7 +9,7 @@ const loadEngine = () => (enginePromise ??= import('@/features/multitracks/multi
 
 // Ao sair da tela (ex.: ir ao mixer e voltar), as faixas abertas ficam na
 // memória por alguns minutos: voltar não abre tudo de novo. Um motor só.
-const KEEP_MS = 5 * 60 * 1000
+const KEEP_MS = 20 * 60 * 1000
 let kept: { engine: MultitrackPlayer; key: string; timer: number } | null = null
 
 function keep(engine: MultitrackPlayer, key: string | null) {
@@ -41,7 +41,11 @@ export function useMultitrack() {
   const [adopted] = useState(adopt)
   const engine = useRef<MultitrackPlayer | null>(adopted?.engine ?? null)
   const [loadedKey, setLoadedKey] = useState<string | null>(adopted?.key ?? null)
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [progress, setProgress] = useState<{
+    done: number
+    total: number
+    toDownload: number
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [duration, setDuration] = useState(adopted?.engine.duration ?? 0)
@@ -99,11 +103,13 @@ export function useMultitrack() {
   const load = useCallback(
     async (sources: TrackSource[], gains: Record<string, number>, key: string) => {
       setError(null)
-      setProgress({ done: 0, total: sources.length })
+      setProgress({ done: 0, total: sources.length, toDownload: 0 })
       try {
         const e = await ensure()
         const keep = e.position()
-        const length = await e.load(sources, gains, (done, total) => setProgress({ done, total }))
+        const length = await e.load(sources, gains, (done, total, toDownload) =>
+          setProgress({ done, total, toDownload }),
+        )
         setDuration(length)
         if (keep > 0 && keep < length) await e.seek(keep)
         setPosition(e.position())
