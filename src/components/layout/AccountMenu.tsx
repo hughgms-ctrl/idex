@@ -6,6 +6,7 @@ import {
   Guitar,
   Layers,
   LogOut,
+  Network,
   Settings2,
   Smartphone,
   UserRound,
@@ -152,6 +153,18 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
                   </Button>
                 </>
               )}
+              {!supportOnly && (
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={() => setOpen(false)}
+                >
+                  <Link to="/multitracks">
+                    <Layers aria-hidden="true" /> Multitracks
+                  </Link>
+                </Button>
+              )}
               <Button
                 asChild
                 variant="ghost"
@@ -183,7 +196,7 @@ export function AccountMenu({ variant }: { variant: 'header' | 'sidebar' }) {
                     onClick={() => setOpen(false)}
                   >
                     <Link to="/ministerios">
-                      <Layers aria-hidden="true" /> Ministérios, instrumentos e vozes
+                      <Network aria-hidden="true" /> Ministérios, instrumentos e vozes
                     </Link>
                   </Button>
                   <Button
