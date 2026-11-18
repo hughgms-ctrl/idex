@@ -138,9 +138,10 @@ const norm = (s: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
 
-const FIXED = /\b(click|clique|metronomo|metronome|guia|guide|cue|cues|contagem|count|vs guide)\b/
+const FIXED =
+  /\b(click|clicks|clique|metronomo|metronome|guia|guide|guides|cue|cues|contagem|count|countin)\b/
 const VOICE =
-  /\b(voz|vozes|vocal|vocals|vox|bv|bvs|back|backing|backs|soprano|contralto|tenor|baritono|coro|coral|choir|lead vocal|ministro|ministra)\b/
+  /\b(voz|vozes|vocal|vocals|vox|bv|bvs|bgv|bgvs|back|backing|backs|harmonia|harmony|soprano|contralto|alto|tenor|baritono|coro|coral|choir|ministro|ministra|cantor|cantora)\b/
 
 export function trackKind(name: string): TrackKind {
   const n = norm(name).replace(/[_\-.]+/g, ' ')

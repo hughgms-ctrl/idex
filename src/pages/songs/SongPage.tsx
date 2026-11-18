@@ -43,6 +43,40 @@ import { cn } from '@/lib/utils'
 
 const SPEEDS = [12, 20, 30, 45] // pixels por segundo
 
+type SongRow = { id: string; original_key: string | null }
+type FileRow = {
+  id: string
+  kind: string
+  musical_key?: string | null
+  is_default?: boolean | null
+}
+
+/** Áudio que está no player da tela (único ou 1ª faixa do Multitracks), com o tom dele. */
+function linkedAudio(
+  song: SongRow | null | undefined,
+  files: FileRow[] | undefined,
+  storedMix: Parameters<typeof cleanMix>[0],
+  audioId: string | null,
+): { identity: string; audioSemi: number; multitrack: boolean } | null {
+  if (!song || !files) return null
+  const audios = files.filter((f) => f.kind === 'audio')
+  const mix = cleanMix(
+    storedMix,
+    audios.map((a) => a.id),
+  )
+  const multitrack = mix.active && mix.tracks.length > 0
+  const file = multitrack
+    ? audios.find((a) => a.id === mix.tracks[0])
+    : (audios.find((a) => a.id === audioId) ?? defaultAudio(audios))
+  if (!file) return null
+  return {
+    identity: `${multitrack ? 'mt' : 'a'}:${file.id}`,
+    // áudio sem tom cadastrado = no tom original da música
+    audioSemi: semitonesBetween(song.original_key, file.musical_key ?? song.original_key),
+    multitrack,
+  }
+}
+
 export function SongPage() {
   const { songId = '' } = useParams()
   const [params] = useSearchParams()
@@ -71,6 +105,32 @@ export function SongPage() {
   })
 
   const accidentalsPref = useAccidentalsPref(songId)
+
+  // Tom da cifra e do áudio andam juntos: com áudio, o tom da tela é o do
+  // áudio + o que foi mudado no player; mudar a cifra muda o player. Ao abrir
+  // (ou trocar de áudio) o player vai para o tom que a tela mostra.
+  const linked = linkedAudio(song.data, files.data, storedMix, audioId)
+  const shownSemi = useRef<number | null>(null)
+  const syncedFor = useRef<string | null>(null)
+  const linkedPlayer = linked?.multitrack ? multitrack : engine
+  const shownNow = linked
+    ? linked.audioSemi + linkedPlayer.semitones
+    : (semi ?? semitonesBetween(song.data?.original_key, targetKey))
+  useEffect(() => {
+    shownSemi.current = shownNow
+  }, [shownNow])
+  useEffect(() => {
+    if (!linked || syncedFor.current === linked.identity) return
+    const first = syncedFor.current === null
+    syncedFor.current = linked.identity
+    const original = song.data?.original_key
+    const wanted = first
+      ? (semi ?? (targetKey ? semitonesBetween(original, targetKey) : null))
+      : shownSemi.current
+    if (wanted === null) return
+    linkedPlayer.setSemitones(wanted - linked.audioSemi)
+  }, [linked, linkedPlayer, semi, targetKey, song.data?.original_key])
+
   if (song.error) return <ErrorState error={song.error} onRetry={() => void song.refetch()} />
   if (song.isPending) return <FullScreenLoader />
   if (!song.data) return <ErrorState error="Música não encontrada." />
@@ -85,15 +145,17 @@ export function SongPage() {
     audios.map((a) => a.id),
   )
   const multitrackOn = !!files.data && mix.active && mix.tracks.length > 0
-  const firstTrack = audios.find((a) => a.id === mix.tracks[0])
   const player = multitrackOn ? multitrack : engine
-  // a cifra parte do tom do culto; sem ele, do tom cadastrado no áudio (que
-  // pode não ser o original da música); e acompanha o tom mudado no player
-  const audioKey = targetKey
-    ? null
-    : ((multitrackOn ? firstTrack?.musical_key : audio?.musical_key) ?? null)
-  const baseSemi = semitonesBetween(s.original_key, targetKey ?? audioKey)
-  const semitones = (semi ?? baseSemi) + player.semitones
+  // sem áudio: a cifra parte do tom do culto (ou o original) e muda sozinha;
+  // com áudio: tom do áudio + o que mudou no player (os dois juntos)
+  const baseSemi = semitonesBetween(s.original_key, targetKey)
+  const semitones = linked ? linked.audioSemi + player.semitones : (semi ?? baseSemi)
+  // "voltar": ao tom do culto; sem culto, ao do áudio (ou o original)
+  const resetSemi = targetKey ? baseSemi : linked ? linked.audioSemi : 0
+  const changeKey = (delta: number) => {
+    if (linked) player.setSemitones(player.semitones + delta)
+    else setSemi(semitones + delta)
+  }
   const openMixer = () => {
     engine.pause()
     if (opensInNewWindow() && openMixerWindow(s.id)) return
@@ -205,23 +267,21 @@ export function SongPage() {
           size="icon"
           className="font-mono text-lg"
           aria-label="Baixar meio tom"
-          onClick={() => setSemi((semi ?? baseSemi) - 1)}
+          onClick={() => changeKey(-1)}
         >
           −
         </Button>
         <div className="flex min-w-16 flex-col items-center">
           <span className="text-muted-foreground text-[11px]">TOM</span>
           <span className="text-primary font-mono text-xl font-semibold">{currentKey ?? '—'}</span>
-          {player.semitones !== 0 && (
-            <span className="text-muted-foreground text-[10px]">com o áudio</span>
-          )}
+          {linked && <span className="text-muted-foreground text-[10px]">cifra e áudio</span>}
         </div>
         <Button
           variant="outline"
           size="icon"
           className="font-mono text-lg"
           aria-label="Subir meio tom"
-          onClick={() => setSemi((semi ?? baseSemi) + 1)}
+          onClick={() => changeKey(1)}
         >
           +
         </Button>
@@ -292,9 +352,15 @@ export function SongPage() {
               ))}
             </span>
           )}
-          {semi !== null && semi !== baseSemi && (
-            <Button variant="ghost" size="sm" onClick={() => setSemi(null)}>
-              Voltar ao tom {targetKey ? 'do culto' : audioKey ? 'do áudio' : 'original'}
+          {semitones !== resetSemi && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                linked ? player.setSemitones(resetSemi - linked.audioSemi) : setSemi(null)
+              }
+            >
+              Voltar ao tom {targetKey ? 'do culto' : linked ? 'do áudio' : 'original'}
             </Button>
           )}
         </div>
