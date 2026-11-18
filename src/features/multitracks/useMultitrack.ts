@@ -63,20 +63,28 @@ export function useMultitrack() {
     void loadEngine()
   }, [])
 
+  // avisos do motor para esta tela (não para a visita anterior)
+  const [buffering, setBuffering] = useState(false)
+  const wire = useCallback((e: MultitrackPlayer) => {
+    e.onEnded = () => {
+      setPlaying(false)
+      setPosition(0)
+    }
+    e.onWaiting = setBuffering
+    e.onDuration = setDuration
+  }, [])
+
   const ensure = useCallback(async (): Promise<MultitrackPlayer> => {
     if (engine.current) return engine.current
     const { MultitrackPlayer } = await loadEngine()
     if (engine.current) return engine.current
     const e = new MultitrackPlayer()
-    e.onEnded = () => {
-      setPlaying(false)
-      setPosition(0)
-    }
+    wire(e)
     e.setTempo(tempo.current.bpm, tempo.current.beats)
     e.setSettings(settings.current.semitones, settings.current.rate)
     engine.current = e
     return e
-  }, [])
+  }, [wire])
 
   const pause = useCallback(() => {
     const e = engine.current
@@ -183,22 +191,19 @@ export function useMultitrack() {
     // modo estrito do React desmonta e monta de novo: pega o motor de volta
     if (!engine.current) engine.current = adopt()?.engine ?? null
     // o fim da música avisa esta tela (não a visita anterior)
-    if (engine.current) {
-      engine.current.onEnded = () => {
-        setPlaying(false)
-        setPosition(0)
-      }
-    }
+    if (engine.current) wire(engine.current)
     return () => {
       const e = engine.current
       engine.current = null
       if (e) keep(e, loadedRef.current)
     }
-  }, [])
+  }, [wire])
 
   return {
     loadedKey,
     loading: progress !== null,
+    /** Tocando, mas parado esperando o resto das faixas abrir. */
+    buffering,
     progress,
     error,
     playing,

@@ -99,7 +99,9 @@ export function MultitrackBar({
   const adjusted = engine.semitones !== 0 || engine.rate !== 1
   const status = engine.progress
     ? `${engine.progress.toDownload > 0 ? 'Baixando e abrindo' : 'Abrindo (já baixadas)'} · faixa ${Math.min(engine.progress.done + 1, engine.progress.total)} de ${engine.progress.total}…`
-    : null
+    : engine.buffering
+      ? 'Abrindo o resto da música…'
+      : null
 
   const flip = (field: 'muted' | 'solo', id: string) =>
     updateMix(songId, (m) => ({ ...m, [field]: { ...m[field], [id]: !m[field][id] } }))
@@ -117,7 +119,7 @@ export function MultitrackBar({
           disabled={engine.loading || tracks.length === 0 || missing}
           onClick={() => void toggle()}
         >
-          {engine.loading ? (
+          {engine.loading || engine.buffering ? (
             <Loader2 className="size-6 animate-spin" />
           ) : engine.playing ? (
             <Pause className="size-6" />

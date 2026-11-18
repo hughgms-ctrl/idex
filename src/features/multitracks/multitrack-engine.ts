@@ -49,6 +49,21 @@ const KINDS: TrackKind[] = ['instrument', 'voice', 'fixed']
 const LOOKAHEAD = 8
 /** Faixas baixadas/abertas ao mesmo tempo. */
 const PARALLEL = 3
+// Abrir (descompactar) um MP3 inteiro leva tempo no celular. Primeiro abre só o
+// começo de cada faixa (os bytes iniciais: ~20% do arquivo, ao menos 600 KB),
+// já dá para tocar, e o resto abre em segundo plano. Medido no Chromium: o
+// começo aberto sozinho é idêntico, amostra por amostra, ao da faixa inteira
+// (MP3 com taxa fixa, variável ou com etiqueta ID3) e sai 4–5× mais rápido.
+const PREFIX_SHARE = 0.2
+const PREFIX_MIN = 600 * 1024
+const BACKGROUND = 2
+
+function isMp3(bytes: ArrayBuffer): boolean {
+  const u = new Uint8Array(bytes, 0, Math.min(3, bytes.byteLength))
+  const id3 = u[0] === 0x49 && u[1] === 0x44 && u[2] === 0x33
+  const sync = u[0] === 0xff && ((u[1] ?? 0) & 0xe0) === 0xe0
+  return id3 || sync
+}
 
 export type TrackSource = TrackDownload
 
@@ -57,9 +72,14 @@ type Track = {
   kind: TrackKind
   segs: Segment[]
   channels: number
+  /** Tamanho (amostras): exato quando `complete`, senão estimado. */
   frames: number
+  /** Pedaços prontos desde o início (com `complete`, todos). */
+  ready: number
+  complete: boolean
   gain: GainNode
 }
+type Pending = { id: string; bytes: ArrayBuffer }
 type Scheduled = { node: AudioBufferSourceNode; when: number }
 
 type Bus = {
@@ -128,6 +148,13 @@ export class MultitrackPlayer {
   rate = 1
   loadedIds: string[] = []
   onEnded: () => void = () => undefined
+  /** Parou esperando o resto das faixas abrir (true) / voltou a tocar (false). */
+  onWaiting: (waiting: boolean) => void = () => undefined
+  /** A duração ficou exata (o resto das faixas abriu). */
+  onDuration: (seconds: number) => void = () => undefined
+  private waiting = false
+  /** Pedaço que faltava quando parou para esperar. */
+  private waitSeg = 0
 
   constructor() {
     const nav = navigator as Navigator & { audioSession?: { type: string } }
@@ -172,21 +199,39 @@ export class MultitrackPlayer {
     let used = 0
     let done = 0
     const opened: (Omit<Track, 'gain'> | undefined)[] = new Array(sources.length)
+    const pending: Pending[] = []
     const openOne = async (src: TrackSource, i: number) => {
       const bytes = await fetchTrack(src)
       if (gen !== this.gen) throw new Error('cancelado')
+      const cut =
+        isMp3(bytes) && bytes.byteLength > PREFIX_MIN * 1.5
+          ? Math.max(PREFIX_MIN, Math.ceil(bytes.byteLength * PREFIX_SHARE))
+          : bytes.byteLength
+      const partial = cut < bytes.byteLength
       let decoded: AudioBuffer
       try {
-        decoded = await this.ctx.decodeAudioData(bytes)
+        // decodeAudioData consome o buffer: o começo vai numa cópia
+        decoded = await this.ctx.decodeAudioData(partial ? bytes.slice(0, cut) : bytes)
       } catch {
         throw new Error(`Este aparelho não abre o formato de “${src.name}”. Prefira MP3.`)
       }
       if (gen !== this.gen) throw new Error('cancelado')
       // mono quando os lados são iguais; no máximo 2 canais
       const n = sameSides(decoded) ? 1 : 2
-      const chans = Array.from({ length: n }, (_, c) => decoded.getChannelData(c))
+      const chans = Array.from({ length: Math.min(n, decoded.numberOfChannels) }, (_, c) =>
+        decoded.getChannelData(c),
+      )
       const segs = toSegments(chans, frames)
-      used += segmentsBytes(segs)
+      let ready = segs.length
+      let total = decoded.length
+      if (partial) {
+        // o último segundo do começo pode sair incompleto: fica para depois
+        ready = Math.floor(Math.max(0, decoded.length - this.ctx.sampleRate) / frames)
+        segs.length = ready
+        total = Math.round((decoded.length * bytes.byteLength) / cut)
+        pending.push({ id: src.id, bytes })
+      }
+      used += segmentsBytes(segs) * (partial ? bytes.byteLength / cut : 1)
       if (used > budget) {
         throw new Error(
           'As faixas não cabem na memória deste aparelho. Desligue algumas no mixer (as que estão sempre caladas, por exemplo).',
@@ -196,8 +241,10 @@ export class MultitrackPlayer {
         id: src.id,
         kind: trackKind(src.name),
         segs,
-        channels: n,
-        frames: decoded.length,
+        channels: chans.length,
+        frames: total,
+        ready,
+        complete: !partial,
       }
       onProgress(++done, sources.length, toDownload)
     }
@@ -237,6 +284,7 @@ export class MultitrackPlayer {
     this.duration = Math.max(0, ...this.tracks.map((t) => t.frames)) / this.ctx.sampleRate
     this.loadedIds = sources.map((s) => s.id)
     this.applyShifts(this.ctx.currentTime, true)
+    void this.completeTracks(gen, pending)
     return this.duration
   }
 
@@ -247,7 +295,7 @@ export class MultitrackPlayer {
 
   tick(): number {
     const p = this.position()
-    if (this.playing && p >= this.duration - 0.01) {
+    if (this.playing && p >= this.duration - 0.01 && this.tracks.every((t) => t.complete)) {
       this.pause()
       this.offset = 0
       this.onEnded()
@@ -273,6 +321,7 @@ export class MultitrackPlayer {
   }
 
   pause() {
+    this.setWaiting(false)
     this.metronome.stop()
     if (!this.playing) return
     this.offset = this.position()
@@ -372,6 +421,68 @@ export class MultitrackPlayer {
     })
   }
 
+  /** Pedaços prontos em TODAS as faixas (as completas não limitam). */
+  private readySegments(): number {
+    let n = Infinity
+    for (const t of this.tracks) if (!t.complete) n = Math.min(n, t.ready)
+    return n
+  }
+
+  private setWaiting(w: boolean) {
+    if (this.waiting === w) return
+    this.waiting = w
+    this.onWaiting(w)
+  }
+
+  /** Para no ponto em que o resto ainda não abriu; volta sozinho quando abrir. */
+  private stall() {
+    const k = this.nextSeg
+    this.pause()
+    this.waitSeg = k
+    this.setWaiting(true)
+  }
+
+  /** Abre o resto das faixas (as que só tinham o começo) em segundo plano. */
+  private async completeTracks(gen: number, pending: Pending[]) {
+    const sr = this.ctx.sampleRate
+    const work = async () => {
+      for (let p = pending.shift(); p; p = pending.shift()) {
+        let decoded: AudioBuffer
+        try {
+          decoded = await this.ctx.decodeAudioData(p.bytes)
+        } catch {
+          continue
+        }
+        if (gen !== this.gen) return
+        const tr = this.tracks.find((t) => t.id === p.id)
+        if (!tr) continue
+        const chans = Array.from(
+          { length: Math.min(tr.channels, decoded.numberOfChannels) },
+          (_, c) => decoded.getChannelData(c),
+        )
+        tr.segs = toSegments(chans, this.segFrames)
+        tr.ready = tr.segs.length
+        tr.frames = decoded.length
+        tr.complete = true
+        if (this.tracks.every((t) => t.complete)) {
+          this.duration = Math.max(0, ...this.tracks.map((t) => t.frames)) / sr
+          this.onDuration(this.duration)
+        }
+        // parado esperando: volta quando o trecho de onde parou estiver pronto
+        if (this.waiting) {
+          // volta com folga (o pedaço que faltava e o seguinte), sem parar de novo
+          if (this.readySegments() >= this.waitSeg + 2) {
+            this.setWaiting(false)
+            void this.play()
+          }
+        } else if (this.playing) {
+          this.scheduleAhead()
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: BACKGROUND }, work))
+  }
+
   private startSources(t: number, pos: number) {
     this.stopSources(t)
     const segSeconds = this.segFrames / this.ctx.sampleRate
@@ -396,6 +507,11 @@ export class MultitrackPlayer {
       const offset = Math.max(0, this.srcInput - segStart)
       const when = this.srcTime + (segStart + offset - this.srcInput) / this.rate
       if (when > horizon) break
+      if (k >= this.readySegments()) {
+        // o resto ainda está abrindo: se já era hora de tocar, espera
+        if (this.playing && when < this.ctx.currentTime + 0.3) this.stall()
+        break
+      }
       this.nextSeg++
       for (const tr of this.tracks) {
         const seg = tr.segs[k]
