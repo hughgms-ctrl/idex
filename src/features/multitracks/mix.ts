@@ -43,9 +43,6 @@ export function cleanMix(mix: Mix, existing: string[]): Mix {
     : { ...mix, tracks, active: mix.active && tracks.length > 0 }
 }
 
-/** Limite de canais de um AudioWorklet no navegador. */
-export const MAX_CHANNELS = 32
-
 /** Memória aproximada (MB) das faixas abertas: canais × segundos × taxa × 4 bytes. */
 export function memoryMb(channels: number, seconds: number, sampleRate: number): number {
   return Math.round((channels * seconds * sampleRate * 4) / 1_048_576)
