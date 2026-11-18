@@ -80,7 +80,7 @@ export function AudiosPage() {
           files={audios}
           onSelect={(a) => {
             setSelected(a)
-            if (a.url) void engine.load(a.url, a.id)
+            if (a.url) void engine.load(a.url, a.id, s.id)
           }}
           songBpm={s.bpm}
           songKey={s.original_key}
@@ -108,7 +108,7 @@ export function AudiosPage() {
                 multiple={audios.length > 1}
                 onSelect={() => {
                   setSelected(a)
-                  if (a.url && engine.loadedKey !== a.id) void engine.load(a.url, a.id)
+                  if (a.url && engine.loadedKey !== a.id) void engine.load(a.url, a.id, s.id)
                 }}
               />
             ))}

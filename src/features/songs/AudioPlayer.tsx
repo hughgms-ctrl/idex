@@ -18,6 +18,7 @@ export type AudioFile = {
   bpm: number | null
   musical_key: string | null
   is_default?: boolean
+  song_id?: string
 }
 
 type Engine = ReturnType<typeof useAudioEngine>
@@ -68,7 +69,7 @@ export function AudioPlayer({
   const toggle = async () => {
     if (engine.playing) return engine.pause()
     if (!loaded) {
-      if (!file.url || !(await engine.load(file.url, file.id))) return
+      if (!file.url || !(await engine.load(file.url, file.id, file.song_id))) return
     }
     await engine.play()
   }
@@ -207,7 +208,7 @@ export function AudioPlayer({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void engine.load(file.url ?? '', file.id)}
+            onClick={() => void engine.load(file.url ?? '', file.id, file.song_id)}
           >
             Tentar abrir no player de novo
           </Button>

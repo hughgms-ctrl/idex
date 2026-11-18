@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { invokeFunction } from '@/lib/functions'
 import { supabase } from '@/lib/supabase'
+import { deleteCached, deleteCachedFile, pruneCached } from '@/features/songs/audio-cache'
 
 export const BUCKET = 'song-files'
 /** Limite no Storage do Supabase (plano gratuito). */
@@ -77,11 +78,16 @@ export function useSongFiles(songId: string) {
       const { data, error } = await supabase
         .from('song_files')
         .select(
-          'id, name, kind, storage_path, storage_backend, size_bytes, bpm, musical_key, is_default, created_at',
+          'id, song_id, name, kind, storage_path, storage_backend, size_bytes, bpm, musical_key, is_default, created_at',
         )
         .eq('song_id', songId)
         .order('created_at')
       if (error) throw error
+      // arquivo apagado/trocado no app sai também do aparelho
+      void pruneCached(
+        songId,
+        data.filter((f) => f.kind === 'audio').map((f) => f.id),
+      )
       if (data.length === 0) return []
       // links temporários (tudo é privado): Supabase e R2
       const url = new Map<string, string>()
@@ -114,6 +120,7 @@ export function useSongFiles(songId: string) {
 
 /** Apaga um arquivo (onde quer que esteja) e o registro dele. */
 export async function deleteSongFile(file: StoredFile): Promise<void> {
+  void deleteCachedFile(file.id)
   if (file.storage_backend === 'r2') {
     await invokeFunction('song-storage', { action: 'delete', fileIds: [file.id] })
     return
@@ -126,6 +133,7 @@ export async function deleteSongFile(file: StoredFile): Promise<void> {
 
 /** Apaga os arquivos de uma música (antes de apagar a música). */
 export async function removeSongStorage(songId: string) {
+  void deleteCached(songId)
   const { data } = await supabase
     .from('song_files')
     .select('id, storage_path, storage_backend')
