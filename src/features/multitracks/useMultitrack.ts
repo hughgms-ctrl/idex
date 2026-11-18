@@ -7,17 +7,47 @@ import { clampRate } from '@/features/songs/audio-math'
 let enginePromise: Promise<typeof import('@/features/multitracks/multitrack-engine')> | null = null
 const loadEngine = () => (enginePromise ??= import('@/features/multitracks/multitrack-engine'))
 
+// Ao sair da tela (ex.: ir ao mixer e voltar), as faixas abertas ficam na
+// memória por alguns minutos: voltar não abre tudo de novo. Um motor só.
+const KEEP_MS = 5 * 60 * 1000
+let kept: { engine: MultitrackPlayer; key: string; timer: number } | null = null
+
+function keep(engine: MultitrackPlayer, key: string | null) {
+  release()
+  if (!key) return engine.dispose()
+  engine.pause()
+  engine.setMetronome(false, 0, 4)
+  kept = { engine, key, timer: window.setTimeout(release, KEEP_MS) }
+}
+
+function release() {
+  if (!kept) return
+  window.clearTimeout(kept.timer)
+  kept.engine.dispose()
+  kept = null
+}
+
+function adopt(): { engine: MultitrackPlayer; key: string } | null {
+  if (!kept) return null
+  window.clearTimeout(kept.timer)
+  const k = kept
+  kept = null
+  return k
+}
+
 /** Várias faixas juntas: um tom, um andamento, um metrônomo; volume por faixa. */
 export function useMultitrack() {
-  const engine = useRef<MultitrackPlayer | null>(null)
-  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  // motor que ficou aberto da visita anterior a esta tela
+  const [adopted] = useState(adopt)
+  const engine = useRef<MultitrackPlayer | null>(adopted?.engine ?? null)
+  const [loadedKey, setLoadedKey] = useState<string | null>(adopted?.key ?? null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [duration, setDuration] = useState(0)
-  const [position, setPosition] = useState(0)
-  const [semitones, setSemitonesState] = useState(0)
-  const [rate, setRateState] = useState(1)
+  const [duration, setDuration] = useState(adopted?.engine.duration ?? 0)
+  const [position, setPosition] = useState(() => adopted?.engine.position() ?? 0)
+  const [semitones, setSemitonesState] = useState(adopted?.engine.semitones ?? 0)
+  const [rate, setRateState] = useState(adopted?.engine.rate ?? 1)
   const [metronome, setMetronomeState] = useState(false)
   const tempo = useRef({ bpm: 0, beats: 4 })
   const settings = useRef({ semitones, rate })
@@ -138,13 +168,27 @@ export function useMultitrack() {
     return () => window.clearInterval(id)
   }, [playing])
 
-  useEffect(
-    () => () => {
-      engine.current?.dispose()
+  const loadedRef = useRef(loadedKey)
+  useEffect(() => {
+    loadedRef.current = loadedKey
+  }, [loadedKey])
+
+  useEffect(() => {
+    // modo estrito do React desmonta e monta de novo: pega o motor de volta
+    if (!engine.current) engine.current = adopt()?.engine ?? null
+    // o fim da música avisa esta tela (não a visita anterior)
+    if (engine.current) {
+      engine.current.onEnded = () => {
+        setPlaying(false)
+        setPosition(0)
+      }
+    }
+    return () => {
+      const e = engine.current
       engine.current = null
-    },
-    [],
-  )
+      if (e) keep(e, loadedRef.current)
+    }
+  }, [])
 
   return {
     loadedKey,

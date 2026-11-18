@@ -6,6 +6,7 @@ import { FullScreenLoader } from '@/components/FullScreenLoader'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useChurch } from '@/features/church/church-context'
+import { CachedSongLine } from '@/features/multitracks/CachedTracks'
 import { TrackToggle } from '@/features/multitracks/MultitrackBar'
 import { cleanMix, MAX_VOLUME, toggleTrack, updateMix, useMix } from '@/features/multitracks/mix'
 import { useSong } from '@/features/songs/queries'
@@ -198,6 +199,7 @@ export function MixerPage() {
               usa. A mixagem é só sua e fica salva neste aparelho. Toque duas vezes no volume para
               voltar a 100%.
             </p>
+            <CachedSongLine songId={songId} />
             {canUpload && (
               <Button asChild variant="ghost" className="self-start">
                 <Link to={`/repertorio/${songId}/audios`}>

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useChurch } from '@/features/church/church-context'
+import { CachedTracks } from '@/features/multitracks/CachedTracks'
 import { readMix } from '@/features/multitracks/mix'
 import { mixerPath } from '@/features/multitracks/open-mixer'
 import { useTrackCounts } from '@/features/multitracks/queries'
@@ -35,6 +36,10 @@ export function MultitracksPage() {
     return { ready: list.filter((s) => n(s) >= 2), single: list.filter((s) => n(s) === 1) }
   }, [songs.data, counts.data, query])
 
+  const titles = useMemo(
+    () => Object.fromEntries((songs.data ?? []).map((s) => [s.id, s.title])),
+    [songs.data],
+  )
   const error = songs.error ?? counts.error
   if (error) return <ErrorState error={error} />
   const loading = songs.isPending || counts.isPending
@@ -81,6 +86,7 @@ export function MultitracksPage() {
               ))}
             </ul>
           )}
+          <CachedTracks titles={titles} />
           {single.length > 0 && (
             <section className="flex flex-col gap-2">
               <h2 className="text-muted-foreground text-xs font-semibold tracking-wider">
