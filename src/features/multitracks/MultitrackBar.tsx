@@ -62,7 +62,9 @@ export function MultitrackBar({
   }, [gains, setGains])
 
   const sources = () =>
-    tracks.filter((t) => t.url).map((t) => ({ id: t.id, url: t.url as string, name: t.name }))
+    tracks
+      .filter((t) => t.url)
+      .map((t) => ({ id: t.id, url: t.url as string, name: t.name, songId }))
 
   // faixas trocadas no mixer com a música tocando: reabre e continua
   useEffect(() => {

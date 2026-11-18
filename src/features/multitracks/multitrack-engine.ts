@@ -10,6 +10,7 @@ import {
   toSegments,
   type Segment,
 } from '@/features/multitracks/segments'
+import { fetchTrack, type TrackDownload } from '@/features/multitracks/track-cache'
 
 // Motor do Multitracks, sem React.
 //
@@ -49,7 +50,7 @@ const LOOKAHEAD = 8
 /** Faixas baixadas/abertas ao mesmo tempo. */
 const PARALLEL = 3
 
-export type TrackSource = { id: string; url: string; name: string }
+export type TrackSource = TrackDownload
 
 type Track = {
   id: string
@@ -171,16 +172,11 @@ export class MultitrackPlayer {
     let done = 0
     const opened: (Omit<Track, 'gain'> | undefined)[] = new Array(sources.length)
     const openOne = async (src: TrackSource, i: number) => {
-      let res: Response
-      try {
-        res = await fetch(src.url, { cache: 'no-store' })
-      } catch {
-        throw new Error(`Não foi possível baixar “${src.name}” (internet ou armazenamento).`)
-      }
-      if (!res.ok) throw new Error(`O link de “${src.name}” venceu (erro ${res.status}).`)
+      const bytes = await fetchTrack(src)
+      if (gen !== this.gen) throw new Error('cancelado')
       let decoded: AudioBuffer
       try {
-        decoded = await this.ctx.decodeAudioData(await res.arrayBuffer())
+        decoded = await this.ctx.decodeAudioData(bytes)
       } catch {
         throw new Error(`Este aparelho não abre o formato de “${src.name}”. Prefira MP3.`)
       }
