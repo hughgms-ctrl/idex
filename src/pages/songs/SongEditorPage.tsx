@@ -295,7 +295,13 @@ function Editor({ song }: { song: Tables<'songs'> | null }) {
             <Input id="song-bpm" inputMode="numeric" {...form.register('bpm')} />
           </FormField>
           <FormField id="song-ts" label="Compasso" error={errors.timeSignature?.message}>
-            <Input id="song-ts" {...form.register('timeSignature')} />
+            <NativeSelect id="song-ts" {...form.register('timeSignature')}>
+              {timeSignatureOptions(song?.time_signature).map((ts) => (
+                <option key={ts} value={ts}>
+                  {ts}
+                </option>
+              ))}
+            </NativeSelect>
           </FormField>
         </div>
         <Controller
@@ -421,4 +427,13 @@ function safeConvert(text: string, key: string, title?: string): string {
   } catch {
     return text
   }
+}
+
+/** Compassos comuns no louvor; o metrônomo acentua o 1º de cada compasso. */
+const TIME_SIGNATURES = ['4/4', '3/4', '6/8', '2/4', '12/8', '6/4', '5/4', '7/8']
+
+function timeSignatureOptions(current: string | null | undefined): string[] {
+  return current && !TIME_SIGNATURES.includes(current)
+    ? [current, ...TIME_SIGNATURES]
+    : TIME_SIGNATURES
 }

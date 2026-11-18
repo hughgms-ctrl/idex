@@ -197,6 +197,7 @@ export function MultitrackBar({
         <PlayerAdjustments
           engine={engine}
           bpm={bpm}
+          beats={beats}
           shownKey={shownKey}
           manualBpm={baseBpm ? null : manualBpm}
           onManualBpm={setManualBpm}

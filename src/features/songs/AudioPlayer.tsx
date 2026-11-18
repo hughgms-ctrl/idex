@@ -1,14 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import {
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  Music2,
-  Pause,
-  Play,
-  Settings2,
-} from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, Music2, Pause, Play, Settings2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { effectiveBpm, formatClock } from '@/features/songs/audio-math'
@@ -228,6 +220,7 @@ export function AudioPlayer({
             engine={engine}
             bpm={bpm}
             shownKey={shownKey}
+            beats={beats}
             manualBpm={baseBpm ? null : manualBpm}
             onManualBpm={setManualBpm}
             extra={

@@ -22,6 +22,7 @@ export function PlayerAdjustments({
   shownKey,
   manualBpm,
   onManualBpm,
+  beats,
   extra,
 }: {
   engine: AdjustableEngine
@@ -29,6 +30,8 @@ export function PlayerAdjustments({
   shownKey: string | null
   manualBpm: number | null
   onManualBpm: (bpm: number) => void
+  /** Tempos por compasso (acento no 1º). */
+  beats?: number
   extra?: ReactNode
 }) {
   const adjusted = engine.semitones !== 0 || engine.rate !== 1
@@ -106,6 +109,11 @@ export function PlayerAdjustments({
         >
           <Timer aria-hidden="true" /> Metrônomo {engine.metronome ? 'ligado' : 'desligado'}
         </Button>
+        {beats !== undefined && (
+          <span className="text-muted-foreground text-xs">
+            {beats} tempos por compasso · muda em Editar música
+          </span>
+        )}
         {manualBpm !== null && (
           <label className="text-muted-foreground flex items-center gap-2 text-xs">
             BPM
