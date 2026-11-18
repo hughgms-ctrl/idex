@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { AuthContext } from '@/auth/auth-context'
+import { deleteCached } from '@/features/songs/audio-cache'
 import { clearOfflineCache } from '@/lib/query-client'
 import { supabase } from '@/lib/supabase'
 
@@ -17,7 +18,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
     const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (event === 'SIGNED_OUT') clearOfflineCache()
+      if (event === 'SIGNED_OUT') {
+        clearOfflineCache()
+        void deleteCached() // áudios baixados não ficam para a próxima conta
+      }
       setSession(newSession)
       setLoading(false)
     })

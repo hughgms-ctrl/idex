@@ -72,13 +72,14 @@ export function useAudioEngine() {
 
   /** Abre o arquivo; `key` identifica o arquivo (o link assinado muda). */
   const load = useCallback(
-    async (url: string, key: string): Promise<boolean> => {
+    async (url: string, key: string, songId?: string): Promise<boolean> => {
       setLoading(true)
       setError(null)
       setPlaying(false)
       try {
         const e = await ensure()
-        const length = await e.load(url)
+        // `key` é o id do arquivo: guardado no aparelho junto com o do Multitracks
+        const length = await e.load(url, { id: key, songId })
         setDuration(length)
         setPosition(0)
         setLoadedKey(key)

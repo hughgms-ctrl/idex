@@ -231,7 +231,7 @@ export function SongPage() {
                 setAudioId(next.id)
                 if (next.url) {
                   void engine
-                    .load(next.url, next.id)
+                    .load(next.url, next.id, s.id)
                     .then((ok) => (ok && wasPlaying ? engine.play() : undefined))
                 }
               }}

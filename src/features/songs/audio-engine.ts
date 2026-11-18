@@ -1,5 +1,6 @@
 import type { StretchNode } from 'signalsmith-stretch'
 
+import { fetchTrack } from '@/features/songs/audio-cache'
 import { isOriginal, positionAt } from '@/features/songs/audio-math'
 
 // Motor do player de referência, sem React.
@@ -58,8 +59,11 @@ export class ReferencePlayer {
     this.metronome = new Metronome(this.ctx)
   }
 
-  /** Baixa e decodifica o arquivo. Devolve a duração em segundos. */
-  async load(url: string): Promise<number> {
+  /**
+   * Baixa (ou lê do aparelho, se já baixado — `audio-cache.ts`, o mesmo do
+   * Multitracks) e decodifica o arquivo. Devolve a duração em segundos.
+   */
+  async load(url: string, file?: { id: string; songId?: string; name?: string }): Promise<number> {
     this.pause()
     const gen = ++this.gen
     this.releaseMedia()
@@ -67,17 +71,22 @@ export class ReferencePlayer {
     this.buffer = null
     this.offset = 0
     this.mode = 'direct'
-    // `no-store`: uma resposta guardada sem CORS quebraria o fetch.
-    let res: Response
-    try {
-      res = await fetch(url, { cache: 'no-store' })
-    } catch {
-      throw new Error('Não foi possível baixar o áudio (internet ou armazenamento).')
+    let data: ArrayBuffer
+    if (file) {
+      data = await fetchTrack({ id: file.id, url, name: file.name ?? 'áudio', songId: file.songId })
+    } else {
+      // `no-store`: uma resposta guardada sem CORS quebraria o fetch.
+      let res: Response
+      try {
+        res = await fetch(url, { cache: 'no-store' })
+      } catch {
+        throw new Error('Não foi possível baixar o áudio (internet ou armazenamento).')
+      }
+      if (!res.ok) {
+        throw new Error(`O link do áudio venceu ou o arquivo não foi achado (erro ${res.status}).`)
+      }
+      data = await res.arrayBuffer()
     }
-    if (!res.ok) {
-      throw new Error(`O link do áudio venceu ou o arquivo não foi achado (erro ${res.status}).`)
-    }
-    const data = await res.arrayBuffer()
     let decoded: AudioBuffer | null = null
     try {
       decoded = await this.ctx.decodeAudioData(data)
