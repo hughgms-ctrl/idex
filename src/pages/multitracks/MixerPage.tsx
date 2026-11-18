@@ -194,8 +194,9 @@ export function MixerPage() {
             </ul>
 
             <p className="text-muted-foreground text-[11px]">
-              As faixas ficam abertas na memória do aparelho: no celular, prefira até 8. A mixagem é
-              só sua e fica salva neste aparelho. Toque duas vezes no volume para voltar a 100%.
+              Pode abrir todas as faixas; se o aparelho ficar sem memória, desligue as que você não
+              usa. A mixagem é só sua e fica salva neste aparelho. Toque duas vezes no volume para
+              voltar a 100%.
             </p>
             {canUpload && (
               <Button asChild variant="ghost" className="self-start">

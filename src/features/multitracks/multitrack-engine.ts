@@ -2,7 +2,14 @@ import type { StretchNode } from 'signalsmith-stretch'
 
 import { Metronome } from '@/features/songs/audio-engine'
 import { positionAt } from '@/features/songs/audio-math'
-import { busShift, MAX_CHANNELS, trackKind, type TrackKind } from '@/features/multitracks/mix'
+import { busShift, trackKind, type TrackKind } from '@/features/multitracks/mix'
+import {
+  segmentFrames,
+  segmentsBytes,
+  segmentToFloat,
+  toSegments,
+  type Segment,
+} from '@/features/multitracks/segments'
 
 // Motor do Multitracks, sem React.
 //
@@ -25,7 +32,11 @@ import { busShift, MAX_CHANNELS, trackKind, type TrackKind } from '@/features/mu
 // `splitComputation` espalha a conta no tempo (sem picos que engasgam).
 // Click/guia não mudam de tom; só o grupo das vozes tem compensação de formantes.
 //
-// Memória: faixa estéreo com os dois lados iguais vira mono; celular usa 32 kHz.
+// Memória (músicas com 20, 30 faixas): cada faixa fica guardada em pedaços de
+// 4 s em Int16 (metade do Float32) e sem os pedaços em silêncio
+// (`segments.ts`); estéreo com os lados iguais vira mono; celular usa 32 kHz.
+// Na hora de tocar, os pedaços dos próximos segundos viram AudioBuffers
+// pequenos (`LOOKAHEAD`), agendados no relógio do áudio, emendados sem estalo.
 
 let stretchModule: Promise<typeof import('signalsmith-stretch').default> | null = null
 const loadStretch = () => (stretchModule ??= import('signalsmith-stretch').then((m) => m.default))
@@ -33,10 +44,22 @@ const loadStretch = () => (stretchModule ??= import('signalsmith-stretch').then(
 const FADE = 0.03
 const BLOCK_MS = 300
 const KINDS: TrackKind[] = ['instrument', 'voice', 'fixed']
+/** Segundos agendados à frente (folga para o celular atrasar o relógio da tela). */
+const LOOKAHEAD = 8
+/** Faixas baixadas/abertas ao mesmo tempo. */
+const PARALLEL = 3
 
 export type TrackSource = { id: string; url: string; name: string }
 
-type Track = { id: string; kind: TrackKind; buffer: AudioBuffer; gain: GainNode }
+type Track = {
+  id: string
+  kind: TrackKind
+  segs: Segment[]
+  channels: number
+  frames: number
+  gain: GainNode
+}
+type Scheduled = { node: AudioBufferSourceNode; when: number }
 
 type Bus = {
   kind: TrackKind
@@ -47,6 +70,13 @@ type Bus = {
   stretch: StretchNode | null
   /** Meios tons aplicados agora (0 = caminho direto). */
   shift: number
+}
+
+/** Quanto as faixas guardadas podem ocupar (Int16, sem silêncio). */
+function memoryBudget(): number {
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+  if (lowMemoryDevice()) return 700 * 1024 * 1024
+  return (mem && mem >= 8 ? 2500 : 1500) * 1024 * 1024
 }
 
 function lowMemoryDevice(): boolean {
@@ -78,7 +108,13 @@ export class MultitrackPlayer {
   private fade: GainNode
   private buses: Bus[] = []
   private tracks: Track[] = []
-  private sources: AudioBufferSourceNode[] = []
+  private sources: Scheduled[] = []
+  private timer: number | null = null
+  // relógio das fontes (antes do processador): a entrada `srcInput` sai em `srcTime`
+  private srcTime = 0
+  private srcInput = 0
+  private nextSeg = 0
+  private segFrames = 0
   private latency = 0
   private gen = 0
   // posição ouvida = offset + (agora - startedAt) * rate
@@ -128,9 +164,13 @@ export class MultitrackPlayer {
     this.releaseTracks()
     this.offset = 0
     this.duration = 0
-    const opened: { id: string; kind: TrackKind; buffer: AudioBuffer }[] = []
-    let channels = 0
-    for (const [i, src] of sources.entries()) {
+    const frames = segmentFrames(this.ctx.sampleRate)
+    this.segFrames = frames
+    const budget = memoryBudget()
+    let used = 0
+    let done = 0
+    const opened: (Omit<Track, 'gain'> | undefined)[] = new Array(sources.length)
+    const openOne = async (src: TrackSource, i: number) => {
       let res: Response
       try {
         res = await fetch(src.url, { cache: 'no-store' })
@@ -145,24 +185,41 @@ export class MultitrackPlayer {
         throw new Error(`Este aparelho não abre o formato de “${src.name}”. Prefira MP3.`)
       }
       if (gen !== this.gen) throw new Error('cancelado')
-      let buffer = decoded
-      if (decoded.numberOfChannels > 2 || (decoded.numberOfChannels === 2 && sameSides(decoded))) {
-        // mono (ou só os 2 primeiros canais): metade da memória
-        const n = sameSides(decoded) ? 1 : 2
-        buffer = this.ctx.createBuffer(n, decoded.length, decoded.sampleRate)
-        for (let c = 0; c < n; c++) buffer.copyToChannel(decoded.getChannelData(c), c)
+      // mono quando os lados são iguais; no máximo 2 canais
+      const n = sameSides(decoded) ? 1 : 2
+      const chans = Array.from({ length: n }, (_, c) => decoded.getChannelData(c))
+      const segs = toSegments(chans, frames)
+      used += segmentsBytes(segs)
+      if (used > budget) {
+        throw new Error(
+          'As faixas não cabem na memória deste aparelho. Desligue algumas no mixer (as que estão sempre caladas, por exemplo).',
+        )
       }
-      channels += buffer.numberOfChannels
-      if (channels > MAX_CHANNELS) {
-        opened.length = 0
-        throw new Error('Faixas demais de uma vez (máximo de 32 canais). Escolha menos faixas.')
+      opened[i] = {
+        id: src.id,
+        kind: trackKind(src.name),
+        segs,
+        channels: n,
+        frames: decoded.length,
       }
-      opened.push({ id: src.id, kind: trackKind(src.name), buffer })
-      onProgress(i + 1, sources.length)
+      onProgress(++done, sources.length)
+    }
+    let cursor = 0
+    const worker = async () => {
+      while (cursor < sources.length) {
+        const i = cursor++
+        await openOne(sources[i]!, i)
+      }
+    }
+    try {
+      await Promise.all(Array.from({ length: Math.min(PARALLEL, sources.length) }, worker))
+    } catch (err) {
+      opened.length = 0
+      throw err
     }
 
     // grupos que têm faixa; processadores criados agora (sem atraso no 1º play)
-    const kinds = KINDS.filter((k) => opened.some((t) => t.kind === k))
+    const kinds = KINDS.filter((k) => opened.some((t) => t?.kind === k))
     try {
       await this.ensureBuses(kinds)
     } catch {
@@ -170,14 +227,15 @@ export class MultitrackPlayer {
     }
     if (gen !== this.gen) throw new Error('cancelado')
 
-    this.tracks = opened.map((t) => {
+    this.tracks = opened.flatMap((t) => {
+      if (!t) return []
       const gain = this.ctx.createGain()
       gain.gain.value = gains[t.id] ?? 1
       const bus = this.buses.find((b) => b.kind === t.kind) ?? this.buses[0]
       if (bus) gain.connect(bus.input)
-      return { ...t, gain }
+      return [{ ...t, gain }]
     })
-    this.duration = Math.max(0, ...opened.map((t) => t.buffer.duration))
+    this.duration = Math.max(0, ...this.tracks.map((t) => t.frames)) / this.ctx.sampleRate
     this.loadedIds = sources.map((s) => s.id)
     this.applyShifts(this.ctx.currentTime, true)
     return this.duration
@@ -248,10 +306,27 @@ export class MultitrackPlayer {
     if (rateChanged) {
       // a posição ouvida em `heard` corresponde à entrada em `t`
       const pos = this.positionAt(heard)
-      for (const s of this.sources) s.playbackRate.setValueAtTime(rate, t)
+      // o pedaço que já está tocando muda de velocidade; os seguintes são
+      // reagendados no novo andamento
+      const keep: Scheduled[] = []
+      for (const sc of this.sources) {
+        if (sc.when < t) {
+          sc.node.playbackRate.setValueAtTime(rate, t)
+          keep.push(sc)
+        } else {
+          sc.node.onended = null
+          sc.node.stop()
+          sc.node.disconnect()
+        }
+      }
+      this.sources = keep
+      this.srcTime = t
+      this.srcInput = pos
+      this.nextSeg = Math.floor(pos / (this.segFrames / this.ctx.sampleRate)) + 1
       this.offset = pos
       this.startedAt = heard
       this.rate = rate
+      this.scheduleAhead()
     }
     this.applyShifts(heard, false)
   }
@@ -300,25 +375,60 @@ export class MultitrackPlayer {
 
   private startSources(t: number, pos: number) {
     this.stopSources(t)
-    this.sources = []
-    for (const tr of this.tracks) {
-      if (pos >= tr.buffer.duration) continue
-      const s = this.ctx.createBufferSource()
-      s.buffer = tr.buffer
-      s.playbackRate.value = this.rate
-      s.connect(tr.gain)
-      s.start(t, pos)
-      this.sources.push(s)
+    const segSeconds = this.segFrames / this.ctx.sampleRate
+    const k0 = Math.floor(pos / segSeconds)
+    this.srcTime = t
+    this.srcInput = pos
+    this.nextSeg = k0
+    this.scheduleAhead()
+    if (this.timer === null) this.timer = window.setInterval(() => this.scheduleAhead(), 250)
+  }
+
+  /** Agenda os pedaços que vão tocar nos próximos `LOOKAHEAD` segundos. */
+  private scheduleAhead() {
+    const sr = this.ctx.sampleRate
+    const segSeconds = this.segFrames / sr
+    const horizon = this.ctx.currentTime + LOOKAHEAD
+    const total = Math.ceil((this.duration * sr) / this.segFrames)
+    while (this.nextSeg < total) {
+      const k = this.nextSeg
+      const segStart = k * segSeconds
+      // o 1º pedaço pode começar no meio (posição de onde voltou a tocar)
+      const offset = Math.max(0, this.srcInput - segStart)
+      const when = this.srcTime + (segStart + offset - this.srcInput) / this.rate
+      if (when > horizon) break
+      this.nextSeg++
+      for (const tr of this.tracks) {
+        const seg = tr.segs[k]
+        if (!seg) continue
+        const length = seg[0]!.length
+        if (offset * sr >= length) continue
+        const buffer = this.ctx.createBuffer(tr.channels, length, sr)
+        seg.forEach((ch, c) => buffer.copyToChannel(segmentToFloat(ch, k, this.segFrames), c))
+        const node = this.ctx.createBufferSource()
+        node.buffer = buffer
+        node.playbackRate.value = this.rate
+        node.connect(tr.gain)
+        node.start(Math.max(when, this.ctx.currentTime), offset)
+        const sc: Scheduled = { node, when }
+        node.onended = () => {
+          node.disconnect()
+          this.sources = this.sources.filter((x) => x !== sc)
+        }
+        this.sources.push(sc)
+      }
     }
   }
 
   private stopSources(when: number) {
-    for (const s of this.sources) {
-      s.onended = () => s.disconnect()
+    if (this.timer !== null) window.clearInterval(this.timer)
+    this.timer = null
+    for (const sc of this.sources) {
+      sc.node.onended = () => sc.node.disconnect()
       try {
-        s.stop(when)
+        sc.node.stop(Math.max(when, sc.when))
       } catch {
-        s.disconnect()
+        sc.node.disconnect()
       }
     }
     this.sources = []
